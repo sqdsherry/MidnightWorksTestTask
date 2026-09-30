@@ -1,0 +1,21 @@
+{
+    "name": "AutoService.Presentation",
+    "rootNamespace": "AutoService.Presentation",
+    "references": [
+        "AutoService.Domain",
+        "AutoService.Services",
+        "Unity.InputSystem",
+        "Unity.AI.Navigation",
+        "UnityEngine.UI",
+        "Unity.TextMeshPro"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -1,0 +1,17 @@
+{
+    "name": "AutoService.Infrastructure",
+    "rootNamespace": "AutoService.Infrastructure",
+    "references": [
+        "AutoService.Domain",
+        "AutoService.Services"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
