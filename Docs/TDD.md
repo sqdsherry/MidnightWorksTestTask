@@ -20,23 +20,26 @@
 ## 1. Слои и сборки ✅
 
 ```
-Presentation ──► Application ──► Domain
-     │                ▲
-     ▼                │ реализует интерфейсы
-Infrastructure ───────┘
+Presentation ──► Services ──► Domain
+     │               ▲
+     ▼               │ реализует интерфейсы
+Infrastructure ──────┘
 Bootstrap ──► всё (только сборка графа)
 ```
 
+> Слой Application (Clean Architecture) называется **Services**: namespace `AutoService.Application` конфликтовал бы с `UnityEngine.Application` во всех файлах внутри `AutoService.*`.
+
 | Сборка (asmdef) | Namespace | Ссылки | Что внутри |
 |---|---|---|---|
-| `AutoService.Domain` | `AutoService.Domain.*` | — (`noEngineReferences`) | сущности, value objects, FSM, формулы, доменные события |
-| `AutoService.Application` | `AutoService.Application.*` | Domain | интерфейсы сервисов, сервисы-оркестраторы, use-cases, DTO сейва |
-| `AutoService.Infrastructure` | `AutoService.Infrastructure.*` | Domain, Application | JsonUtility-сейв, PlayerPrefs-настройки, SO-конфиги, `UnityTimeProvider`, `UnityRandom` |
-| `AutoService.Presentation` | `AutoService.Presentation.*` | Domain, Application | MonoBehaviour: Views, NavMesh-агенты, камера, ввод, UI (MVP) |
-| `AutoService.Bootstrap` | `AutoService.Bootstrap` | все | `ProjectEntryPoint`, `GameplayEntryPoint`, `ServiceContainer` |
-| `AutoService.Tests.EditMode` | — | Domain, Application | юнит-тесты домена и сервисов |
+| `AutoService.Domain` | `AutoService.Domain.*` | — (`noEngineReferences`) | сущности, value objects, FSM, формулы |
+| `AutoService.Services` | `AutoService.Services.*` | Domain (`noEngineReferences`) | интерфейсы сервисов, оркестраторы, EventBus, lifecycle-интерфейсы, конфиг-модели, DTO сейва |
+| `AutoService.Infrastructure` | `AutoService.Infrastructure.*` | Domain, Services | JsonUtility-сейв, PlayerPrefs, SO-конфиги, время, рандом, пауза (`timeScale`) |
+| `AutoService.Presentation` | `AutoService.Presentation.*` | Domain, Services, InputSystem, AI.Navigation, uGUI, TMP | MonoBehaviour: Views, NavMesh-агенты, камера, ввод, UI (MVP) |
+| `AutoService.Bootstrap` | `AutoService.Bootstrap` | все | EntryPoint'ы, `ServiceContainer`, `GameLoop` |
+| `AutoService.Bootstrap.Editor` | `AutoService.Bootstrap.Editor` | Bootstrap (Editor only) | старт Play Mode со сцены Boot |
+| `AutoService.Tests.EditMode` | `AutoService.Tests.EditMode` | Domain, Services | юнит-тесты |
 
-> Application тоже без UnityEngine, если получится (❓ T1). Тогда весь геймплей тестируется в EditMode без сцены.
+T1 решён: Services тоже `noEngineReferences` → весь геймплей тестируется в EditMode.
 
 ## 2. Структура папок ✅
 
@@ -44,7 +47,7 @@ Bootstrap ──► всё (только сборка графа)
 Assets/_Project/
   Scripts/
     Domain/            (asmdef)
-    Application/       (asmdef)
+    Services/          (asmdef)
     Infrastructure/    (asmdef)
     Presentation/      (asmdef)
     Bootstrap/         (asmdef)
@@ -58,8 +61,11 @@ Docs/                  GDD.md, TDD.md
 
 ### 3.1 Composition Root
 - `ServiceContainer` — рукописный: `Register<T>(T instance)`, `Resolve<T>()`. **Используется только внутри EntryPoint'ов.** Классы получают зависимости через конструктор (C#) или `Construct(...)` (MonoBehaviour). Никто, кроме EntryPoint, контейнер не видит — иначе это Service Locator.
-- `ProjectEntryPoint` (сцена `Boot`, `DontDestroyOnLoad`) — глобальное: сейв, настройки, загрузчик сцен, экран загрузки, аудио.
+- `ProjectEntryPoint` (сцена `Boot`, `DontDestroyOnLoad`) — глобальное: конфиги, время, рандом, пауза, (позже) сейв, настройки, загрузчик сцен, экран загрузки, аудио.
 - `GameplayEntryPoint` (сцена `Gameplay`) — всё игровое. Порядок: конфиги → домен → сервисы → загрузка сейва → views/presenters → `Initialize()` → старт тика.
+- **Передача контейнера без статики:** `ProjectEntryPoint` грузит сцену, ищет среди root-объектов компонент `ISceneEntryPoint` и вызывает `Enter(projectContainer)`. Сценовый контейнер — дочерний (`new ServiceContainer(parent)`), `Resolve` идёт вверх по родителям.
+- Контейнер запоминает зарегистрированные `IDisposable` и диспоузит их в обратном порядке при выгрузке сцены.
+- Editor: `PlayModeStartScene` всегда = Boot, чтобы Play работал из любой открытой сцены.
 
 ### 3.2 Жизненный цикл
 - `IInitializable { void Initialize(); }`
@@ -87,7 +93,7 @@ Docs/                  GDD.md, TDD.md
 ### 4.1 Economy
 - `Money` — `readonly struct` над `long`, операторы, `ToString` через форматтер (1.2K/3.4M).
 - `Wallet` (домен): `Balance`, `bool TrySpend(Money)`, `void Add(Money)`, `event Action<Money> Changed`.
-- `IWalletService` (Application) — обёртка + публикация событий.
+- `IWalletService` (Services) — обёртка + публикация событий.
 - `PriceFormula` — `Cost(base, growth, level)`.
 
 ### 4.2 Config
@@ -111,19 +117,20 @@ Docs/                  GDD.md, TDD.md
 `IServicePointService` — реестр точек, поиск свободной точки по типу.
 
 ### 4.4 Parking & Dispatch
+- `EntryQueue` (домен): очередь-полоса на дороге из N слотов перед развилкой. `bool TryEnqueue(car)`, `Head`, `Dequeue()`; при сдвиге машины подтягиваются на слот вперёд. Полная → машина проезжает мимо.
 - `ParkingLot` (домен): слоты, `bool TryReserve(out slot)`, `Release(slot)`.
-- `OrderDispatcher` (Application, `ITickable`): сопоставляет ждущие машины со свободными подходящими точками (FIFO), отдаёт команды машинам.
+- `OrderDispatcher` (Services, `ITickable`): для головы очереди — свободна нужная точка → сразу на неё; иначе → к шлагбауму. Для парковки — FIFO сопоставление машин со свободными точками.
 
 ### 4.5 Cars (AI клиентов)
 - Домен: `Car` — `Type`, `RequestedService`, `Patience`, `IsVip`, FSM:
-  `Arriving → AtBarrier → ToParking → Parked → ToPoint → AtPoint → Leaving (paid | angry | noSpace)`.
+  `Arriving → InQueue → (ToPoint | AtBarrier → ToParking → Parked → ToPoint) → AtPoint → Leaving (paid | angry | noSpace)`.
 - Presentation: `CarView` — `NavMeshAgent`, по прибытии сообщает домену `OnArrived()`. Домен про NavMesh не знает.
-- `CarSpawner` (Application, `ITickable`) + пул (`UnityEngine.Pool.ObjectPool<CarView>`).
+- `CarSpawner` (Services, `ITickable`) решает *когда и какую* машину создать и зовёт `ICarViewFactory` (интерфейс в Services). Реализация фабрики — в Presentation, на `UnityEngine.Pool.ObjectPool<CarView>` (Services Unity не видит).
 - NavMesh: отдельный **agent type «Car»** (радиус больше), дорожная area. Финальная доводка на слот — плавный Lerp к позе слота. ❓ T3.
 
 ### 4.6 Player Character
 - Домен: `PlayerState` FSM (`Idle/Moving/Working/Repairing`) + `CarriedBox?`.
-- Application: `PlayerCommandService` — `MoveTo(pos)`, `Interact(IInteractableTarget)`; решает, что значит клик по цели (работать / пополнить / взять ящик / ремонт).
+- Services: `PlayerCommandService` — `MoveTo(pos)`, `Interact(IInteractableTarget)`; решает, что значит клик по цели (работать / пополнить / взять ящик / ремонт).
 - Presentation: `PlayerView` (`NavMeshAgent` humanoid), при достижении `WorkSpot` → домен занимает точку.
 
 ### 4.7 Staff
@@ -204,6 +211,7 @@ Docs/                  GDD.md, TDD.md
 EditMode: `Wallet`, `PriceFormula`, `ServicePoint` (прогресс только при occupant, расходник, поломка), `ParkingLot`, `OrderDispatcher`, `PlayerProgress`/unlocks, `NegotiationService` (фейковый `IRandom`), маппинг сейва (round-trip).
 
 ## 7. Код-стайл ✅
+- **Код и комментарии — на английском.** Документация проекта (Docs/) — на русском.
 - Приватные поля `_camelCase`, `[SerializeField] private`, никаких public-полей.
 - Один класс — один файл, имя файла = имя класса.
 - `sealed` по умолчанию для не-базовых классов.
@@ -221,7 +229,7 @@ EditMode: `Wallet`, `PriceFormula`, `ServicePoint` (прогресс тольк�
 2. На каждый пункт roadmap — ветка `feature/<NN>-<name>` (напр. `feature/01-core`).
 3. Кодер коммитит в ветку → открывается **PR в main**.
 4. Ревью: архитектор читает diff (`git fetch` + `git diff main...origin/feature/<NN>-<name>`; `gh` CLI не установлен), сверяет с TDD и правилами §0, пишет замечания; пользователь проверяет в Editor.
-5. Правки → в ту же ветку. После апрува — **squash merge** в main, ветку удалить.
+5. Правки → в ту же ветку. **Пользователь докоммичивает в ветку `.meta`, сцены, SO-ассеты и префабы**, созданные в Editor (кодер `.meta` не создаёт). После апрува — **squash merge** в main, ветку удалить.
 6. Архитектор обновляет статус в roadmap и, если что-то поменялось, TDD/GDD.
 
 **Формат каждого промпта кодеру:**
@@ -239,7 +247,7 @@ EditMode: `Wallet`, `PriceFormula`, `ServicePoint` (прогресс тольк�
 
 | # | Ветка | Модуль | День | Приоритет | Статус |
 |---|---|---|---|---|---|
-| 01 | `feature/01-core` | Структура, asmdef, Core (контейнер, GameLoop, EventBus, Pause, Time/Random), Economy, Config-база | 1 | M | ⏳ |
+| 01 | `feature/01-core` | Структура, asmdef, Core (контейнер, GameLoop, EventBus, Pause, Time/Random), Economy, Config-база — [промпт](Prompts/01-core.md) | 1 | M | 🔨 промпт выдан |
 | 02 | `feature/02-player` | Input + Camera + Player click-to-move (whitebox сцена) | 1 | M | ⏳ |
 | 03 | `feature/03-service-loop` | Service Points + Parking + Dispatcher + Cars AI + Spawner + пул | 1 | M | ⏳ |
 | 04 | `feature/04-supplies` | Warehouse / Supplies / Carry | 2 | M | ⏳ |
@@ -262,7 +270,7 @@ EditMode: `Wallet`, `PriceFormula`, `ServicePoint` (прогресс тольк�
 
 | # | Вопрос | Дефолт |
 |---|---|---|
-| T1 | Application полностью без UnityEngine? | Да, пробуем; если мешает — точечно |
+| ~~T1~~ | ~~Services без UnityEngine?~~ | ✅ Да, `noEngineReferences`. Векторы/позиции в Services не нужны — ими оперирует Presentation |
 | T2 | Id конфигов: string или int? | string (читаемо в сейве и SO) |
 | T3 | Парковка машин: чистый NavMesh или NavMesh + доводка Lerp на слот? | NavMesh до точки подъезда + Lerp |
 | T4 | Сейв: центральный маппер или `ISaveable` на каждом сервисе? | `ISaveable` — сервисы независимы, легко добавлять |
@@ -288,3 +296,6 @@ EditMode: `Wallet`, `PriceFormula`, `ServicePoint` (прогресс тольк�
 | 2026-09-30 | Код пишет только кодер-чат; feature-ветки + PR + совместное ревью + squash merge |
 | 2026-09-30 | Срок 3–4 дня → roadmap из 16 веток, тесты только на ключевой домен |
 | 2026-09-30 | Все UI-строки — английский, в конфигах/префабах, не хардкодом в логике |
+| 2026-09-30 | Слой Application → **Services** (конфликт имён с `UnityEngine.Application`); Services тоже `noEngineReferences` |
+| 2026-09-30 | Контейнер в сцену передаётся через `ISceneEntryPoint.Enter(parent)`, без статики; Play Mode всегда стартует с Boot |
+| 2026-09-30 | Очередь-полоса `EntryQueue` перед развилкой точки/шлагбаум |
