@@ -212,29 +212,51 @@ EditMode: `Wallet`, `PriceFormula`, `ServicePoint` (прогресс тольк�
 
 ---
 
-## 🗺️ Roadmap
+## 🔀 Процесс разработки ✅
 
-| # | Модуль | Статус |
-|---|---|---|
-| 1 | Структура, asmdef, Core (контейнер, GameLoop, EventBus, Pause, Time/Random) | ⏳ |
-| 2 | Economy | ⏳ |
-| 3 | Config | ⏳ |
-| 4 | Input + Camera + Player (click-to-move) | ⏳ |
-| 5 | Service Points + Parking + Dispatcher | ⏳ |
-| 6 | Cars AI + Spawner + пул | ⏳ |
-| 7 | Warehouse / Supplies | ⏳ |
-| 8 | Build | ⏳ |
-| 9 | Staff (работник, кладовщик) | ⏳ |
-| 10 | Breakdowns | ⏳ |
-| 11 | Progression + Unlocks | ⏳ |
-| 12 | Save | ⏳ |
-| 13 | Scene Flow + Loading | ⏳ |
-| 14 | UI: HUD, панели, попапы → MainMenu → Settings | ⏳ |
-| 15 | VIP + Negotiation | ⏳ |
-| 16 | Onboarding | ⏳ |
-| 17 | Speech Bubbles | ⏳ |
-| 18 | Вторая локация (контент) | ⏳ |
-| 19 | Визуал, звук, полировка | ⏳ |
+**Роли:** архитектор (Claude, этот чат) пишет промпт → **кодер-чат пишет весь код** → ревью делают вместе пользователь и архитектор → пользователь собирает сцену/префабы в Editor.
+
+**Git-флоу:**
+1. `main` — всегда рабочий, прямых коммитов нет (кроме Docs).
+2. На каждый пункт roadmap — ветка `feature/<NN>-<name>` (напр. `feature/01-core`).
+3. Кодер коммитит в ветку → открывается **PR в main**.
+4. Ревью: архитектор читает diff (`gh pr diff`), сверяет с TDD и правилами §0, пишет замечания; пользователь проверяет в Editor.
+5. Правки → в ту же ветку. После апрува — **squash merge** в main, ветку удалить.
+6. Архитектор обновляет статус в roadmap и, если что-то поменялось, TDD/GDD.
+
+**Формат каждого промпта кодеру:**
+1. Контекст и цель модуля (+ ссылка на разделы GDD/TDD).
+2. Файлы/классы/интерфейсы с контрактами (сигнатуры, события).
+3. Правила реализации (§0 + специфичное для модуля).
+4. Интеграция в EntryPoint.
+5. **Editor setup** — пошагово, что пользователь делает руками в Unity (объекты, компоненты, слои, NavMesh, ссылки в инспекторе).
+6. Критерии приёмки (что должно работать/какие тесты зелёные).
+7. Ветка и сообщение коммита.
+
+> Узкое место — ручная сборка в Editor, а не объём кода. Поэтому: максимум `[SerializeField]`-ссылок и префабов, минимум «магии» и поиска объектов в рантайме; whitebox (кубы) до замены на ассеты.
+
+## 🗺️ Roadmap (3–4 дня)
+
+| # | Ветка | Модуль | День | Приоритет | Статус |
+|---|---|---|---|---|---|
+| 01 | `feature/01-core` | Структура, asmdef, Core (контейнер, GameLoop, EventBus, Pause, Time/Random), Economy, Config-база | 1 | M | ⏳ |
+| 02 | `feature/02-player` | Input + Camera + Player click-to-move (whitebox сцена) | 1 | M | ⏳ |
+| 03 | `feature/03-service-loop` | Service Points + Parking + Dispatcher + Cars AI + Spawner + пул | 1 | M | ⏳ |
+| 04 | `feature/04-supplies` | Warehouse / Supplies / Carry | 2 | M | ⏳ |
+| 05 | `feature/05-build` | Build (фикс. участки) | 2 | M | ⏳ |
+| 06 | `feature/06-staff` | Staff: работник точки, кладовщик | 2 | M | ⏳ |
+| 07 | `feature/07-progression` | Progression + Unlocks | 2 | M | ⏳ |
+| 08 | `feature/08-save` | Save + Settings | 2 | M | ⏳ |
+| 09 | `feature/09-scenes-ui` | Scene Flow + Loading + MainMenu + Settings + HUD + панели/попапы | 3 | M | ⏳ |
+| 10 | `feature/10-onboarding` | Onboarding | 3 | M | ⏳ |
+| 11 | `feature/11-location2` | 2-я локация + переключение камеры | 3 | M | ⏳ |
+| 12 | `feature/12-visual` | Ассеты, стиль, звук, juice | 3 | M | ⏳ |
+| 13 | `feature/13-vip` | VIP + Negotiation | 4 | S | ⏳ |
+| 14 | `feature/14-breakdowns` | Breakdowns + терпение/уход | 4 | S | ⏳ |
+| 15 | `feature/15-bubbles` | Speech Bubbles, debug-панель | 4 | C | ⏳ |
+| 16 | `feature/16-release` | README, чек-лист TZ.md, багфикс | 4 | M | ⏳ |
+
+> Урезание под срок: тесты — только ключевой домен (Wallet, ServicePoint, ParkingLot, Save round-trip). Терпение как счётчик заложить в 03, уход злых — в 14.
 
 ## ❓ Открытые технические вопросы
 
@@ -263,3 +285,6 @@ EditMode: `Wallet`, `PriceFormula`, `ServicePoint` (прогресс тольк�
 | 2026-09-30 | Пауза через `timeScale`, UI на unscaled |
 | 2026-09-30 | uGUI, MVP |
 | 2026-09-30 | Экран загрузки — persistent canvas в Boot |
+| 2026-09-30 | Код пишет только кодер-чат; feature-ветки + PR + совместное ревью + squash merge |
+| 2026-09-30 | Срок 3–4 дня → roadmap из 16 веток, тесты только на ключевой домен |
+| 2026-09-30 | Все UI-строки — английский, в конфигах/префабах, не хардкодом в логике |
