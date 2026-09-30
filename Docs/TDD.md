@@ -1,0 +1,265 @@
+# TDD — Auto Service Tycoon
+
+> Живой документ. Как устроено и почему. Геймдизайн — в [GDD.md](GDD.md).
+> Статусы: ✅ решено · 🟡 черновик · ❓ открытый вопрос · ⏳ не начато · 🔨 в работе · ✔️ готово
+
+**Последнее обновление:** 2026-09-30
+**Unity:** 6000.3.17f1 · **RP:** URP 17.3 · **Пакеты:** AI Navigation 2.0, Input System 1.19, uGUI, Test Framework
+
+---
+
+## 0. Жёсткие правила ✅
+
+1. **Никаких сторонних библиотек.** Нет Zenject/UniTask/DOTween/Odin. Можно: всё из `com.unity.*`, `UnityEngine.Pool`, `Awaitable`, корутины.
+2. **Домен не знает про Unity.** `Domain.asmdef` с `noEngineReferences: true` — компилятор не даст нарушить.
+3. **Нет синглтонов, `FindObjectOfType`, `GameObject.Find`, статического состояния.** Все зависимости — через Composition Root.
+4. **Ноль аллокаций в тике:** без LINQ, лямбд-замыканий, boxing, конкатенации строк, `GetComponent` в `Tick`/`Update`.
+5. **Каждая подписка на event имеет отписку** (`Dispose` / `OnDestroy`).
+6. **XML-комментарии (`///`)** на всём публичном API + комментарии «почему» в неочевидных местах. Это критерий оценки.
+
+## 1. Слои и сборки ✅
+
+```
+Presentation ──► Application ──► Domain
+     │                ▲
+     ▼                │ реализует интерфейсы
+Infrastructure ───────┘
+Bootstrap ──► всё (только сборка графа)
+```
+
+| Сборка (asmdef) | Namespace | Ссылки | Что внутри |
+|---|---|---|---|
+| `AutoService.Domain` | `AutoService.Domain.*` | — (`noEngineReferences`) | сущности, value objects, FSM, формулы, доменные события |
+| `AutoService.Application` | `AutoService.Application.*` | Domain | интерфейсы сервисов, сервисы-оркестраторы, use-cases, DTO сейва |
+| `AutoService.Infrastructure` | `AutoService.Infrastructure.*` | Domain, Application | JsonUtility-сейв, PlayerPrefs-настройки, SO-конфиги, `UnityTimeProvider`, `UnityRandom` |
+| `AutoService.Presentation` | `AutoService.Presentation.*` | Domain, Application | MonoBehaviour: Views, NavMesh-агенты, камера, ввод, UI (MVP) |
+| `AutoService.Bootstrap` | `AutoService.Bootstrap` | все | `ProjectEntryPoint`, `GameplayEntryPoint`, `ServiceContainer` |
+| `AutoService.Tests.EditMode` | — | Domain, Application | юнит-тесты домена и сервисов |
+
+> Application тоже без UnityEngine, если получится (❓ T1). Тогда весь геймплей тестируется в EditMode без сцены.
+
+## 2. Структура папок ✅
+
+```
+Assets/_Project/
+  Scripts/
+    Domain/            (asmdef)
+    Application/       (asmdef)
+    Infrastructure/    (asmdef)
+    Presentation/      (asmdef)
+    Bootstrap/         (asmdef)
+  Tests/EditMode/      (asmdef)
+  Configs/             ScriptableObject-ассеты (баланс, точки, машины, уровни)
+  Prefabs/  Scenes/  Art/  UI/  Audio/  Materials/
+Docs/                  GDD.md, TDD.md
+```
+
+## 3. Core-инфраструктура 🟡
+
+### 3.1 Composition Root
+- `ServiceContainer` — рукописный: `Register<T>(T instance)`, `Resolve<T>()`. **Используется только внутри EntryPoint'ов.** Классы получают зависимости через конструктор (C#) или `Construct(...)` (MonoBehaviour). Никто, кроме EntryPoint, контейнер не видит — иначе это Service Locator.
+- `ProjectEntryPoint` (сцена `Boot`, `DontDestroyOnLoad`) — глобальное: сейв, настройки, загрузчик сцен, экран загрузки, аудио.
+- `GameplayEntryPoint` (сцена `Gameplay`) — всё игровое. Порядок: конфиги → домен → сервисы → загрузка сейва → views/presenters → `Initialize()` → старт тика.
+
+### 3.2 Жизненный цикл
+- `IInitializable { void Initialize(); }`
+- `ITickable { void Tick(float deltaTime); }`
+- `IDisposable` (штатный).
+- `GameLoop : MonoBehaviour` — **единственный** геймплейный `Update`. Держит `ITickable[]` (массив, не List + foreach по интерфейсу без аллокаций). Передаёт `Time.deltaTime` (scaled).
+
+### 3.3 Пауза
+`Time.timeScale = 0` → геймплей стоит сам (dt = 0). UI-анимации — на `unscaledDeltaTime`. `IPauseService` со счётчиком запросов (несколько попапов подряд не ломают паузу).
+
+### 3.4 События
+Два механизма, чётко разделены:
+- **C# `event Action<...>` на сервисе/сущности** — когда подписчик знает источник (Presenter ↔ свой сервис).
+- **`IEventBus`** — сквозные доменные события, которые слушают многие (XP, онбординг, облачка, звук):
+  `Subscribe<T>(Action<T>)`, `Unsubscribe<T>(Action<T>)`, `Publish<T>(in T evt) where T : struct`.
+  События — `readonly struct` → без аллокаций. Примеры: `CarServiced`, `CarLeftAngry`, `OrderAccepted`, `PointBroken`, `LevelUp`, `BuildCompleted`.
+
+### 3.5 Абстракции окружения
+`ITimeProvider` (UTC now), `IRandom` (`float Value()`, `int Range(int,int)`) — для детерминированных тестов.
+
+## 4. Модули 🟡
+
+> Контракты здесь — ориентир для промптов кодеру, не финальный код.
+
+### 4.1 Economy
+- `Money` — `readonly struct` над `long`, операторы, `ToString` через форматтер (1.2K/3.4M).
+- `Wallet` (домен): `Balance`, `bool TrySpend(Money)`, `void Add(Money)`, `event Action<Money> Changed`.
+- `IWalletService` (Application) — обёртка + публикация событий.
+- `PriceFormula` — `Cost(base, growth, level)`.
+
+### 4.2 Config
+- SO в Infrastructure: `ServicePointConfig`, `CarTypeConfig`, `SupplyConfig`, `LevelTableConfig`, `BuildableConfig`, `StaffConfig`, `VipConfig`, `BalanceConfig`.
+- `IConfigProvider` отдаёт **доменные readonly-структуры/классы** (маппинг SO → домен), домен SO не видит.
+- Ключи — строковые `Id` в конфиге (стабильны для сейва). ❓ T2: string vs int.
+
+### 4.3 Service Points (сердце игры)
+Доменная сущность `ServicePoint`:
+- `Id`, `ServiceType`, `LocationId`
+- `Levels` (speed, price, reliability)
+- `Supply { Current, Max, SupplyType }` (у шлагбаума — нет)
+- `State`: `Idle | AwaitingAccept | Servicing | Broken`
+- `Occupant`: `None | Player | Worker`
+- `CurrentOrder` (`Order { CarId, Price, Progress, IsVip }`)
+- `Tick(dt)` двигает прогресс **только если** `Occupant != None && State == Servicing`.
+- События: `OrderAccepted`, `ServiceCompleted`, `Broke`, `Repaired`, `SupplyChanged`.
+
+Шлагбаум — тот же `ServicePoint` с `ServiceType.Parking`, без расходника, завершение = машина встаёт на место.
+
+`IServicePointService` — реестр точек, поиск свободной точки по типу.
+
+### 4.4 Parking & Dispatch
+- `ParkingLot` (домен): слоты, `bool TryReserve(out slot)`, `Release(slot)`.
+- `OrderDispatcher` (Application, `ITickable`): сопоставляет ждущие машины со свободными подходящими точками (FIFO), отдаёт команды машинам.
+
+### 4.5 Cars (AI клиентов)
+- Домен: `Car` — `Type`, `RequestedService`, `Patience`, `IsVip`, FSM:
+  `Arriving → AtBarrier → ToParking → Parked → ToPoint → AtPoint → Leaving (paid | angry | noSpace)`.
+- Presentation: `CarView` — `NavMeshAgent`, по прибытии сообщает домену `OnArrived()`. Домен про NavMesh не знает.
+- `CarSpawner` (Application, `ITickable`) + пул (`UnityEngine.Pool.ObjectPool<CarView>`).
+- NavMesh: отдельный **agent type «Car»** (радиус больше), дорожная area. Финальная доводка на слот — плавный Lerp к позе слота. ❓ T3.
+
+### 4.6 Player Character
+- Домен: `PlayerState` FSM (`Idle/Moving/Working/Repairing`) + `CarriedBox?`.
+- Application: `PlayerCommandService` — `MoveTo(pos)`, `Interact(IInteractableTarget)`; решает, что значит клик по цели (работать / пополнить / взять ящик / ремонт).
+- Presentation: `PlayerView` (`NavMeshAgent` humanoid), при достижении `WorkSpot` → домен занимает точку.
+
+### 4.7 Staff
+- `Worker` — привязан к точке, FSM `Spawn → GoToSpot → Working (→ Repairing slowly)`.
+- `Storekeeper` — на локацию, FSM `Idle → ToWarehouse → Carry → ToPoint → Deliver`; цель — точка с min `Supply.Current / Max`.
+- `IStaffService` — найм, лимиты, стоимость.
+
+### 4.8 Warehouse & Supplies
+- `Warehouse` (на локацию): `bool TryTakeBox(SupplyType, out Box)` — списывает $ через `IWalletService`.
+- Выбор типа ящика при клике — `SupplyPriorityPolicy` (точка, где кончится раньше). Q1 в GDD.
+
+### 4.9 Breakdowns
+- `BreakdownService`: на `ServiceCompleted` → `IRandom` vs `chance(reliabilityLevel)` → `point.Break()`.
+- Ремонт: `RepairProgress` на точке; игрок — 2 с hold, работник — ~10 с.
+
+### 4.10 VIP & Negotiation
+- `VipService`: таймер спавна × `Loyalty`, флаг `IsVip` на машине.
+- `NegotiationService` (домен-логика): `Resolve(option, IRandom) → NegotiationResult { Accepted, Multiplier }`.
+- Presentation: `VipPopupPresenter`, `NegotiationPopupPresenter` (запрашивают паузу).
+
+### 4.11 Build
+- `BuildPlot` (домен): `Id`, `BuildableId`, `State: Locked | Available | Built`, `RequiredLevel`, `Cost`.
+- `IBuildService`: `CanBuild(id)`, `bool TryBuild(id)`, `event Action<string> Built`.
+- Presentation: `BuildPlotView` (призрак, ценник), на `Built` — инстанс префаба точки + анимация.
+- **Новый тип постройки = новый конфиг + префаб.** Код сервиса не меняется.
+
+### 4.12 Progression
+- `PlayerProgress`: `Xp`, `Level`, `AddXp(int)`, `event LevelUp`.
+- `UnlockService` — по `LevelTableConfig` открывает `BuildPlot`/найм; слушает `LevelUp`.
+
+### 4.13 Onboarding
+- `TutorialService`: последовательность шагов, каждый ждёт своё событие из `IEventBus`. Прогресс сохраняется.
+- Presentation: `TutorialArrowView` + подсказка в HUD.
+
+### 4.14 Speech Bubbles
+- `BubbleService` слушает `IEventBus` → `BubbleView` из пула над целью. Тексты — в конфиге.
+
+### 4.15 Save
+- `ISaveService`: `bool TryLoad(out SaveData)`, `void Save(SaveData)`, `void Delete()`.
+- `SaveData` — `[Serializable]`, поле `version`, списки (JsonUtility не умеет Dictionary → массивы пар).
+- Сохраняем: деньги, XP/уровень, постройки (built, уровни апгрейдов), найм, расходники на точках, лояльность VIP, шаг онбординга, открытые локации.
+- **Не сохраняем:** машины в пути, положение персонажа (стартует у склада).
+- Запись атомарная: `save.tmp` → `File.Replace`/move. Путь: `Application.persistentDataPath/save.json`.
+- Автосейв: раз в 30 с + `OnApplicationPause(true)` + `OnApplicationQuit` + после постройки/найма.
+- `ISaveMapper` / `ISaveable` — каждый сервис сам пишет/читает свой кусок `SaveData` (❓ T4).
+- Настройки — отдельно, `PlayerPrefs` через `ISettingsService`.
+
+### 4.16 Scene Flow & Loading
+- Сцены: `Boot` → `MainMenu` → `Gameplay`.
+- Экран загрузки — **persistent canvas** в `Boot` (не отдельная сцена): `ISceneLoader.LoadAsync(name)` на `SceneManager.LoadSceneAsync` + `Awaitable`, показывает прогресс.
+
+### 4.17 Input
+- Input System, свой `.inputactions`: `Point`, `Click` (+ hold для ремонта), `Pan` (WASD), `Zoom` (scroll), `Recenter` (Space), `Cancel` (Esc).
+- `PointerRaycaster`: `Physics.RaycastNonAlloc`, слои `Interactable` / `Ground`; блок, если над UI (`EventSystem.IsPointerOverGameObject`).
+- Цели клика реализуют `IInteractableTarget` (Presentation) → транслируют в `PlayerCommandService`.
+
+### 4.18 Camera
+- `CameraRig`: follow с демпфированием, pan WASD/край экрана, zoom, границы (bounds на локацию), переключение локаций.
+
+### 4.19 UI (MVP)
+- **uGUI** (не UI Toolkit) — нужен world-space UI, проще единый стек. ✅
+- `View` — пассивный MonoBehaviour (кнопки, тексты, `event Action` на клики).
+- `Presenter` — чистый C#, подписан на сервисы, обновляет View **по событиям, не каждый кадр**.
+- `IScreenService` — стек экранов/попапов.
+- Числа — через кешированный форматтер, без аллокаций на каждый кадр.
+- Канвас: `Scale With Screen Size`, 1920×1080, match 0.5.
+
+### 4.20 Audio
+`IAudioService`: `PlaySfx(id)`, музыка; громкость из `ISettingsService` → `AudioMixer` параметры.
+
+## 5. Производительность ✅
+- Пулы: машины, облачка, «+$»-всплывашки, NPC (❓).
+- Кеш `WaitForSeconds`, `NonAlloc`-API физики.
+- Никаких `Update` кроме `GameLoop`, `CameraRig` (LateUpdate), UI-анимаций.
+- NavMesh: `NavMeshSurface` на локацию, obstacle у построек → перепечь при постройке (или carve ❓ T5).
+
+## 6. Тесты 🟡
+EditMode: `Wallet`, `PriceFormula`, `ServicePoint` (прогресс только при occupant, расходник, поломка), `ParkingLot`, `OrderDispatcher`, `PlayerProgress`/unlocks, `NegotiationService` (фейковый `IRandom`), маппинг сейва (round-trip).
+
+## 7. Код-стайл ✅
+- Приватные поля `_camelCase`, `[SerializeField] private`, никаких public-полей.
+- Один класс — один файл, имя файла = имя класса.
+- `sealed` по умолчанию для не-базовых классов.
+- XML-доки на всё публичное; `// Why:` на неочевидное.
+- Коммиты — маленькие, по модулю.
+
+---
+
+## 🗺️ Roadmap
+
+| # | Модуль | Статус |
+|---|---|---|
+| 1 | Структура, asmdef, Core (контейнер, GameLoop, EventBus, Pause, Time/Random) | ⏳ |
+| 2 | Economy | ⏳ |
+| 3 | Config | ⏳ |
+| 4 | Input + Camera + Player (click-to-move) | ⏳ |
+| 5 | Service Points + Parking + Dispatcher | ⏳ |
+| 6 | Cars AI + Spawner + пул | ⏳ |
+| 7 | Warehouse / Supplies | ⏳ |
+| 8 | Build | ⏳ |
+| 9 | Staff (работник, кладовщик) | ⏳ |
+| 10 | Breakdowns | ⏳ |
+| 11 | Progression + Unlocks | ⏳ |
+| 12 | Save | ⏳ |
+| 13 | Scene Flow + Loading | ⏳ |
+| 14 | UI: HUD, панели, попапы → MainMenu → Settings | ⏳ |
+| 15 | VIP + Negotiation | ⏳ |
+| 16 | Onboarding | ⏳ |
+| 17 | Speech Bubbles | ⏳ |
+| 18 | Вторая локация (контент) | ⏳ |
+| 19 | Визуал, звук, полировка | ⏳ |
+
+## ❓ Открытые технические вопросы
+
+| # | Вопрос | Дефолт |
+|---|---|---|
+| T1 | Application полностью без UnityEngine? | Да, пробуем; если мешает — точечно |
+| T2 | Id конфигов: string или int? | string (читаемо в сейве и SO) |
+| T3 | Парковка машин: чистый NavMesh или NavMesh + доводка Lerp на слот? | NavMesh до точки подъезда + Lerp |
+| T4 | Сейв: центральный маппер или `ISaveable` на каждом сервисе? | `ISaveable` — сервисы независимы, легко добавлять |
+| T5 | NavMesh при постройке: rebake или `NavMeshObstacle` carve? | carve (дёшево, без rebake) |
+| T6 | Пул NPC нужен? | Нет, их мало — инстанс при найме |
+| T7 | Вторая локация — та же сцена? | Да (GDD §6) |
+
+## 💡 Тех-идеи — если успеем
+- Editor-валидатор конфигов (дубли Id, пустые ссылки) — `OnValidate` / меню.
+- Debug-панель (F1): +$1000, +уровень, спавн VIP, сброс сейва — очень поможет проверяющему.
+- Миграции `SaveData` по `version`.
+- PlayMode-тест «запуск Gameplay без ошибок».
+
+## 📜 Лог тех-решений
+| Дата | Решение |
+|---|---|
+| 2026-09-30 | DDD-слои, границы через asmdef, Domain `noEngineReferences` |
+| 2026-09-30 | Рукописный контейнер только в EntryPoint'ах; один `GameLoop` |
+| 2026-09-30 | `IEventBus` на struct-событиях + локальные C# events |
+| 2026-09-30 | Пауза через `timeScale`, UI на unscaled |
+| 2026-09-30 | uGUI, MVP |
+| 2026-09-30 | Экран загрузки — persistent canvas в Boot |
