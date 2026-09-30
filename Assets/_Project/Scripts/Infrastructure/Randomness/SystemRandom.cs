@@ -1,7 +1,7 @@
 using System;
 using AutoService.Services.Core;
 
-namespace AutoService.Infrastructure.Random
+namespace AutoService.Infrastructure.Randomness
 {
     /// <summary>
     /// <see cref="IRandom"/> backed by <see cref="System.Random"/>.

@@ -1,5 +1,6 @@
 using System;
 using AutoService.Services.Core;
+using UnityEngine;
 
 namespace AutoService.Infrastructure.Pause
 {
@@ -53,8 +54,6 @@ namespace AutoService.Infrastructure.Pause
             }
         }
 
-        // Why: fully qualified — inside AutoService.Infrastructure.* the name "Time" resolves to the sibling
-        // namespace AutoService.Infrastructure.Time before any using directive is considered.
-        private static void SetTimeScale(float scale) => UnityEngine.Time.timeScale = scale;
+        private static void SetTimeScale(float scale) => Time.timeScale = scale;
     }
 }

@@ -1,7 +1,7 @@
 using System;
 using AutoService.Services.Core;
 
-namespace AutoService.Infrastructure.Time
+namespace AutoService.Infrastructure.Timing
 {
     /// <summary>
     /// <see cref="ITimeProvider"/> backed by the system clock.
