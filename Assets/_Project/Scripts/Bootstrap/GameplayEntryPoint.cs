@@ -75,19 +75,37 @@ namespace AutoService.Bootstrap
         }
 
         /// <summary>Registers a service and tracks its lifecycle interfaces.</summary>
+        /// <remarks>
+        /// The same instance may be registered under several contracts; it is tracked once,
+        /// so <see cref="IInitializable.Initialize"/> and <see cref="ITickable.Tick"/> run once per instance.
+        /// </remarks>
         private void Register<T>(T service) where T : class
         {
             _container.Register(service);
 
-            if (service is IInitializable initializable)
+            if (service is IInitializable initializable && !ContainsReference(_initializables, initializable))
             {
                 _initializables.Add(initializable);
             }
 
-            if (service is ITickable tickable)
+            if (service is ITickable tickable && !ContainsReference(_tickables, tickable))
             {
                 _tickables.Add(tickable);
             }
+        }
+
+        // Why: reference identity, not Equals — a service with overridden equality is still one instance to track.
+        private static bool ContainsReference<TItem>(List<TItem> list, TItem item) where TItem : class
+        {
+            for (int i = 0; i < list.Count; i++)
+            {
+                if (ReferenceEquals(list[i], item))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private void InitializeServices()
