@@ -16,20 +16,54 @@ namespace AutoService.Bootstrap.Editor
         static PlayModeStartScene()
         {
             // Why: deferred — during the very first domain reload after import the AssetDatabase may not be ready yet.
-            EditorApplication.delayCall += Apply;
+            EditorApplication.delayCall += OnEditorReady;
+
+            // Why: picks up Boot.unity as soon as it is created/moved/renamed, without waiting for a recompile.
+            EditorApplication.projectChanged += OnProjectChanged;
+            AssemblyReloadEvents.beforeAssemblyReload += OnBeforeAssemblyReload;
         }
 
-        private static void Apply()
+        private static void OnEditorReady()
+        {
+            if (!TryApply())
+            {
+                Debug.LogWarning("[PlayModeStartScene] Boot scene not found at '" + BootScenePath +
+                                 "'. Create it (see PR 01 Editor setup) so Play Mode starts through the Composition Root.");
+            }
+        }
+
+        private static void OnProjectChanged()
+        {
+            // Why: silent here — projectChanged fires on every asset change, a warning each time would flood the console.
+            TryApply();
+        }
+
+        private static void OnBeforeAssemblyReload()
+        {
+            EditorApplication.projectChanged -= OnProjectChanged;
+            AssemblyReloadEvents.beforeAssemblyReload -= OnBeforeAssemblyReload;
+        }
+
+        private static bool TryApply()
         {
             var bootScene = AssetDatabase.LoadAssetAtPath<SceneAsset>(BootScenePath);
             if (bootScene == null)
             {
-                Debug.LogWarning("[PlayModeStartScene] Boot scene not found at '" + BootScenePath +
-                                 "'. Create it (see PR 01 Editor setup) so Play Mode starts through the Composition Root.");
-                return;
+                // Boot was deleted or moved: fall back to the default behaviour (play the open scene).
+                if (EditorSceneManager.playModeStartScene != null)
+                {
+                    EditorSceneManager.playModeStartScene = null;
+                }
+
+                return false;
             }
 
-            EditorSceneManager.playModeStartScene = bootScene;
+            if (EditorSceneManager.playModeStartScene != bootScene)
+            {
+                EditorSceneManager.playModeStartScene = bootScene;
+            }
+
+            return true;
         }
     }
 }
