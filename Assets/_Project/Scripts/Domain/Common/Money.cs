@@ -43,14 +43,13 @@ namespace AutoService.Domain.Common
         /// <summary>Adds two amounts, saturating at <see cref="long.MaxValue"/> on overflow.</summary>
         public static Money operator +(Money left, Money right)
         {
-            try
-            {
-                return new Money(checked(left.Amount + right.Amount));
-            }
-            catch (OverflowException)
+            // Why: both amounts are non-negative, so this single comparison detects overflow without exceptions.
+            if (right.Amount > long.MaxValue - left.Amount)
             {
                 return MaxValue;
             }
+
+            return new Money(left.Amount + right.Amount);
         }
 
         /// <summary>Subtracts <paramref name="right"/> from <paramref name="left"/>.</summary>
