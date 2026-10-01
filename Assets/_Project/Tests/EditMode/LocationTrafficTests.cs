@@ -17,7 +17,8 @@ namespace AutoService.Tests.EditMode
     /// </summary>
     /// <remarks>
     /// The spawn interval is huge, so a car spawns on the first tick and the next one only on <see cref="SpawnNext"/>.
-    /// Accept and clear delays are zero to keep the tick arithmetic readable.
+    /// Accept and clear delays are zero to keep the tick arithmetic readable. By default every car wants a service and
+    /// parks for exactly <see cref="ParkingStay"/> seconds; tests change that through <see cref="UseTraffic"/>.
     /// </remarks>
     public sealed class LocationTrafficTests
     {
@@ -30,6 +31,7 @@ namespace AutoService.Tests.EditMode
         private const float WashDuration = 6f;
         private const float BarrierDuration = 1f;
         private const float Step = 0.1f;
+        private const float ParkingStay = 5f;
 
         private EventBus _bus;
         private WalletService _wallet;
@@ -40,6 +42,7 @@ namespace AutoService.Tests.EditMode
         private LocationTraffic _traffic;
         private ServicePoint _wash;
         private ServicePoint _barrier;
+        private ServiceTypeSettings _parkingType;
 
         private readonly List<ServiceCompletedEvent> _completed = new List<ServiceCompletedEvent>();
         private readonly List<CarLeftEvent> _left = new List<CarLeftEvent>();
@@ -53,7 +56,8 @@ namespace AutoService.Tests.EditMode
             _points = new ServicePointService(_wallet, _bus);
             _agents = new FakeCarAgents();
             _random = new FakeRandom();
-            _config = new FakeConfigProvider { Traffic = new TrafficSettings(SpawnInterval, 0f, 12, 0f, 0f, 0f) };
+            _config = new FakeConfigProvider();
+            UseTraffic(parkOnlyChance: 0f, stayMin: ParkingStay, stayMax: ParkingStay);
 
             var parking = new ServiceTypeSettings(ParkingType, "Parking", PointKind.Barrier, new Money(2), BarrierDuration, 0f, 0f);
             var wash = new ServiceTypeSettings(WashType, "Wash", PointKind.Service, new Money(12), WashDuration, 0f, 0f);
@@ -62,6 +66,7 @@ namespace AutoService.Tests.EditMode
             _config.CarTypeList.Add(new CarType("sedan", 1, 1.0, 60f));
             _config.CarTypeList.Add(new CarType("suv", 1, 1.5, 60f));
 
+            _parkingType = parking;
             _barrier = _points.Register(parking.CreatePointDefinition(BarrierId, LocationId));
             _wash = _points.Register(wash.CreatePointDefinition(WashId, LocationId));
 
@@ -287,6 +292,142 @@ namespace AutoService.Tests.EditMode
         }
 
         [Test]
+        public void ParkOnly_GoesThroughBarrierStaysAndLeaves_PayingOnce()
+        {
+            UseTraffic(parkOnlyChance: 1f, stayMin: ParkingStay, stayMax: ParkingStay);
+            CreateTraffic();
+            int car = SpawnAtHead();
+
+            Tick(Step);
+            Assert.AreEqual(Destination.Barrier(), Describe(car), "Never straight to the free wash.");
+            Assert.AreEqual(ServicePointState.Idle, _wash.State);
+
+            ParkThroughBarrier(car);
+            Tick(ParkingStay - 1f);
+            Assert.AreEqual(CarDestinationKind.ParkingSlot, _agents.Destinations[car].Kind, "Still staying.");
+            Assert.AreEqual(3, _traffic.ParkingFree);
+
+            Tick(1.5f);
+            Assert.AreEqual(Destination.Exit(), Describe(car));
+            Assert.AreEqual(4, _traffic.ParkingFree, "The slot is released when the car leaves.");
+
+            _agents.Arrive(car);
+            Assert.AreEqual(0, _traffic.CarsAlive);
+            Assert.AreEqual(1, _left.Count);
+            Assert.AreEqual(CarLeaveReason.Served, _left[0].Reason);
+            Assert.AreEqual(new Money(2), _wallet.Balance, "Only the parking fee.");
+            Assert.AreEqual(ServicePointState.Idle, _wash.State);
+        }
+
+        [Test]
+        public void ParkOnlyHead_WaitsForBusyBarrier_EvenIfPointIsFree()
+        {
+            UseTraffic(parkOnlyChance: 1f, stayMin: ParkingStay, stayMax: ParkingStay);
+            CreateTraffic();
+            _barrier.TryReserve(999, Money.Zero);
+            int car = SpawnAtHead();
+
+            Tick(Step);
+
+            Assert.AreEqual(Destination.QueueSlot(0), Describe(car));
+            Assert.AreEqual(1, _traffic.QueueCount);
+            Assert.AreEqual(ServicePointState.Idle, _wash.State);
+        }
+
+        [Test]
+        public void ServiceCar_IsNotDispatchedDuringStay_AndGoesToPointAfterIt()
+        {
+            const float longStay = 20f;
+            UseTraffic(parkOnlyChance: 0f, stayMin: longStay, stayMax: longStay);
+            CreateTraffic();
+            _wash.TryReserve(999, Money.Zero);
+            int carId = SpawnAtHead();
+            Tick(Step);
+            ParkThroughBarrier(carId);
+            _traffic.TryGetCar(carId, out Car car);
+            float patienceWhenParked = car.PatienceLeft;
+
+            ServeAtWash(999);
+            Tick(Step);
+
+            Assert.AreEqual(ServicePointState.Idle, _wash.State, "The wash is free, but the car is still staying.");
+            Assert.AreEqual(CarDestinationKind.ParkingSlot, _agents.Destinations[carId].Kind);
+            Assert.AreEqual(patienceWhenParked, car.PatienceLeft, "No patience is spent during the stay.");
+
+            Tick(longStay);
+
+            Assert.AreEqual(Destination.Point(WashId), Describe(carId));
+        }
+
+        [Test]
+        public void StayingParkedCar_DoesNotBlockQueueHead()
+        {
+            const float longStay = 20f;
+            UseTraffic(parkOnlyChance: 0f, stayMin: longStay, stayMax: longStay);
+            CreateTraffic(parkingCapacity: 1);
+            _wash.TryReserve(999, Money.Zero);
+            int parked = SpawnAtHead();
+            Tick(Step);
+
+            // Spawned before the first car parks: the long spawn tick must not eat into its stay.
+            int head = SpawnAtHead();
+            ParkThroughBarrier(parked);
+            Assert.AreEqual(Destination.QueueSlot(0), Describe(head), "Wash busy and parking full: the head waits.");
+
+            ServeAtWash(999);
+            Tick(Step);
+
+            Assert.AreEqual(Destination.Point(WashId), Describe(head));
+            Assert.AreEqual(CarDestinationKind.ParkingSlot, _agents.Destinations[parked].Kind);
+        }
+
+        [Test]
+        public void ReadyParkedCars_AreDispatchedInReadinessOrder()
+        {
+            UseTraffic(parkOnlyChance: 0f, stayMin: 0f, stayMax: 10f);
+            CreateTraffic(parkingCapacity: 2);
+            _wash.TryReserve(999, Money.Zero);
+
+            // Value() calls in order: spawn interval A, spawn interval B, stay A (9 s), stay B (1 s).
+            _random.Values.Enqueue(0.5f);
+            _random.Values.Enqueue(0.5f);
+            _random.Values.Enqueue(0.9f);
+            _random.Values.Enqueue(0.1f);
+
+            int first = SpawnAtHead();
+            Tick(Step);
+            int second = SpawnAtHead();
+            ParkThroughBarrier(first);
+            Assert.AreEqual(Destination.Barrier(), Describe(second));
+            ParkThroughBarrier(second);
+
+            Tick(2f);   // the second car's short stay is over, the first one still stays
+            Tick(10f);  // now both are ready: second first, first after it
+
+            ServeAtWash(999);
+            Tick(Step);
+
+            Assert.AreEqual(Destination.Point(WashId), Describe(second), "Readiness order, not parking order.");
+            Assert.AreEqual(CarDestinationKind.ParkingSlot, _agents.Destinations[first].Kind);
+        }
+
+        [Test]
+        public void LocationWithoutServicePoints_SpawnsParkingOnlyCars()
+        {
+            _points.Register(_parkingType.CreatePointDefinition("loc2_barrier", "loc2"));
+            var agents = new FakeCarAgents();
+            var traffic = new LocationTraffic(
+                new LocationTrafficDefinition("loc2", "loc2_barrier", 4, 4), _points, agents, _config, _random, _bus);
+
+            traffic.Tick(Step);
+
+            Assert.AreEqual(1, traffic.CarsAlive);
+            Assert.IsTrue(traffic.TryGetCar(agents.Spawned[0], out Car car));
+            Assert.IsFalse(car.WantsService);
+            traffic.Dispose();
+        }
+
+        [Test]
         public void Dispose_Unsubscribes()
         {
             CreateTraffic();
@@ -294,6 +435,11 @@ namespace AutoService.Tests.EditMode
             _traffic.Dispose();
 
             Assert.AreEqual(0, _agents.SubscriberCount);
+        }
+
+        private void UseTraffic(float parkOnlyChance, float stayMin, float stayMax)
+        {
+            _config.Traffic = new TrafficSettings(SpawnInterval, 0f, 12, parkOnlyChance, stayMin, stayMax);
         }
 
         private void CreateTraffic(int queueCapacity = 4, int parkingCapacity = 4)
