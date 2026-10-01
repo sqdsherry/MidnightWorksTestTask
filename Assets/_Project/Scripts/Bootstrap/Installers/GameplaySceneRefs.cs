@@ -1,6 +1,6 @@
-using AutoService.Presentation.Building;
 using AutoService.Presentation.CameraControl;
 using AutoService.Presentation.Hud;
+using AutoService.Presentation.Panels;
 using AutoService.Presentation.Player;
 using AutoService.Presentation.Traffic;
 using UnityEngine;
@@ -32,7 +32,7 @@ namespace AutoService.Bootstrap.Installers
             CarVisualCatalog carVisuals,
             Transform carPoolRoot,
             BalanceView balanceView,
-            BuildPanelView buildPanel)
+            OfferPanelView buildPanel)
         {
             InputActions = inputActions;
             Camera = camera;
@@ -86,6 +86,6 @@ namespace AutoService.Bootstrap.Installers
         public BalanceView BalanceView { get; }
 
         /// <summary>Screen-space build panel.</summary>
-        public BuildPanelView BuildPanel { get; }
+        public OfferPanelView BuildPanel { get; }
     }
 }

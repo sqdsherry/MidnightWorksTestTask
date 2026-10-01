@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using AutoService.Bootstrap.Installers;
-using AutoService.Presentation.Building;
 using AutoService.Presentation.CameraControl;
 using AutoService.Presentation.Hud;
+using AutoService.Presentation.Panels;
 using AutoService.Presentation.Player;
 using AutoService.Presentation.Traffic;
 using AutoService.Services.Core;
@@ -80,7 +80,7 @@ namespace AutoService.Bootstrap
 
         [SerializeField]
         [Tooltip("Screen-space build panel shown next to a plot the character stands at.")]
-        private BuildPanelView _buildPanel;
+        private OfferPanelView _buildPanel;
 
         // Why: lifecycle lists are filled by the installers (through GameplayContext), so every service created there is
         // initialized and ticked without each module having to remember to wire itself in.
