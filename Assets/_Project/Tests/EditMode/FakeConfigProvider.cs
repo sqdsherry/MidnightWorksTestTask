@@ -24,6 +24,12 @@ namespace AutoService.Tests.EditMode
         /// <inheritdoc />
         public IReadOnlyList<CarType> CarTypes => CarTypeList;
 
+        /// <summary>Mutable list behind <see cref="Buildables"/>.</summary>
+        public List<BuildableSettings> BuildableList { get; } = new List<BuildableSettings>();
+
+        /// <inheritdoc />
+        public IReadOnlyList<BuildableSettings> Buildables => BuildableList;
+
         /// <inheritdoc />
         public TrafficSettings Traffic { get; set; } = new TrafficSettings(7f, 0f, 12, 35, 35, 30, 0f, 0f);
 
@@ -31,6 +37,13 @@ namespace AutoService.Tests.EditMode
         public bool TryGetServiceType(string id, out ServiceTypeSettings settings)
         {
             settings = ServiceTypeList.Find(type => string.Equals(type.Id, id, StringComparison.Ordinal));
+            return settings != null;
+        }
+
+        /// <inheritdoc />
+        public bool TryGetBuildable(string id, out BuildableSettings settings)
+        {
+            settings = BuildableList.Find(buildable => string.Equals(buildable.Id, id, StringComparison.Ordinal));
             return settings != null;
         }
     }
