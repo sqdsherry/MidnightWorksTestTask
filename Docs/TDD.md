@@ -238,7 +238,7 @@ EditMode: `Wallet`, `PriceFormula`, `ServicePoint` (прогресс тольк�
 2. Файлы/классы/интерфейсы с контрактами (сигнатуры, события).
 3. Правила реализации (§0 + специфичное для модуля).
 4. Интеграция в EntryPoint.
-5. **Editor setup** — пошагово, что пользователь делает руками в Unity (объекты, компоненты, слои, NavMesh, ссылки в инспекторе).
+5. **Editor setup** — пошагово, что пользователь делает руками в Unity (объекты, компоненты, слои, NavMesh, ссылки в инспекторе). **Для каждого компонента явно писать, на КАКОЙ объект он вешается** (урок 02: компоненты попали на дочерний ApproachPoint вместо куба). Иерархию давать деревом.
 6. Критерии приёмки (что должно работать/какие тесты зелёные).
 7. Ветка и сообщение коммита.
 
@@ -249,8 +249,8 @@ EditMode: `Wallet`, `PriceFormula`, `ServicePoint` (прогресс тольк�
 | # | Ветка | Модуль | День | Приоритет | Статус |
 |---|---|---|---|---|---|
 | 01 | `feature/01-core` | Структура, asmdef, Core (контейнер, GameLoop, EventBus, Pause, Time/Random), Economy, Config-база — [промпт](Prompts/01-core.md) | 1 | M | ✔️ смержен |
-| 02 | `feature/02-player` | Input + Camera + Player click-to-move (whitebox сцена) — [промпт](Prompts/02-player.md) | 1 | M | 🔨 промпт выдан |
-| 03 | `feature/03-service-loop` | Service Points + Parking + Dispatcher + Cars AI + Spawner + пул | 1 | M | ⏳ |
+| 02 | `feature/02-player` | Input + Camera + Player click-to-move (whitebox сцена) — [промпт](Prompts/02-player.md) | 1 | M | ✔️ смержен |
+| 03 | `feature/03-service-loop` | Service Points + Queue + Parking + Traffic + Cars AI + пул + мини-HUD баланса — [промпт](Prompts/03-service-loop.md) | 1–2 | M | 🔨 промпт выдан |
 | 04 | `feature/04-supplies` | Warehouse / Supplies / Carry | 2 | M | ⏳ |
 | 05 | `feature/05-build` | Build (фикс. участки) | 2 | M | ⏳ |
 | 06 | `feature/06-staff` | Staff: работник точки, кладовщик | 2 | M | ⏳ |
