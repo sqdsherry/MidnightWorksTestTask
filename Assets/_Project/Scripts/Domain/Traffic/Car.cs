@@ -3,8 +3,7 @@ using System;
 namespace AutoService.Domain.Traffic
 {
     /// <summary>
-    /// A customer car: its plan (a service, or parking only), patience, parking stay and position in the flow
-    /// (<see cref="CarState"/>).
+    /// A customer car: its visit plan, patience, parking stay and position in the flow (<see cref="CarState"/>).
     /// </summary>
     /// <remarks>
     /// The car does not know about NavMesh or points: the orchestrator tells it where it is sent and reports arrivals.
@@ -21,26 +20,35 @@ namespace AutoService.Domain.Traffic
         /// <summary>Creates a car in <see cref="CarState.Arriving"/> with full patience.</summary>
         /// <param name="id">Runtime id (non-negative).</param>
         /// <param name="type">Car type.</param>
-        /// <param name="requestedServiceTypeId">Id of the service the car wants, or null for a parking-only car.</param>
-        /// <exception cref="ArgumentOutOfRangeException">Thrown for a negative id.</exception>
+        /// <param name="plan">What the car came for.</param>
+        /// <param name="requestedServiceTypeId">
+        /// Id of the service the car wants: null for <see cref="CarVisitPlan.ParkOnly"/>, non-empty otherwise.
+        /// </param>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown for a negative id or an undefined plan.</exception>
         /// <exception cref="ArgumentNullException">Thrown for a null type.</exception>
-        /// <exception cref="ArgumentException">Thrown for an empty (but non-null) service type id.</exception>
-        public Car(int id, CarType type, string requestedServiceTypeId)
+        /// <exception cref="ArgumentException">Thrown when the service type id does not match the plan.</exception>
+        public Car(int id, CarType type, CarVisitPlan plan, string requestedServiceTypeId)
         {
             if (id < 0)
             {
                 throw new ArgumentOutOfRangeException(nameof(id), id, "Car id must be non-negative.");
             }
 
-            // Why: null is the explicit "parking only" plan; an empty string is a config bug, not a plan.
-            if (requestedServiceTypeId != null && requestedServiceTypeId.Trim().Length == 0)
+            if (plan != CarVisitPlan.ParkOnly && plan != CarVisitPlan.WashOnly && plan != CarVisitPlan.WashThenPark)
+            {
+                throw new ArgumentOutOfRangeException(nameof(plan), plan, "Unknown visit plan.");
+            }
+
+            bool hasService = requestedServiceTypeId != null && requestedServiceTypeId.Trim().Length > 0;
+            if ((plan == CarVisitPlan.ParkOnly) != (requestedServiceTypeId == null) || (requestedServiceTypeId != null && !hasService))
             {
                 throw new ArgumentException(
-                    "Requested service type id must be null (parking only) or non-empty.", nameof(requestedServiceTypeId));
+                    "A parking-only car has no service type id; any other plan needs a non-empty one.", nameof(requestedServiceTypeId));
             }
 
             Id = id;
             Type = type ?? throw new ArgumentNullException(nameof(type));
+            Plan = plan;
             RequestedServiceTypeId = requestedServiceTypeId;
             State = CarState.Arriving;
             PatienceLeft = type.Patience;
@@ -56,11 +64,14 @@ namespace AutoService.Domain.Traffic
         /// <summary>Car type.</summary>
         public CarType Type { get; }
 
+        /// <summary>What the car came for.</summary>
+        public CarVisitPlan Plan { get; }
+
         /// <summary>Id of the service the car wants, or null for a parking-only car.</summary>
         public string RequestedServiceTypeId { get; }
 
-        /// <summary>False for a parking-only car: it parks for a while and leaves, never visiting a service point.</summary>
-        public bool WantsService => RequestedServiceTypeId != null;
+        /// <summary>True unless the car only wants to park.</summary>
+        public bool WantsService => Plan != CarVisitPlan.ParkOnly;
 
         /// <summary>Current flow state.</summary>
         public CarState State { get; private set; }
@@ -74,26 +85,23 @@ namespace AutoService.Domain.Traffic
         /// <summary>Patience left as a fraction of the type's patience, 0..1.</summary>
         public float Patience01 => PatienceLeft / Type.Patience;
 
+        /// <summary>
+        /// Id of the point the car is heading for or stands at: its service point (also while in that point's buffer)
+        /// or the entrance barrier; null otherwise.
+        /// </summary>
+        public string TargetPointId { get; private set; }
+
         /// <summary>Reserved parking slot index, or <see cref="NoParkingSlot"/>.</summary>
         public int ParkingSlot { get; private set; }
 
-        /// <summary>Id of the point the car is sent to or stands at, or null.</summary>
-        public string TargetPointId { get; private set; }
+        /// <summary>Stay the car pays for at the entrance, in seconds (set by <see cref="SendToEntrance"/>).</summary>
+        public float PlannedStay { get; private set; }
 
-        /// <summary>
-        /// Id of the point a car heading for the parking exit continues to after paying, or null (it leaves).
-        /// Set by <see cref="SendToParkingExit"/>, consumed by <see cref="ContinueFromParkingExit"/>.
-        /// </summary>
-        public string NextPointId { get; private set; }
-
-        /// <summary>Game time when the car parked (the parking exit fee is charged for the time since then).</summary>
-        public float ParkedAtTime { get; private set; }
-
-        /// <summary>Seconds the car still wants to stay parked (set by <see cref="SendToParking"/>, drained while parked).</summary>
+        /// <summary>Seconds of the stay still left while parked.</summary>
         public float ParkingStayLeft { get; private set; }
 
-        /// <summary>True when the car is parked and its stay is over: it may now drive to the parking exit.</summary>
-        public bool IsReadyToLeaveParking => State == CarState.Parked && ParkingStayLeft <= 0f;
+        /// <summary>True when the car is parked and its stay is over: it leaves.</summary>
+        public bool IsStayOver => State == CarState.Parked && ParkingStayLeft <= 0f;
 
         /// <summary><see cref="CarState.Arriving"/> → <see cref="CarState.InQueue"/>; the car drives to its queue slot.</summary>
         public void EnterQueue()
@@ -111,29 +119,94 @@ namespace AutoService.Domain.Traffic
             HasArrived = false;
         }
 
-        /// <summary>
-        /// <see cref="CarState.InQueue"/> → <see cref="CarState.ToParking"/>: the car drives through the automatic entry gate
-        /// straight to its reserved slot (the gate has no logic of its own).
-        /// </summary>
-        /// <param name="parkingSlot">Reserved slot index (&gt;= 0).</param>
-        /// <param name="parkingStay">Seconds the car will stay parked once there (&gt;= 0).</param>
-        /// <exception cref="ArgumentOutOfRangeException">Thrown for a negative slot or a negative/NaN stay.</exception>
-        public void SendToParking(int parkingSlot, float parkingStay)
+        /// <summary><see cref="CarState.InQueue"/> → <see cref="CarState.ToBuffer"/>: the head waits for its busy point in the point's buffer.</summary>
+        /// <exception cref="ArgumentException">Thrown for an empty point id.</exception>
+        /// <exception cref="InvalidOperationException">Thrown from other states or for a parking-only car.</exception>
+        public void SendToBuffer(string pointId)
         {
+            RequirePointId(pointId);
+            RequireService(nameof(SendToBuffer));
+            Require(CarState.InQueue, nameof(SendToBuffer));
+            TargetPointId = pointId;
+            GoTo(CarState.ToBuffer);
+        }
+
+        /// <summary>
+        /// The buffer moved and the car drives one slot forward: keeps <see cref="CarState.ToBuffer"/>/<see cref="CarState.InBuffer"/>,
+        /// <see cref="HasArrived"/> is reset.
+        /// </summary>
+        public void MoveUpInBuffer()
+        {
+            if (State != CarState.ToBuffer && State != CarState.InBuffer)
+            {
+                throw InvalidTransition(nameof(MoveUpInBuffer));
+            }
+
+            HasArrived = false;
+        }
+
+        /// <summary>
+        /// <see cref="CarState.InQueue"/> or <see cref="CarState.InBuffer"/> → <see cref="CarState.ToPoint"/>: drives to the reserved point.
+        /// </summary>
+        /// <exception cref="ArgumentException">Thrown for an empty point id.</exception>
+        /// <exception cref="InvalidOperationException">Thrown from other states or for a parking-only car.</exception>
+        public void SendToPoint(string pointId)
+        {
+            RequirePointId(pointId);
+            RequireService(nameof(SendToPoint));
+            if (State != CarState.InQueue && State != CarState.InBuffer)
+            {
+                throw InvalidTransition(nameof(SendToPoint));
+            }
+
+            TargetPointId = pointId;
+            GoTo(CarState.ToPoint);
+        }
+
+        /// <summary>
+        /// Drives to a parking entrance with a reserved slot and the stay it will pay for:
+        /// from <see cref="CarState.InQueue"/> (<see cref="CarVisitPlan.ParkOnly"/>, main entrance) or
+        /// from <see cref="CarState.AtPoint"/> (<see cref="CarVisitPlan.WashThenPark"/>, service entrance) → <see cref="CarState.ToEntrance"/>.
+        /// </summary>
+        /// <param name="entrancePointId">Id of the reserved entrance barrier.</param>
+        /// <param name="parkingSlot">Reserved slot index (&gt;= 0).</param>
+        /// <param name="plannedStay">Seconds the car will stay parked (&gt;= 0).</param>
+        /// <exception cref="ArgumentException">Thrown for an empty entrance id.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown for a negative slot or a negative/NaN stay.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the state does not match the plan.</exception>
+        public void SendToEntrance(string entrancePointId, int parkingSlot, float plannedStay)
+        {
+            RequirePointId(entrancePointId);
             if (parkingSlot < 0)
             {
                 throw new ArgumentOutOfRangeException(nameof(parkingSlot), parkingSlot, "Parking slot must be non-negative.");
             }
 
             // Why: the negated comparison also rejects NaN.
-            if (!(parkingStay >= 0f))
+            if (!(plannedStay >= 0f))
             {
-                throw new ArgumentOutOfRangeException(nameof(parkingStay), parkingStay, "Parking stay must be non-negative.");
+                throw new ArgumentOutOfRangeException(nameof(plannedStay), plannedStay, "Planned stay must be non-negative.");
             }
 
-            Require(CarState.InQueue, nameof(SendToParking));
+            bool fromQueue = State == CarState.InQueue && Plan == CarVisitPlan.ParkOnly;
+            bool fromPoint = State == CarState.AtPoint && Plan == CarVisitPlan.WashThenPark;
+            if (!fromQueue && !fromPoint)
+            {
+                throw InvalidTransition(nameof(SendToEntrance));
+            }
+
+            TargetPointId = entrancePointId;
             ParkingSlot = parkingSlot;
-            ParkingStayLeft = parkingStay;
+            PlannedStay = plannedStay;
+            GoTo(CarState.ToEntrance);
+        }
+
+        /// <summary>The fee is paid: <see cref="CarState.AtEntrance"/> → <see cref="CarState.ToParking"/> (drives to <see cref="ParkingSlot"/>).</summary>
+        public void SendToParking()
+        {
+            Require(CarState.AtEntrance, nameof(SendToParking));
+            TargetPointId = null;
+            ParkingStayLeft = PlannedStay;
             GoTo(CarState.ToParking);
         }
 
@@ -149,72 +222,16 @@ namespace AutoService.Domain.Traffic
         }
 
         /// <summary>
-        /// <see cref="CarState.Parked"/> (stay over) → <see cref="CarState.ToParkingExit"/>. Clears <see cref="ParkingSlot"/>
-        /// (the orchestrator releases the slot itself) and remembers where the car goes after paying.
+        /// <see cref="CarState.Parked"/> → <see cref="CarState.Leaving"/>: the car drives out of the lot to the exit.
+        /// Clears <see cref="ParkingSlot"/>: the orchestrator releases the slot itself.
         /// </summary>
-        /// <param name="nextPointId">Reserved point to drive to after the exit, or null to leave the location.</param>
-        /// <exception cref="ArgumentException">Thrown for an empty (but non-null) point id.</exception>
-        /// <exception cref="InvalidOperationException">
-        /// Thrown when the car is not parked, its stay is not over, or a parking-only car is given a point.
-        /// </exception>
-        public void SendToParkingExit(string nextPointId)
+        /// <remarks>Does not require the stay to be over, so an impatient car could leave too (module 14).</remarks>
+        public void LeaveParking()
         {
-            if (nextPointId != null && nextPointId.Trim().Length == 0)
-            {
-                throw new ArgumentException("Next point id must be null (leave) or non-empty.", nameof(nextPointId));
-            }
-
-            if (!IsReadyToLeaveParking || (nextPointId != null && !WantsService))
-            {
-                throw InvalidTransition(nameof(SendToParkingExit));
-            }
-
-            NextPointId = nextPointId;
+            Require(CarState.Parked, nameof(LeaveParking));
             ParkingSlot = NoParkingSlot;
             ParkingStayLeft = 0f;
-            GoTo(CarState.ToParkingExit);
-        }
-
-        /// <summary>
-        /// The parking fee is paid: <see cref="CarState.AtParkingExit"/> → <see cref="CarState.ToPoint"/>
-        /// (<see cref="TargetPointId"/> = <see cref="NextPointId"/>) or, without a next point, → <see cref="CarState.Leaving"/>.
-        /// </summary>
-        public void ContinueFromParkingExit()
-        {
-            Require(CarState.AtParkingExit, nameof(ContinueFromParkingExit));
-            string nextPointId = NextPointId;
-            NextPointId = null;
-            if (nextPointId == null)
-            {
-                GoTo(CarState.Leaving);
-                return;
-            }
-
-            TargetPointId = nextPointId;
-            GoTo(CarState.ToPoint);
-        }
-
-        /// <summary>
-        /// <see cref="CarState.InQueue"/> → <see cref="CarState.ToPoint"/>: the queue head drives straight to a free point.
-        /// Parked cars reach points through <see cref="SendToParkingExit"/> instead.
-        /// </summary>
-        /// <exception cref="ArgumentException">Thrown for an empty point id.</exception>
-        /// <exception cref="InvalidOperationException">Thrown from other states or for a parking-only car.</exception>
-        public void SendToPoint(string pointId)
-        {
-            if (string.IsNullOrWhiteSpace(pointId))
-            {
-                throw new ArgumentException("Point id must not be empty.", nameof(pointId));
-            }
-
-            if (!WantsService)
-            {
-                throw InvalidTransition(nameof(SendToPoint));
-            }
-
-            Require(CarState.InQueue, nameof(SendToPoint));
-            TargetPointId = pointId;
-            GoTo(CarState.ToPoint);
+            GoTo(CarState.Leaving);
         }
 
         /// <summary><see cref="CarState.AtPoint"/> → <see cref="CarState.Leaving"/>; the car drives to the exit.</summary>
@@ -227,34 +244,37 @@ namespace AutoService.Domain.Traffic
 
         /// <summary>
         /// The car reached its current destination: sets <see cref="HasArrived"/> and completes a drive
-        /// (<c>ToParking → Parked</c>, <c>ToParkingExit → AtParkingExit</c>, <c>ToPoint → AtPoint</c>). Other states only set the flag.
+        /// (<c>ToBuffer → InBuffer</c>, <c>ToPoint → AtPoint</c>, <c>ToEntrance → AtEntrance</c>, <c>ToParking → Parked</c>).
+        /// Other states only set the flag.
         /// </summary>
-        /// <param name="time">Current game time, stored as <see cref="ParkedAtTime"/> when the car parks.</param>
-        public void MarkArrived(float time)
+        public void MarkArrived()
         {
             HasArrived = true;
             switch (State)
             {
-                case CarState.ToParking:
-                    State = CarState.Parked;
-                    ParkedAtTime = time;
-                    break;
-                case CarState.ToParkingExit:
-                    State = CarState.AtParkingExit;
+                case CarState.ToBuffer:
+                    State = CarState.InBuffer;
                     break;
                 case CarState.ToPoint:
                     State = CarState.AtPoint;
+                    break;
+                case CarState.ToEntrance:
+                    State = CarState.AtEntrance;
+                    break;
+                case CarState.ToParking:
+                    State = CarState.Parked;
                     break;
             }
         }
 
         /// <summary>
-        /// Drains patience while the car waits (<see cref="CarState.InQueue"/>, <see cref="CarState.Parked"/> after its stay,
-        /// <see cref="CarState.AtParkingExit"/>, <see cref="CarState.AtPoint"/>); ignored otherwise. Never below zero.
+        /// Drains patience while the car waits (<see cref="CarState.InQueue"/>, <see cref="CarState.InBuffer"/>,
+        /// <see cref="CarState.AtPoint"/>, <see cref="CarState.AtEntrance"/>); ignored otherwise. Never below zero.
         /// </summary>
         /// <remarks>
-        /// At the parking exit and at a point patience must only drain until the order is accepted; the car cannot see the
-        /// point, so the orchestrator calls this for those two states only while the point awaits acceptance.
+        /// At a point or an entrance patience must only drain until the order is accepted; the car cannot see the point,
+        /// so the orchestrator calls this for those two states only while the point awaits acceptance.
+        /// The paid parking stay never costs patience.
         /// </remarks>
         public void TickPatience(float deltaTime)
         {
@@ -273,13 +293,12 @@ namespace AutoService.Domain.Traffic
             PatienceDepleted?.Invoke(this);
         }
 
-        // Why: the parking stay is time the customer wanted to spend parked, not waiting — it costs no patience.
         private bool IsWaiting()
         {
             return State == CarState.InQueue
-                || (State == CarState.Parked && ParkingStayLeft <= 0f)
-                || State == CarState.AtParkingExit
-                || State == CarState.AtPoint;
+                || State == CarState.InBuffer
+                || State == CarState.AtPoint
+                || State == CarState.AtEntrance;
         }
 
         private void GoTo(CarState state)
@@ -296,9 +315,26 @@ namespace AutoService.Domain.Traffic
             }
         }
 
+        private void RequireService(string transition)
+        {
+            if (!WantsService)
+            {
+                throw InvalidTransition(transition);
+            }
+        }
+
+        private static void RequirePointId(string pointId)
+        {
+            if (string.IsNullOrWhiteSpace(pointId))
+            {
+                throw new ArgumentException("Point id must not be empty.", nameof(pointId));
+            }
+        }
+
         private InvalidOperationException InvalidTransition(string transition)
         {
-            return new InvalidOperationException("Car " + Id + " cannot " + transition + " from state " + State + ".");
+            return new InvalidOperationException(
+                "Car " + Id + " (" + Plan + ") cannot " + transition + " from state " + State + ".");
         }
     }
 }
