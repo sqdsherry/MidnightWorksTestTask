@@ -1,0 +1,18 @@
+{
+    "name": "AutoService.Bootstrap.Editor",
+    "rootNamespace": "AutoService.Bootstrap.Editor",
+    "references": [
+        "AutoService.Bootstrap"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

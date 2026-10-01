@@ -1,0 +1,19 @@
+{
+    "name": "AutoService.Bootstrap",
+    "rootNamespace": "AutoService.Bootstrap",
+    "references": [
+        "AutoService.Domain",
+        "AutoService.Services",
+        "AutoService.Infrastructure",
+        "AutoService.Presentation"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
