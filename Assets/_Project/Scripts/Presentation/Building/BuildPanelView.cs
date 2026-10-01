@@ -103,6 +103,7 @@ namespace AutoService.Presentation.Building
 
             // Why: no Hide() here — when the panel object itself starts inactive, Awake runs inside Show() and would
             // hide it right away. The presenter hides the panel on start instead.
+            // Unity calls Awake once per object lifetime (on its first activation), so the listeners are never doubled.
         }
 
         private void OnDestroy()
@@ -135,12 +136,14 @@ namespace AutoService.Presentation.Building
             }
 
             _onScreen = true;
-            Root.gameObject.SetActive(true);
+            ActivateChainToRoot();
         }
 
-        /// <summary>Hides the panel.</summary>
+        /// <summary>Hides the panel (only its root; this container stays active).</summary>
         public void Hide()
         {
+            // Why: the container must stay active, otherwise Awake (button listeners, the canvas lookup) would not run
+            // before the next Show and SetScreenPosition would work without a canvas.
             Root.gameObject.SetActive(false);
         }
 
@@ -164,7 +167,14 @@ namespace AutoService.Presentation.Building
             }
 
             _onScreen = onScreen;
-            Root.gameObject.SetActive(onScreen);
+            if (onScreen)
+            {
+                ActivateChainToRoot();
+            }
+            else
+            {
+                Root.gameObject.SetActive(false);
+            }
         }
 
         /// <summary>
@@ -199,6 +209,24 @@ namespace AutoService.Presentation.Building
             position.x = Mathf.Max(minX, Mathf.Min(position.x, maxX));
             position.y = Mathf.Min(maxY, Mathf.Max(position.y, minY));
             root.localPosition = new Vector3(position.x, position.y, 0f);
+        }
+
+        // Why: the panel must show however the objects were left in the scene — this view, the root and every object
+        // between them are switched on (activating this object first also runs Awake if it never ran).
+        private void ActivateChainToRoot()
+        {
+            if (!gameObject.activeSelf)
+            {
+                gameObject.SetActive(true);
+            }
+
+            for (Transform current = Root; current != null && current != transform; current = current.parent)
+            {
+                if (!current.gameObject.activeSelf)
+                {
+                    current.gameObject.SetActive(true);
+                }
+            }
         }
 
         private void OnBuildButton() => BuildClicked?.Invoke();

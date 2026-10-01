@@ -154,6 +154,13 @@ namespace AutoService.Bootstrap.Editor
         };
 
         private static readonly Vector3 ParkingGhostScale = new Vector3(2.2f, 0.05f, 4.4f);
+
+        // Why: the pad's bottom sits above Surface_Parking (top at y = 0.05), and the clickable volume rises above the
+        // road — a flat ghost level with the asphalt would lose the pointer ray to the road's collider.
+        private const float ParkingPadBottom = 0.06f;
+        private static readonly Vector3 ParkingColliderCenter = new Vector3(0f, 0.25f, 0f);
+        private static readonly Vector3 ParkingColliderSize = new Vector3(2.2f, 0.5f, 4.4f);
+        private const float RoadTop = 0.05f;
         private static readonly Vector3 ParkingApproachOffset = new Vector3(0f, 0f, -2f);
 
         // Ghost look and world-space price tag / dwell ring.
@@ -513,10 +520,17 @@ namespace AutoService.Bootstrap.Editor
                 GameObject pad = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 pad.name = "Pad";
                 pad.transform.SetParent(visual.transform, false);
-                pad.transform.localPosition = Vector3.up * (ParkingGhostScale.y * 0.5f);
+                pad.transform.localPosition = Vector3.up * (ParkingPadBottom + ParkingGhostScale.y * 0.5f);
                 pad.transform.localScale = ParkingGhostScale;
+                Object.DestroyImmediate(pad.GetComponent<Collider>());
                 ApplyGhostLook(pad, material);
-                SetInteractableLayer(pad);
+
+                // Why: on the unscaled Visual (it sits exactly on the ghost root) rather than the root itself, so the
+                // collider is switched off together with the ghost once the slot is built and stops catching clicks.
+                var box = visual.AddComponent<BoxCollider>();
+                box.center = ParkingColliderCenter;
+                box.size = ParkingColliderSize;
+                SetInteractableLayer(visual);
 
                 // Why: south of the slot, facing it (north) — where a player would stand to look at the bare asphalt.
                 Transform approach = CreateChild("ApproachPoint", ghostRoot.transform).transform;
@@ -587,6 +601,11 @@ namespace AutoService.Bootstrap.Editor
 
         private static void AddGhostCollider(GameObject visual, Bounds worldBounds)
         {
+            // Why: the clickable volume starts above the road surface, so the road's collider never wins the pointer ray.
+            float bottom = Mathf.Max(worldBounds.min.y, RoadTop + 0.01f);
+            worldBounds.SetMinMax(new Vector3(worldBounds.min.x, bottom, worldBounds.min.z),
+                new Vector3(worldBounds.max.x, Mathf.Max(worldBounds.max.y, bottom + 0.5f), worldBounds.max.z));
+
             var box = visual.AddComponent<BoxCollider>();
             Transform transform = visual.transform;
             box.center = transform.InverseTransformPoint(worldBounds.center);
