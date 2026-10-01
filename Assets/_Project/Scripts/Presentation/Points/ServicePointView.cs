@@ -1,0 +1,128 @@
+using AutoService.Domain.Points;
+using AutoService.Presentation.Interaction;
+using AutoService.Services.Points;
+using UnityEngine;
+
+namespace AutoService.Presentation.Points
+{
+    /// <summary>
+    /// Scene representation of a service point (wash bay, parking barrier...): its ids, where the car stands,
+    /// where the worker stands, and the click interaction that occupies the work spot.
+    /// </summary>
+    /// <remarks>
+    /// The view holds no game state: <see cref="BeginInteraction"/>/<see cref="EndInteraction"/> forward to
+    /// <see cref="IServicePointService"/>, which owns the <see cref="ServicePoint"/> entity.
+    /// Components live on the parent object; colliders may sit on children (the pointer raycast resolves the parent).
+    /// </remarks>
+    public sealed class ServicePointView : MonoBehaviour, IInteractable
+    {
+        private static readonly Vector3 CarFootprint = new Vector3(2f, 0.05f, 4f);
+
+        [SerializeField]
+        [Tooltip("Unique point id, e.g. \"loc1_wash_1\".")]
+        private string _pointId = string.Empty;
+
+        [SerializeField]
+        [Tooltip("Id of a Service Type asset in GameConfig, e.g. \"wash\".")]
+        private string _serviceTypeId = string.Empty;
+
+        [SerializeField]
+        [Tooltip("Where the car stops; its forward (blue Z axis) is the direction the car faces.")]
+        private Transform _carSpot;
+
+        [SerializeField]
+        [Tooltip("Work spot of the player/worker; its forward is the direction they face.")]
+        private Transform _approachPoint;
+
+        [SerializeField]
+        [Tooltip("Optional hover feedback.")]
+        private InteractableHighlight _highlight;
+
+        [SerializeField]
+        [Tooltip("Optional world-space indicators (progress, \"!\").")]
+        private ServicePointHud _hud;
+
+        private IServicePointService _service;
+
+        /// <summary>Unique point id.</summary>
+        public string PointId => _pointId;
+
+        /// <summary>Id of the point's service type.</summary>
+        public string ServiceTypeId => _serviceTypeId;
+
+        /// <summary>Where the car stops (may be null if not assigned).</summary>
+        public Transform CarSpot => _carSpot;
+
+        /// <summary>World-space indicators, or null.</summary>
+        public ServicePointHud Hud => _hud;
+
+        /// <inheritdoc />
+        public Vector3 ApproachPosition => ApproachTransform.position;
+
+        /// <inheritdoc />
+        public Quaternion ApproachRotation => ApproachTransform.rotation;
+
+        /// <inheritdoc />
+        /// <remarks>Not interactable before <see cref="Construct"/>, for unregistered ids and while a worker holds the spot.</remarks>
+        public bool IsInteractable =>
+            _service != null
+            && _service.TryGet(_pointId, out ServicePoint point)
+            && point.Occupant != OccupantKind.Worker;
+
+        private Transform ApproachTransform => _approachPoint != null ? _approachPoint : transform;
+
+        /// <summary>Injects the point registry. Called by the scene entry point after the point was registered.</summary>
+        public void Construct(IServicePointService service)
+        {
+            _service = service;
+        }
+
+        /// <inheritdoc />
+        public void SetHighlighted(bool highlighted)
+        {
+            if (_highlight != null)
+            {
+                _highlight.SetHighlighted(highlighted);
+            }
+        }
+
+        /// <inheritdoc />
+        public void BeginInteraction()
+        {
+            // Why: the result is ignored on purpose — if a worker took the spot meanwhile, the player just stands next to it.
+            _service?.TryOccupy(_pointId, OccupantKind.Player);
+        }
+
+        /// <inheritdoc />
+        public void EndInteraction()
+        {
+            _service?.Vacate(_pointId, OccupantKind.Player);
+        }
+
+        private void OnDrawGizmos()
+        {
+            if (_carSpot != null)
+            {
+                Gizmos.color = new Color(1f, 0.6f, 0.1f, 1f);
+                Matrix4x4 previous = Gizmos.matrix;
+                Gizmos.matrix = Matrix4x4.TRS(_carSpot.position, _carSpot.rotation, Vector3.one);
+                Gizmos.DrawWireCube(Vector3.up * CarFootprint.y, CarFootprint);
+                DrawArrow(Vector3.zero, Vector3.forward, Vector3.right, 2.5f);
+                Gizmos.matrix = previous;
+            }
+
+            Transform approach = ApproachTransform;
+            Gizmos.color = Color.cyan;
+            Gizmos.DrawWireSphere(approach.position, 0.3f);
+            DrawArrow(approach.position, approach.forward, approach.right, 0.8f);
+        }
+
+        private static void DrawArrow(Vector3 origin, Vector3 forward, Vector3 right, float length)
+        {
+            Vector3 tip = origin + forward * length;
+            Gizmos.DrawLine(origin, tip);
+            Gizmos.DrawLine(tip, tip - forward * 0.3f + right * 0.2f);
+            Gizmos.DrawLine(tip, tip - forward * 0.3f - right * 0.2f);
+        }
+    }
+}

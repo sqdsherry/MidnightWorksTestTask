@@ -1,15 +1,21 @@
 using System;
 using System.Collections.Generic;
 using AutoService.Domain.Economy;
+using AutoService.Domain.Points;
 using AutoService.Presentation.CameraControl;
 using AutoService.Presentation.Controls;
+using AutoService.Presentation.Hud;
 using AutoService.Presentation.Interaction;
 using AutoService.Presentation.Player;
+using AutoService.Presentation.Points;
+using AutoService.Presentation.Traffic;
 using AutoService.Services.Config;
 using AutoService.Services.Core;
 using AutoService.Services.Economy;
 using AutoService.Services.Events;
 using AutoService.Services.Formatting;
+using AutoService.Services.Points;
+using AutoService.Services.Traffic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -60,10 +66,32 @@ namespace AutoService.Bootstrap
         [Tooltip("Layers that block pointer raycasts without being clickable (walls, roofs). May be empty.")]
         private LayerMask _occluderMask;
 
+        [Header("Location")]
+        [SerializeField]
+        [Tooltip("Markup of location 1: points, queue and parking slots, spawn/exit.")]
+        private LocationLayout _location1;
+
+        [SerializeField]
+        [Tooltip("Car type id → car prefab.")]
+        private CarVisualCatalog _carVisuals;
+
+        [SerializeField]
+        [Tooltip("Parent of pooled car instances. Optional (scene root if empty).")]
+        private Transform _carPoolRoot;
+
+        [Header("HUD")]
+        [SerializeField]
+        [Tooltip("Temporary balance label (until the full HUD).")]
+        private BalanceView _balanceView;
+
         // Why: lifecycle lists are filled while registering, so every service created here is initialized
         // and ticked without each module having to remember to wire itself in.
         private readonly List<IInitializable> _initializables = new List<IInitializable>();
         private readonly List<ITickable> _tickables = new List<ITickable>();
+
+        // Why: the container holds one instance per contract type, but there is one presenter per point (and, later,
+        // one traffic per location); such instances are owned and disposed by this entry point instead.
+        private readonly List<IDisposable> _ownedDisposables = new List<IDisposable>();
 
         private ServiceContainer _container;
         private IGameLogger _logger;
@@ -90,6 +118,8 @@ namespace AutoService.Bootstrap
 
             RegisterEconomy(config, eventBus);
             RegisterPlayer(_container.Resolve<IPauseService>());
+            RegisterServiceLoop(config, eventBus, _container.Resolve<IRandom>());
+            RegisterHud();
 
             InitializeServices();
             StartTicking();
@@ -100,6 +130,7 @@ namespace AutoService.Bootstrap
         private void OnDestroy()
         {
             StopTicking();
+            DisposeOwned();
             _container?.Dispose();
             _container = null;
         }
@@ -163,6 +194,139 @@ namespace AutoService.Bootstrap
             _cameraRig.Construct(input, _player);
         }
 
+        /// <summary>Points, traffic and their presenters. Tick order: point service → traffic → car agents → point presenters.</summary>
+        private void RegisterServiceLoop(IConfigProvider config, IEventBus eventBus, IRandom random)
+        {
+            var presenters = new List<ServicePointPresenter>();
+            ServicePointService points = RegisterPoints(config, eventBus, presenters);
+            if (points != null)
+            {
+                RegisterTraffic(points, config, random, eventBus);
+            }
+
+            // Why: presenters are tracked last so they render the state produced by this frame's simulation.
+            for (int i = 0; i < presenters.Count; i++)
+            {
+                Track(presenters[i]);
+            }
+        }
+
+        /// <returns>The point service, or null when the location cannot run (traffic is skipped then).</returns>
+        private ServicePointService RegisterPoints(IConfigProvider config, IEventBus eventBus, List<ServicePointPresenter> presenters)
+        {
+            if (!HasReference(_location1, nameof(_location1)))
+            {
+                _logger.Error("[Gameplay] Service loop skipped: assign the location layout on " + name + ".");
+                return null;
+            }
+
+            if (!_location1.Validate(out string problem))
+            {
+                _logger.Error("[Gameplay] Service loop skipped: LocationLayout '" + _location1.name + "': " + problem + ".");
+                return null;
+            }
+
+            var points = new ServicePointService(_container.Resolve<IWalletService>(), eventBus);
+            Register<IServicePointService>(points);
+
+            if (!TryRegisterPoint(points, config, _location1.Barrier, PointKind.Barrier, presenters))
+            {
+                _logger.Error("[Gameplay] Traffic skipped: location '" + _location1.LocationId + "' has no valid barrier.");
+                return null;
+            }
+
+            ServicePointView[] servicePoints = _location1.ServicePoints;
+            for (int i = 0; i < servicePoints.Length; i++)
+            {
+                TryRegisterPoint(points, config, servicePoints[i], PointKind.Service, presenters);
+            }
+
+            return points;
+        }
+
+        private bool TryRegisterPoint(
+            ServicePointService points,
+            IConfigProvider config,
+            ServicePointView view,
+            PointKind expectedKind,
+            List<ServicePointPresenter> presenters)
+        {
+            if (!config.TryGetServiceType(view.ServiceTypeId, out ServiceTypeSettings settings))
+            {
+                _logger.Error("[Gameplay] ServicePointView '" + view.name + "': unknown service type '" + view.ServiceTypeId
+                    + "'; add it to GameConfig. Point skipped.");
+                return false;
+            }
+
+            if (settings.Kind != expectedKind)
+            {
+                _logger.Error("[Gameplay] ServicePointView '" + view.name + "': service type '" + settings.Id + "' is "
+                    + settings.Kind + ", expected " + expectedKind + ". Point skipped.");
+                return false;
+            }
+
+            ServicePoint point;
+            try
+            {
+                point = points.Register(settings.CreatePointDefinition(view.PointId, _location1.LocationId));
+            }
+            catch (Exception exception) when (exception is ArgumentException || exception is InvalidOperationException)
+            {
+                // Empty or duplicate point id.
+                _logger.Error("[Gameplay] ServicePointView '" + view.name + "': " + exception.Message + " Point skipped.");
+                return false;
+            }
+
+            view.Construct(points);
+            presenters.Add(new ServicePointPresenter(view, point));
+            return true;
+        }
+
+        private void RegisterTraffic(IServicePointService points, IConfigProvider config, IRandom random, IEventBus eventBus)
+        {
+            if (!HasReference(_carVisuals, nameof(_carVisuals)))
+            {
+                _logger.Error("[Gameplay] Traffic skipped: assign the car visual catalog on " + name + ".");
+                return;
+            }
+
+            if (config.CarTypes.Count == 0)
+            {
+                _logger.Warning("[Gameplay] GameConfig has no car types; no cars will spawn.");
+            }
+
+            var definition = new LocationTrafficDefinition(
+                _location1.LocationId, _location1.Barrier.PointId, _location1.QueueSlotCount, _location1.ParkingSlotCount);
+            var agents = new CarAgents(_location1, _carVisuals, _carPoolRoot);
+
+            LocationTraffic traffic;
+            try
+            {
+                traffic = new LocationTraffic(definition, points, agents, config, random, eventBus);
+            }
+            catch (ArgumentException exception)
+            {
+                agents.Dispose();
+                _logger.Error("[Gameplay] Traffic skipped: " + exception.Message);
+                return;
+            }
+
+            // Why: tracked, not registered — module 11 adds a second location with its own traffic and agents.
+            Track(traffic);
+            Track(agents);
+        }
+
+        private void RegisterHud()
+        {
+            if (_balanceView == null)
+            {
+                _logger.Warning("[Gameplay] " + nameof(_balanceView) + " is not assigned; the balance is not shown.");
+                return;
+            }
+
+            Register(new BalancePresenter(_container.Resolve<IWalletService>(), _balanceView));
+        }
+
         private bool HasReference(UnityEngine.Object reference, string fieldName)
         {
             if (reference != null)
@@ -192,6 +356,47 @@ namespace AutoService.Bootstrap
             {
                 _tickables.Add(tickable);
             }
+        }
+
+        /// <summary>
+        /// Tracks the lifecycle of an instance that is NOT put into the container (several instances of one type):
+        /// it is initialized, ticked in tracking order and disposed by this entry point.
+        /// </summary>
+        private void Track(object service)
+        {
+            if (service is IInitializable initializable && !ContainsReference(_initializables, initializable))
+            {
+                _initializables.Add(initializable);
+            }
+
+            if (service is ITickable tickable && !ContainsReference(_tickables, tickable))
+            {
+                _tickables.Add(tickable);
+            }
+
+            if (service is IDisposable disposable && !ContainsReference(_ownedDisposables, disposable))
+            {
+                _ownedDisposables.Add(disposable);
+            }
+        }
+
+        // Why: reverse order, like the container — dependents go before what they depend on.
+        private void DisposeOwned()
+        {
+            for (int i = _ownedDisposables.Count - 1; i >= 0; i--)
+            {
+                try
+                {
+                    _ownedDisposables[i].Dispose();
+                }
+                catch (Exception exception)
+                {
+                    // Why: one failing presenter must not leave the remaining subscriptions alive.
+                    Debug.LogException(exception, this);
+                }
+            }
+
+            _ownedDisposables.Clear();
         }
 
         // Why: reference identity, not Equals — a service with overridden equality is still one instance to track.

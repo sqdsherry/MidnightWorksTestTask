@@ -1,0 +1,18 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3c1de7cb503067e4da0d5889e5e0838a, type: 3}
+  m_Name: CT_Suv
+  m_EditorClassIdentifier: AutoService.Infrastructure::AutoService.Infrastructure.Config.CarTypeConfig
+  _id: suv
+  _spawnWeight: 30
+  _priceMultiplier: 1.5
+  _patience: 60

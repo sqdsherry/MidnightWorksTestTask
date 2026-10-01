@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c8f795e43f2e17d4cb90d84d5e1aadab, type: 3}
+  m_Name: CarVisualCatalog
+  m_EditorClassIdentifier: AutoService.Presentation::AutoService.Presentation.Traffic.CarVisualCatalog
+  _entries:
+  - _carTypeId: sedan
+    _prefab: {fileID: 4691065979381291260, guid: bc689d716a87f5a4a95e8230151d140a, type: 3}
+  - _carTypeId: suv
+    _prefab: {fileID: 4691065979381291260, guid: 53afa96df4c206042a6f3102a940ccb2, type: 3}
+  - _carTypeId: sport
+    _prefab: {fileID: 4691065979381291260, guid: a97304ccc6f71cb44a1ad31fff6b1d4c, type: 3}

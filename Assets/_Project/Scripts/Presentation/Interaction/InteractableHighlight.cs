@@ -30,7 +30,7 @@ namespace AutoService.Presentation.Interaction
 
         [SerializeField]
         [Tooltip("Emission needs Emission enabled on the material; Base Color Tint works with any URP material.")]
-        private HighlightProperty _property = HighlightProperty.Emission;
+        private HighlightProperty _property = HighlightProperty.BaseColorTint;
 
         private MaterialPropertyBlock _block;
 
