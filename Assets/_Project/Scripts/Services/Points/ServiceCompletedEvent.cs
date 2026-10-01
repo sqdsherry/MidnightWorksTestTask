@@ -28,7 +28,7 @@ namespace AutoService.Services.Points
         /// <summary>Service type of the point.</summary>
         public string ServiceTypeId { get; }
 
-        /// <summary>Barrier (parking fee paid, the car leaves the lot) or real service (car leaves).</summary>
+        /// <summary>Barrier (parking fee paid, the car drives to its slot) or real service.</summary>
         public PointKind Kind { get; }
 
         /// <summary>Runtime id of the served car.</summary>

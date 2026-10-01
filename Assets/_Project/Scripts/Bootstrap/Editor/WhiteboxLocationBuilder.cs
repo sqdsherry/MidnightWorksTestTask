@@ -9,9 +9,10 @@ using UnityEngine;
 namespace AutoService.Bootstrap.Editor
 {
     /// <summary>
-    /// Editor tool: builds the whitebox road layout v2 of location 1 (GDD §3) under its <see cref="LocationLayout"/> —
-    /// road surfaces, the one-way <see cref="RoadNode"/> graph, merge zones with the automatic entry gate — moves the wash
-    /// and the parking exit barrier into place and fills the layout's references. One undoable step; safe to re-run.
+    /// Editor tool: builds the whitebox road layout v3 of location 1 (GDD §3) under its <see cref="LocationLayout"/> —
+    /// road surfaces, the one-way <see cref="RoadNode"/> graph and the merge zones — places the wash and both parking
+    /// entrances (creating the second one as a copy of the first) and fills the layout's references.
+    /// One undoable step; safe to re-run.
     /// </summary>
     /// <remarks>
     /// Why a script: ~30 linked nodes by hand is an hour of clicking and typos; this is one click and reproducible.
@@ -19,76 +20,80 @@ namespace AutoService.Bootstrap.Editor
     /// </remarks>
     internal static class WhiteboxLocationBuilder
     {
-        // ── Whitebox layout v2, see GDD §3. World coordinates (the location root sits at the origin). ──────────────────
+        // ── Whitebox layout v3, see GDD §3. World coordinates (the location root sits at the origin). ──────────────────
 
         private const string LocationObjectName = "Location_1";
-        private const string RootName = "Roads_v2";
+        private const string RootName = "Roads_v3";
+        private static readonly string[] ObsoleteRootNames = { "Roads_v2", RootName };
         private const string RoadLayerName = "Road";
 
         private const string WashPointId = "loc1_wash_1";
-        private const string OldParkingExitPointId = "loc1_barrier";
-        private const string ParkingExitPointId = "loc1_parking_exit";
+        private const string MainEntrancePointId = "loc1_entrance_main";
+        private const string ServiceEntrancePointId = "loc1_entrance_service";
+        private const string ServiceEntranceObjectName = "Barrier_Service";
+
+        // Ids the main entrance had in earlier layouts (v1 barrier, v2 parking exit); it is found and renamed.
+        private static readonly string[] OldMainEntrancePointIds = { "loc1_parking_exit", "loc1_barrier" };
 
         // Tokens in NodeSpec.Next that stand for the car spots of the points (they carry their own RoadNode).
         private const string WashSpot = "<wash>";
-        private const string ParkingExitSpot = "<parking_exit>";
+        private const string MainEntranceSpot = "<entrance_main>";
+        private const string ServiceEntranceSpot = "<entrance_service>";
 
-        private const string ZoneS = "Zone_S";
+        private const string ZoneM = "Zone_M";
         private const string ZoneJ = "Zone_J";
-        private const string ZoneG = "Zone_G";
 
         private static readonly SurfaceSpec[] Surfaces =
         {
             new SurfaceSpec("Surface_Road", new Vector3(0f, 0f, -21.5f), new Vector3(72f, 0.1f, 8f)),
-            new SurfaceSpec("Surface_LaneA", new Vector3(-3f, 0f, -11f), new Vector3(5f, 0.1f, 13f)),
-            new SurfaceSpec("Surface_ServiceLane", new Vector3(11.5f, 0f, -6f), new Vector3(34f, 0.1f, 5f)),
-            new SurfaceSpec("Surface_Bays", new Vector3(16f, 0f, 1.5f), new Vector3(24f, 0.1f, 10f)),
-            new SurfaceSpec("Surface_LaneD", new Vector3(26f, 0f, -12f), new Vector3(5f, 0.1f, 13f)),
-            new SurfaceSpec("Surface_Parking", new Vector3(11f, 0f, -13f), new Vector3(22f, 0.1f, 9f)),
+            new SurfaceSpec("Surface_Driveway", new Vector3(3f, 0f, -4f), new Vector3(5f, 0.1f, 28f)),
+            new SurfaceSpec("Surface_TopRoad", new Vector3(17f, 0f, 8f), new Vector3(32f, 0.1f, 5f)),
+            new SurfaceSpec("Surface_Entrance2Lane", new Vector3(11f, 0f, 3f), new Vector3(4f, 0.1f, 6f)),
+            new SurfaceSpec("Surface_Parking", new Vector3(19f, 0f, -8.25f), new Vector3(20f, 0.1f, 18.5f)),
+            new SurfaceSpec("Surface_ExitRoad", new Vector3(30f, 0f, -8f), new Vector3(5f, 0.1f, 34f)),
         };
 
         private static readonly ZoneSpec[] Zones =
         {
-            new ZoneSpec(ZoneS, new Vector3(2f, 0f, -6f), new Color(1f, 0.55f, 0f)),
-            new ZoneSpec(ZoneJ, new Vector3(26f, 0f, -6f), new Color(0.9f, 0.2f, 0.9f)),
-            new ZoneSpec(ZoneG, new Vector3(20f, 0f, -16f), new Color(0.3f, 0.9f, 0.3f)),
+            new ZoneSpec(ZoneM, new Vector3(11f, 0f, -13f), new Color(1f, 0.55f, 0f)),
+            new ZoneSpec(ZoneJ, new Vector3(30f, 0f, -3f), new Color(0.9f, 0.2f, 0.9f)),
         };
 
-        // Why: on equally short routes the graph prefers earlier connections, so the through lane is always listed first
-        // (L6 → L12 before the wash: a parking-only car must drive past the bay, not through it).
+        // Why: on equally short routes the graph prefers earlier connections; layout v3 has no such ties
+        // (LocationLayout.Validate reports a route that would drive through a spot or a parking slot).
         private static readonly NodeSpec[] Nodes =
         {
-            new NodeSpec("N_Spawn", -34f, -19f, 90f, null, "Q3"),
-            new NodeSpec("Q3", -24f, -19f, 90f, null, "Q2"),
-            new NodeSpec("Q2", -18f, -19f, 90f, null, "Q1"),
-            new NodeSpec("Q1", -12f, -19f, 90f, null, "Q0"),
-            new NodeSpec("Q0", -6f, -19f, 90f, null, "F1", "R1"),
-            new NodeSpec("F1", -3f, -15f, 0f, null, "A1"),
-            new NodeSpec("A1", -3f, -9f, 0f, null, "S0"),
-            new NodeSpec("S0", -1f, -6f, 90f, null, "S1"),
-            new NodeSpec("S1", 2f, -6f, 90f, ZoneS, "L6"),
-            new NodeSpec("L6", 6f, -6f, 90f, null, "L12", WashSpot),
-            new NodeSpec("L12", 12f, -6f, 90f, null, "L18"),
-            new NodeSpec("L18", 18f, -6f, 90f, null, "L24"),
-            new NodeSpec("L24", 24f, -6f, 90f, null, "J1"),
-            new NodeSpec("E6", 6f, 4f, 90f, null, "E26"),
-            new NodeSpec("E26", 26f, 4f, 180f, null, "J1"),
-            new NodeSpec("J1", 26f, -6f, 180f, ZoneJ, "D1"),
-            new NodeSpec("D1", 26f, -14f, 180f, null, "D2"),
-            new NodeSpec("D2", 26f, -24f, 90f, null, "N_Exit"),
-            new NodeSpec("N_Exit", 34f, -24f, 90f, null),
-            new NodeSpec("R1", 4f, -19f, 90f, null, "R2"),
-            new NodeSpec("R2", 18f, -19f, 90f, null, "G1"),
-            new NodeSpec("G1", 20f, -16f, 0f, ZoneG, "K18"),
-            new NodeSpec("K18", 18f, -14f, 270f, null, "K14", "P3"),
-            new NodeSpec("K14", 14f, -14f, 270f, null, "K10", "P2"),
-            new NodeSpec("K10", 10f, -14f, 270f, null, "K6", "P1"),
-            new NodeSpec("K6", 6f, -14f, 270f, null, "K2", "P0"),
-            new NodeSpec("K2", 2f, -14f, 0f, null, ParkingExitSpot),
-            new NodeSpec("P3", 18f, -11f, 0f, null, "K14"),
-            new NodeSpec("P2", 14f, -11f, 0f, null, "K10"),
-            new NodeSpec("P1", 10f, -11f, 0f, null, "K6"),
-            new NodeSpec("P0", 6f, -11f, 0f, null, "K2"),
+            new NodeSpec("N_Spawn", -32f, -19f, 90f, null, "Q3"),
+            new NodeSpec("Q3", -21f, -19f, 90f, null, "Q2"),
+            new NodeSpec("Q2", -15f, -19f, 90f, null, "Q1"),
+            new NodeSpec("Q1", -9f, -19f, 90f, null, "Q0"),
+            new NodeSpec("Q0", -3f, -19f, 90f, null, "F1", "R1"),
+            new NodeSpec("F1", 3f, -16f, 0f, null, "WB1"),
+            new NodeSpec("WB1", 3f, -12f, 0f, null, "WB0"),
+            new NodeSpec("WB0", 3f, -7f, 0f, null, WashSpot),
+            new NodeSpec("WX", 3f, 4f, 0f, null, "T1"),
+            new NodeSpec("T1", 3f, 8f, 90f, null, "T2"),
+            new NodeSpec("T2", 11f, 8f, 90f, null, ServiceEntranceSpot, "T3"),
+            new NodeSpec("T3", 30f, 8f, 180f, null, "D1"),
+            new NodeSpec("D1", 30f, -3f, 180f, ZoneJ, "D2"),
+            new NodeSpec("D2", 30f, -24f, 90f, null, "N_Exit"),
+            new NodeSpec("N_Exit", 35f, -24f, 90f, null),
+            new NodeSpec("R1", 6f, -19f, 90f, null, MainEntranceSpot),
+            new NodeSpec("B1N", 11f, -16f, 0f, null, "KIN"),
+            new NodeSpec("B2S", 11f, -1f, 180f, null, "KIN"),
+            new NodeSpec("KIN", 11f, -13f, 90f, ZoneM, "K14"),
+            new NodeSpec("K14", 14f, -13f, 90f, null, "P0", "K18"),
+            new NodeSpec("K18", 18f, -13f, 90f, null, "P1", "K22"),
+            new NodeSpec("K22", 22f, -13f, 90f, null, "P2", "K26"),
+            new NodeSpec("K26", 26f, -13f, 0f, null, "P3"),
+            new NodeSpec("P0", 14f, -8f, 0f, null, "X14"),
+            new NodeSpec("P1", 18f, -8f, 0f, null, "X18"),
+            new NodeSpec("P2", 22f, -8f, 0f, null, "X22"),
+            new NodeSpec("P3", 26f, -8f, 0f, null, "X26"),
+            new NodeSpec("X14", 14f, -3f, 90f, null, "X18"),
+            new NodeSpec("X18", 18f, -3f, 90f, null, "X22"),
+            new NodeSpec("X22", 22f, -3f, 90f, null, "X26"),
+            new NodeSpec("X26", 26f, -3f, 90f, null, "D1"),
         };
 
         private const string SpawnNodeName = "N_Spawn";
@@ -96,30 +101,21 @@ namespace AutoService.Bootstrap.Editor
         private static readonly string[] QueueSlotNames = { "Q0", "Q1", "Q2", "Q3" };
         private static readonly string[] ParkingSlotNames = { "P0", "P1", "P2", "P3" };
 
-        // Wash: the car spot lands here (XZ; the bay keeps its height), facing north.
-        private static readonly Vector3 WashSpotPosition = new Vector3(6f, 0f, -1f);
+        // Wash (drive-through): the car spot lands here (XZ; the bay keeps its height), facing north; buffer 0 = nearest.
+        private static readonly Vector3 WashSpotPosition = new Vector3(3f, 0f, -2f);
         private const float WashSpotYaw = 0f;
-        private static readonly string[] WashSpotNext = { "E6" };
+        private static readonly string[] WashSpotNext = { "WX" };
+        private static readonly string[] WashBufferNames = { "WB0", "WB1" };
 
-        // Parking exit barrier: post, car spot (facing north), work spot (facing east), arm along +X lifted around Z.
-        private static readonly Vector3 ExitPostPosition = new Vector3(0f, 0.5f, -10f);
-        private static readonly Vector3 ExitSpotPosition = new Vector3(2f, 0f, -10f);
-        private const float ExitSpotYaw = 0f;
-        private static readonly Vector3 ExitWorkSpotPosition = new Vector3(-1f, 0f, -10f);
-        private const float ExitWorkSpotYaw = 90f;
-        private static readonly Vector3 ExitArmLocalPosition = new Vector3(2f, 0f, 0f);
-        private static readonly string[] ExitSpotNext = { "S1" };
+        // Parking entrances: post, car spot, work spot (facing east), arm along +X lifted around Z.
+        private static readonly BarrierSpec MainEntrance = new BarrierSpec(
+            MainEntrancePointId, new Vector3(9f, 0.5f, -17.5f), new Vector3(11f, 0f, -19f), 0f, new Vector3(7.5f, 0f, -17f), "B1N");
 
-        // Automatic entry gate of zone G: post with an arm along -X over G1.
-        private static readonly Vector3 GatePostPosition = new Vector3(22.5f, 0.5f, -16f);
-        private static readonly Vector3 GateArmLocalPosition = new Vector3(-2f, 0f, 0f);
+        private static readonly BarrierSpec ServiceEntrance = new BarrierSpec(
+            ServiceEntrancePointId, new Vector3(9f, 0.5f, 2.5f), new Vector3(11f, 0f, 4f), 180f, new Vector3(7.5f, 0f, 3f), "B2S");
 
-        // Why: the arm points along -X, so a positive turn around +Z would swing it down into the road.
-        private const float GateOpenAngle = -80f;
-
-        private static readonly Vector3 PostScale = new Vector3(0.5f, 1f, 0.5f);
-        private static readonly Vector3 PivotLocalPosition = new Vector3(0f, 0.5f, 0f);
-        private static readonly Vector3 PivotLocalScale = new Vector3(2f, 1f, 2f); // undoes the post's scale
+        private const float WorkSpotYaw = 90f;
+        private static readonly Vector3 ArmLocalPosition = new Vector3(2f, 0f, 0f);
         private static readonly Vector3 ArmScale = new Vector3(4f, 0.15f, 0.15f);
 
         // ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -138,10 +134,13 @@ namespace AutoService.Bootstrap.Editor
             int undoGroup = Undo.GetCurrentGroup();
             Undo.SetCurrentGroupName("Build Location 1 Roads");
 
-            Transform previous = layout.transform.Find(RootName);
-            if (previous != null)
+            for (int i = 0; i < ObsoleteRootNames.Length; i++)
             {
-                Undo.DestroyObjectImmediate(previous.gameObject);
+                Transform previous = layout.transform.Find(ObsoleteRootNames[i]);
+                if (previous != null)
+                {
+                    Undo.DestroyObjectImmediate(previous.gameObject);
+                }
             }
 
             GameObject root = CreateChild(RootName, layout.transform);
@@ -150,34 +149,38 @@ namespace AutoService.Bootstrap.Editor
             BuildSurfaces(root.transform);
             Dictionary<string, TrafficZone> zones = BuildZones(root.transform);
             Dictionary<string, RoadNode> nodes = BuildNodes(root.transform, zones);
-
-            ServicePointView wash = FindPoint(layout, WashPointId);
-            ServicePointView parkingExit = FindPoint(layout, ParkingExitPointId) ?? FindPoint(layout, OldParkingExitPointId);
             int problems = 0;
 
+            ServicePointView wash = FindPoint(layout, WashPointId);
             if (wash != null && wash.CarSpot != null)
             {
                 nodes[WashSpot] = PlaceWash(wash, nodes);
             }
             else
             {
-                Debug.LogError("[Whitebox] Wash point '" + WashPointId + "' (with a Car Spot) not found; L6 has no bay.");
+                Debug.LogError("[Whitebox] Wash point '" + WashPointId + "' (with a Car Spot) not found; WB0 leads nowhere.");
+                wash = null;
                 problems++;
             }
 
-            if (parkingExit != null && parkingExit.CarSpot != null)
+            ServicePointView main = FindMainEntrance(layout);
+            ServicePointView service = null;
+            if (main != null && main.CarSpot != null)
             {
-                nodes[ParkingExitSpot] = PlaceParkingExit(parkingExit, nodes);
+                nodes[MainEntranceSpot] = PlaceBarrier(main, MainEntrance, nodes);
+                service = FindPoint(layout, ServiceEntrancePointId) ?? CloneBarrier(main);
+                nodes[ServiceEntranceSpot] = PlaceBarrier(service, ServiceEntrance, nodes);
             }
             else
             {
-                Debug.LogError("[Whitebox] Parking exit point '" + OldParkingExitPointId + "' / '" + ParkingExitPointId
-                    + "' (with a Car Spot) not found; K2 leads nowhere.");
+                Debug.LogError("[Whitebox] Main entrance '" + MainEntrancePointId + "' (or its older ids '"
+                    + string.Join("', '", OldMainEntrancePointIds) + "') with a Car Spot not found; no parking entrances placed.");
+                main = null;
                 problems++;
             }
 
             LinkNodes(nodes);
-            FillLayout(layout, nodes, parkingExit, wash);
+            FillLayout(layout, nodes, main, service, wash);
 
             Undo.CollapseUndoOperations(undoGroup);
             EditorSceneManager.MarkSceneDirty(layout.gameObject.scene);
@@ -185,7 +188,7 @@ namespace AutoService.Bootstrap.Editor
 
             // Why: no LocationLayout.Validate here — it caches the graph on the instance, and a second run of this tool
             // would then validate against the destroyed nodes. GameplayEntryPoint validates the layout on Play.
-            Debug.Log("[Whitebox] Location 1 roads built: " + Nodes.Length + " nodes, " + Zones.Length + " zones"
+            Debug.Log("[Whitebox] Location 1 roads v3 built: " + Nodes.Length + " nodes, " + Zones.Length + " zones"
                 + (problems == 0 ? ". Press Play: the layout is validated on start." : ", " + problems + " problem(s) above."), root);
         }
 
@@ -211,6 +214,17 @@ namespace AutoService.Bootstrap.Editor
             }
 
             return null;
+        }
+
+        private static ServicePointView FindMainEntrance(LocationLayout layout)
+        {
+            ServicePointView main = FindPoint(layout, MainEntrancePointId);
+            for (int i = 0; main == null && i < OldMainEntrancePointIds.Length; i++)
+            {
+                main = FindPoint(layout, OldMainEntrancePointIds[i]);
+            }
+
+            return main;
         }
 
         private static ServicePointView FindPoint(LocationLayout layout, string pointId)
@@ -261,39 +275,11 @@ namespace AutoService.Bootstrap.Editor
                 var zone = zoneObject.AddComponent<TrafficZone>();
                 var serialized = new SerializedObject(zone);
                 serialized.FindProperty("_gizmoColor").colorValue = spec.Color;
-                if (spec.Name == ZoneG)
-                {
-                    serialized.FindProperty("_gate").objectReferenceValue = BuildGate(zoneObject.transform);
-                }
-
                 serialized.ApplyModifiedPropertiesWithoutUndo();
                 zones.Add(spec.Name, zone);
             }
 
             return zones;
-        }
-
-        private static BarrierArm BuildGate(Transform zone)
-        {
-            GameObject post = CreateCube("GatePost", zone);
-            post.transform.SetPositionAndRotation(GatePostPosition, Quaternion.identity);
-            post.transform.localScale = PostScale;
-
-            GameObject pivot = CreateChild("ArmPivot", post.transform);
-            pivot.transform.localPosition = PivotLocalPosition;
-            pivot.transform.localScale = PivotLocalScale;
-
-            GameObject arm = CreateCube("Arm", pivot.transform);
-            arm.transform.localPosition = GateArmLocalPosition;
-            arm.transform.localScale = ArmScale;
-
-            var barrierArm = post.AddComponent<BarrierArm>();
-            var serialized = new SerializedObject(barrierArm);
-            serialized.FindProperty("_arm").objectReferenceValue = pivot.transform;
-            serialized.FindProperty("_openAxis").vector3Value = Vector3.forward;
-            serialized.FindProperty("_openAngle").floatValue = GateOpenAngle;
-            serialized.ApplyModifiedPropertiesWithoutUndo();
-            return barrierArm;
         }
 
         private static Dictionary<string, RoadNode> BuildNodes(Transform root, Dictionary<string, TrafficZone> zones)
@@ -333,49 +319,61 @@ namespace AutoService.Bootstrap.Editor
             offset.y = 0f;
             root.position += offset;
 
+            var view = new SerializedObject(wash);
+            SetArray(view.FindProperty("_bufferSlots"), Lookup(nodes, WashBufferNames));
+            view.ApplyModifiedProperties();
+
             RoadNode node = GetOrAddNode(spot.gameObject);
             SetNext(node, WashSpotNext, nodes);
             return node;
         }
 
-        /// <returns>The road node on the parking exit's car spot.</returns>
-        private static RoadNode PlaceParkingExit(ServicePointView exit, Dictionary<string, RoadNode> nodes)
+        // Why: the second entrance is a copy of the first, so it gets the same post, arm, HUD and click setup.
+        private static ServicePointView CloneBarrier(ServicePointView source)
         {
-            var view = new SerializedObject(exit);
-            view.FindProperty("_pointId").stringValue = ParkingExitPointId;
+            GameObject copy = Object.Instantiate(source.gameObject, source.transform.parent);
+            copy.name = ServiceEntranceObjectName;
+            Undo.RegisterCreatedObjectUndo(copy, "Create service entrance");
+            return copy.GetComponent<ServicePointView>();
+        }
+
+        /// <returns>The road node on the barrier's car spot.</returns>
+        private static RoadNode PlaceBarrier(ServicePointView barrier, BarrierSpec spec, Dictionary<string, RoadNode> nodes)
+        {
+            var view = new SerializedObject(barrier);
+            view.FindProperty("_pointId").stringValue = spec.PointId;
             view.ApplyModifiedProperties();
 
-            Transform post = exit.transform;
-            Undo.RecordObject(post, "Move parking exit");
-            post.SetPositionAndRotation(ExitPostPosition, Quaternion.identity);
+            Transform post = barrier.transform;
+            Undo.RecordObject(post, "Move " + spec.PointId);
+            post.SetPositionAndRotation(spec.PostPosition, Quaternion.identity);
 
-            Transform spot = exit.CarSpot;
-            Undo.RecordObject(spot, "Move parking exit car spot");
-            spot.SetPositionAndRotation(ExitSpotPosition, Quaternion.Euler(0f, ExitSpotYaw, 0f));
+            Transform spot = barrier.CarSpot;
+            Undo.RecordObject(spot, "Move " + spec.PointId + " car spot");
+            spot.SetPositionAndRotation(spec.SpotPosition, Quaternion.Euler(0f, spec.SpotYaw, 0f));
 
-            Object workSpot = view.FindProperty("_approachPoint").objectReferenceValue;
-            if (workSpot is Transform work)
+            if (view.FindProperty("_approachPoint").objectReferenceValue is Transform work)
             {
-                Undo.RecordObject(work, "Move parking exit work spot");
-                work.SetPositionAndRotation(ExitWorkSpotPosition, Quaternion.Euler(0f, ExitWorkSpotYaw, 0f));
+                Undo.RecordObject(work, "Move " + spec.PointId + " work spot");
+                work.SetPositionAndRotation(spec.WorkSpotPosition, Quaternion.Euler(0f, WorkSpotYaw, 0f));
             }
             else
             {
-                Debug.LogWarning("[Whitebox] Parking exit '" + exit.name + "' has no Approach Point; the worker stands at the post.", exit);
+                Debug.LogWarning("[Whitebox] Barrier '" + barrier.name + "' has no Approach Point; the worker stands at the post.", barrier);
             }
 
-            TurnExitArm(exit);
+            TurnArm(barrier);
 
             RoadNode node = GetOrAddNode(spot.gameObject);
-            SetNext(node, ExitSpotNext, nodes);
+            SetNext(node, new[] { spec.Next }, nodes);
             return node;
         }
 
-        private static void TurnExitArm(ServicePointView exit)
+        private static void TurnArm(ServicePointView barrier)
         {
-            if (!exit.TryGetComponent(out BarrierArm barrierArm))
+            if (!barrier.TryGetComponent(out BarrierArm barrierArm))
             {
-                Debug.LogWarning("[Whitebox] Parking exit '" + exit.name + "' has no BarrierArm; the arm was not turned.", exit);
+                Debug.LogWarning("[Whitebox] Barrier '" + barrier.name + "' has no BarrierArm; the arm was not turned.", barrier);
                 return;
             }
 
@@ -386,16 +384,16 @@ namespace AutoService.Bootstrap.Editor
             var pivot = serialized.FindProperty("_arm").objectReferenceValue as Transform;
             if (pivot == null || pivot.childCount == 0)
             {
-                Debug.LogWarning("[Whitebox] BarrierArm of '" + exit.name + "' has no pivot with an arm child; the arm was not turned.", exit);
+                Debug.LogWarning("[Whitebox] BarrierArm of '" + barrier.name + "' has no pivot with an arm child; the arm was not turned.", barrier);
                 return;
             }
 
-            Undo.RecordObject(pivot, "Reset parking exit arm pivot");
+            Undo.RecordObject(pivot, "Reset barrier arm pivot");
             pivot.localRotation = Quaternion.identity;
 
             Transform arm = pivot.GetChild(0);
-            Undo.RecordObject(arm, "Turn parking exit arm");
-            arm.localPosition = ExitArmLocalPosition;
+            Undo.RecordObject(arm, "Turn barrier arm");
+            arm.localPosition = ArmLocalPosition;
             arm.localRotation = Quaternion.identity;
             arm.localScale = ArmScale;
         }
@@ -417,7 +415,7 @@ namespace AutoService.Bootstrap.Editor
                 {
                     targets.Add(target);
                 }
-                else if (next[i] != WashSpot && next[i] != ParkingExitSpot)
+                else if (next[i] != WashSpot && next[i] != MainEntranceSpot && next[i] != ServiceEntranceSpot)
                 {
                     Debug.LogError("[Whitebox] Node table: '" + node.name + "' links to unknown node '" + next[i] + "'.");
                 }
@@ -429,16 +427,21 @@ namespace AutoService.Bootstrap.Editor
         }
 
         private static void FillLayout(
-            LocationLayout layout, Dictionary<string, RoadNode> nodes, ServicePointView parkingExit, ServicePointView wash)
+            LocationLayout layout,
+            Dictionary<string, RoadNode> nodes,
+            ServicePointView main,
+            ServicePointView service,
+            ServicePointView wash)
         {
             var serialized = new SerializedObject(layout);
             serialized.FindProperty("_spawnNode").objectReferenceValue = nodes[SpawnNodeName];
             serialized.FindProperty("_exitNode").objectReferenceValue = nodes[ExitNodeName];
             SetArray(serialized.FindProperty("_queueSlots"), Lookup(nodes, QueueSlotNames));
             SetArray(serialized.FindProperty("_parkingSlots"), Lookup(nodes, ParkingSlotNames));
-            if (parkingExit != null)
+            if (main != null)
             {
-                serialized.FindProperty("_parkingExit").objectReferenceValue = parkingExit;
+                serialized.FindProperty("_mainEntrance").objectReferenceValue = main;
+                serialized.FindProperty("_serviceEntrance").objectReferenceValue = service;
             }
 
             if (wash != null)
@@ -481,16 +484,6 @@ namespace AutoService.Bootstrap.Editor
             return child;
         }
 
-        // Why: gate parts are visuals only — a collider would block clicks and, on the Road layer, the car NavMesh.
-        private static GameObject CreateCube(string name, Transform parent)
-        {
-            GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            cube.name = name;
-            Object.DestroyImmediate(cube.GetComponent<Collider>());
-            cube.transform.SetParent(parent, false);
-            return cube;
-        }
-
         private readonly struct SurfaceSpec
         {
             public SurfaceSpec(string name, Vector3 position, Vector3 scale)
@@ -523,6 +516,33 @@ namespace AutoService.Bootstrap.Editor
             public Color Color { get; }
         }
 
+        private readonly struct BarrierSpec
+        {
+            public BarrierSpec(string pointId, Vector3 postPosition, Vector3 spotPosition, float spotYaw, Vector3 workSpotPosition, string next)
+            {
+                PointId = pointId;
+                PostPosition = postPosition;
+                SpotPosition = spotPosition;
+                SpotYaw = spotYaw;
+                WorkSpotPosition = workSpotPosition;
+                Next = next;
+            }
+
+            public string PointId { get; }
+
+            public Vector3 PostPosition { get; }
+
+            public Vector3 SpotPosition { get; }
+
+            /// <summary>Heading of the car at the barrier in degrees around Y (0 = north/+Z, 180 = south).</summary>
+            public float SpotYaw { get; }
+
+            public Vector3 WorkSpotPosition { get; }
+
+            /// <summary>Node the car drives to after paying.</summary>
+            public string Next { get; }
+        }
+
         private readonly struct NodeSpec
         {
             public NodeSpec(string name, float x, float z, float yaw, string zone, params string[] next)
@@ -544,7 +564,7 @@ namespace AutoService.Bootstrap.Editor
             /// <summary>Merge zone name, or null.</summary>
             public string Zone { get; }
 
-            /// <summary>Names of the next nodes (or <c>WashSpot</c>/<c>ParkingExitSpot</c> tokens), through lane first.</summary>
+            /// <summary>Names of the next nodes (or the car spot tokens), in preference order.</summary>
             public string[] Next { get; }
         }
     }

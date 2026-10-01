@@ -5,7 +5,7 @@ namespace AutoService.Domain.Economy
 {
     /// <summary>
     /// Price formulas: the exponential cost curve used for upgrades, hires and other repeatable purchases,
-    /// and the time-based fee of the parking exit. Stateless pure functions.
+    /// and the time-based fee of the parking entrances. Stateless pure functions.
     /// </summary>
     public static class PriceFormula
     {

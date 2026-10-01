@@ -5,7 +5,7 @@ namespace AutoService.Presentation.Traffic.Routing
 {
     /// <summary>
     /// A merge zone of the road graph: at most one car at a time may drive on the <see cref="RoadNode"/>s that reference it;
-    /// the others wait on the node before the zone. Optionally drives an automatic gate arm (the parking entrance).
+    /// the others wait on the node before the zone. Optionally drives an automatic gate arm (unused in layout v3, kept for later layouts).
     /// </summary>
     /// <remarks>
     /// Pure presentation: the traffic logic never sees zones, it only decides where cars go. Occupancy is runtime state
@@ -21,7 +21,7 @@ namespace AutoService.Presentation.Traffic.Routing
         private Color _gizmoColor = new Color(1f, 0.5f, 0f, 1f);
 
         [SerializeField]
-        [Tooltip("Optional automatic gate: open while a car is in the zone (parking entrance).")]
+        [Tooltip("Optional automatic gate: open while a car is in the zone.")]
         private BarrierArm _gate;
 
         private int _occupantCarId = NoCar;

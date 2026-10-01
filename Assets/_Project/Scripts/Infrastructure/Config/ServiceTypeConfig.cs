@@ -19,7 +19,7 @@ namespace AutoService.Infrastructure.Config
         private string _displayName = string.Empty;
 
         [SerializeField]
-        [Tooltip("Barrier = parking exit (fee for the time parked); Service = a real service after which the car leaves.")]
+        [Tooltip("Barrier = parking entrance (fee for the planned stay); Service = a real service after which the car leaves.")]
         private PointKind _kind = PointKind.Service;
 
         [SerializeField, Min(0)]
@@ -27,7 +27,7 @@ namespace AutoService.Infrastructure.Config
         private long _basePrice = 10;
 
         [SerializeField, Min(0f)]
-        [Tooltip("Extra dollars per second the car stayed (parking exit fee: (Base Price + this × seconds) × car multiplier). 0 = flat price.")]
+        [Tooltip("Extra dollars per second of the planned stay (parking entrance fee: (Base Price + this × seconds) × car multiplier). 0 = flat price.")]
         private float _pricePerSecond;
 
         [SerializeField, Min(0f)]

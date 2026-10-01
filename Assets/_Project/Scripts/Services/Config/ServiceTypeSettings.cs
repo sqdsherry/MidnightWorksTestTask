@@ -14,7 +14,7 @@ namespace AutoService.Services.Config
         /// <param name="displayName">Player-facing name (English).</param>
         /// <param name="kind">Whether points of this type are barriers or real services.</param>
         /// <param name="basePrice">Price before the car type multiplier.</param>
-        /// <param name="pricePerSecond">Extra dollars per second of the car's stay (parking exit fee; 0 = flat price).</param>
+        /// <param name="pricePerSecond">Extra dollars per second of the car's stay (parking entrance fee; 0 = flat price).</param>
         /// <param name="serviceDuration">Seconds of occupied work per car.</param>
         /// <param name="acceptDelay">Seconds of presence before the order is accepted.</param>
         /// <param name="clearDelay">Seconds the point stays unavailable after a car was served.</param>
@@ -66,7 +66,7 @@ namespace AutoService.Services.Config
         /// <summary>Price before the car type multiplier.</summary>
         public Money BasePrice { get; }
 
-        /// <summary>Extra dollars per second of the car's stay; used by the parking exit's time-based fee.</summary>
+        /// <summary>Extra dollars per second of the car's stay; used by the parking entrances' time-based fee.</summary>
         public double PricePerSecond { get; }
 
         /// <summary>Seconds of occupied work per car.</summary>

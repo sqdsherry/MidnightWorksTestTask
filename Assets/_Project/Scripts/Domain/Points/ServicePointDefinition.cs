@@ -14,7 +14,7 @@ namespace AutoService.Domain.Points
         /// <param name="serviceTypeId">Id of the service the point provides (from config).</param>
         /// <param name="kind">Barrier or real service.</param>
         /// <param name="basePrice">Price before the car type multiplier.</param>
-        /// <param name="pricePerSecond">Extra dollars per second of the car's stay (time-based fee of the parking exit; 0 = flat price).</param>
+        /// <param name="pricePerSecond">Extra dollars per second of the car's stay (time-based fee of the parking entrances; 0 = flat price).</param>
         /// <param name="serviceDuration">Seconds of occupied work needed to finish the service.</param>
         /// <param name="acceptDelay">Seconds the work spot must be occupied before the order is accepted.</param>
         /// <param name="clearDelay">Seconds the point stays unavailable after a car has been served.</param>
@@ -64,7 +64,7 @@ namespace AutoService.Domain.Points
         /// <summary>Price before the car type multiplier.</summary>
         public Money BasePrice { get; }
 
-        /// <summary>Extra dollars per second of the car's stay; only the parking exit uses it (see <c>PriceFormula.TimeBased</c>).</summary>
+        /// <summary>Extra dollars per second of the car's stay; only the parking entrances use it (see <c>PriceFormula.TimeBased</c>).</summary>
         public double PricePerSecond { get; }
 
         /// <summary>Seconds of occupied work needed to finish the service (0 = instant).</summary>
