@@ -251,11 +251,10 @@ EditMode: `Wallet`, `PriceFormula`, `ServicePoint` (прогресс тольк�
 | 01 | `feature/01-core` | Структура, asmdef, Core (контейнер, GameLoop, EventBus, Pause, Time/Random), Economy, Config-база — [промпт](Prompts/01-core.md) | 1 | M | ✔️ смержен |
 | 02 | `feature/02-player` | Input + Camera + Player click-to-move (whitebox сцена) — [промпт](Prompts/02-player.md) | 1 | M | ✔️ смержен |
 | 03 | `feature/03-service-loop` | Service Points + Queue + Parking + Traffic + Cars AI + пул + мини-HUD баланса — [промпт](Prompts/03-service-loop.md) | 1–2 | M | ✔️ смержен |
-| 03b | `feature/03b-traffic-routing` | Трафик v2: маршруты по точкам, зоны слияния, авто-ворота въезда, шлагбаум выезда с оплатой за время — [промпт](Prompts/03b-traffic-routing.md) | 2 | M | 🔨 промпт выдан |
+| 03b | `feature/03b-traffic-routing` | Трафик v3: граф дорог, зоны слияния, 2 въездных шлагбаума с оплатой за время, буферы боксов, планы визита — [v2](Prompts/03b-traffic-routing.md) → [v3](Prompts/03b2-layout-v3.md) | Д1 | M | ✔️ смержен |
 | R1 | `feature/r1-installers` | Рефакторинг: `GameplayEntryPoint` → инсталлеры по модулям | 2 | S | ⏳ |
-| 04 | `feature/04-supplies` | Warehouse / Supplies / Carry | 2 | M | ⏳ |
-| 05 | `feature/05-build` | Build (фикс. участки) | 2 | M | ⏳ |
-| 06 | `feature/06-staff` | Staff: работник точки, кладовщик | 2 | M | ⏳ |
+| 04 | `feature/04-build` | **A1** Стройка: ряд 4 боксов с буферами, места парковки, рост потока, панель постройки — [промпт](Prompts/04-a1-build.md) | Д1 | M | 📝 промпт готов |
+| 05 | `feature/05-staff-supplies` | **A2** Персонал (работник точки, грузчик), склад/расходники/перенос, панель точки + апгрейды | Д1–2 | M | ⏳ |
 | 07 | `feature/07-progression` | Progression (XP/уровень — **пишет пользователь** с подсказками архитектора) + Unlocks (кодер) | 2 | M | ⏳ |
 | 08 | `feature/08-save` | Save + Settings | 2 | M | ⏳ |
 | 09 | `feature/09-scenes-ui` | Scene Flow + Loading + MainMenu + Settings + HUD + панели/попапы | 3 | M | ⏳ |
@@ -263,11 +262,19 @@ EditMode: `Wallet`, `PriceFormula`, `ServicePoint` (прогресс тольк�
 | 11 | `feature/11-location2` | 2-я локация + переключение камеры | 3 | M | ⏳ |
 | 12 | `feature/12-visual` | Ассеты, стиль, звук, juice | 3 | M | ⏳ |
 | 13 | `feature/13-vip` | VIP + Negotiation | 4 | S | ⏳ |
-| 14 | `feature/14-breakdowns` | Breakdowns + терпение/уход | 4 | S | ⏳ |
-| 15 | `feature/15-bubbles` | Speech Bubbles, debug-панель | 4 | C | ⏳ |
+| 14 | `feature/14-incidents` | Инциденты «удержи, чтобы решить»: поломки точек + мусор на парковке + уборщик; терпение/уход злых | 4 | S | ⏳ |
+| 15 | `feature/15-debug-bubbles` | **Debug-панель F1 [M]** (+$, +уровень, спавн VIP, сброс сейва); облачки-реплики [C] | 3–4 | M/C | ⏳ |
 | 16 | `feature/16-release` | README, чек-лист TZ.md, багфикс | 4 | M | ⏳ |
 
 > Урезание под срок: тесты — только ключевой домен (Wallet, ServicePoint, ParkingLot, Save round-trip). Терпение как счётчик заложить в 03, уход злых — в 14.
+
+## 🐞 Известные проблемы (чинить в пакете D / полировке)
+
+| # | Проблема | Причина | Идея решения |
+|---|---|---|---|
+| K1 | Машины **обрывисто дёргаются при парковке** (и на точках) | на финальном узле агент резко тормозит, затем доворот на месте с 360°/с | узел-«подход» перед местом (заезд по прямой), плавное торможение (`autoBraking`, меньший `alignSpeed`, доворот во время подъезда), `Quaternion.Slerp` с демпфированием |
+| K2 | Машины проезжают сквозь друг друга при подтягивании очереди | avoidance = None | дистанция до впереди идущей по пути (проверка занятости следующего узла) или avoidance Low для едущих машин |
+| K3 | Подсветка шлагбаума теряет стрелу после пересборки разметки | builder не обновляет `InteractableHighlight._renderers` | builder добавляет новую стрелу в renderers (в A1) |
 
 ## ❓ Открытые технические вопросы
 

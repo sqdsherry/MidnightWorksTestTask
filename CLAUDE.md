@@ -49,5 +49,6 @@ Bootstrap ──► все (Composition Root)
 - Мерж при открытом Unity — без `git checkout` туда-обратно (иначе Unity переимпортирует исчезнувшие на секунду файлы): merge-коммит через `git commit-tree <feature>^{tree} -p main -p <feature>` + `update-ref`, когда `main` — предок ветки.
 - **Одна рабочая папка на всех:** пока открыта feature-ветка, архитектор не коммитит Docs (коммит уйдёт в чужую ветку).
 - Логи Unity (Console, компиляция): `%LOCALAPPDATA%\Unity\Editor\Editor.log`. Шум `ExecutionEngineException: String conversion error` от `QuickInstaller` — из-за кириллицы в пути проекта, на игру не влияет.
+- **Unity Preferences → General → Script Changes While Playing = Recompile After Finished Playing.** Иначе перекомпиляция во время Play теряет C#-граф сервисов (интерфейсные поля не переживают hot reload) → сотни `NullReferenceException` в `GameLoop.Update` — это не баг кода.
 - Результаты Test Runner (после Run All в Editor): `%USERPROFILE%\AppData\LocalLow\DefaultCompany\MidnightWorksTestTask\TestResults.xml` — архитектор читает их сам.
 - Не коммитить `Library/`, `Temp/`, `Logs/`, `UserSettings/`, `*.csproj`, `*.sln`.
