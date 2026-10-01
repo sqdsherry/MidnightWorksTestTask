@@ -46,6 +46,7 @@ namespace AutoService.Presentation.Traffic
         private List<int> _pendingArrivals = new List<int>();
         private List<int> _raisingArrivals = new List<int>();
 
+        private LocationTraffic _debugTraffic;
         private bool _disposed;
 
         /// <summary>Builds the layout's road graph (once) and creates one pool per catalog entry.</summary>
@@ -95,6 +96,23 @@ namespace AutoService.Presentation.Traffic
         /// <inheritdoc />
         public event Action<int> Arrived;
 
+        /// <summary>
+        /// Debug only: cars label themselves in the Scene view with their plan and state read from <paramref name="traffic"/>.
+        /// </summary>
+        /// <remarks>A setter, not a constructor argument: the traffic is created after (and from) these agents.</remarks>
+        public void SetDebugTraffic(LocationTraffic traffic)
+        {
+            _debugTraffic = traffic;
+            for (int i = 0; i < _carIds.Count; i++)
+            {
+                CarView view = _cars[_carIds[i]].View;
+                if (view != null)
+                {
+                    view.SetDebugTraffic(traffic);
+                }
+            }
+        }
+
         /// <inheritdoc />
         public void Spawn(int carId, string carTypeId)
         {
@@ -109,6 +127,7 @@ namespace AutoService.Presentation.Traffic
             {
                 view = pool.Get();
                 view.Place(carId, _layout.SpawnNode);
+                view.SetDebugTraffic(_debugTraffic);
             }
             else
             {

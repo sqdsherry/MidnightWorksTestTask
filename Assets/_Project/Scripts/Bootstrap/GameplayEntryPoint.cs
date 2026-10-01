@@ -319,6 +319,9 @@ namespace AutoService.Bootstrap
                 return;
             }
 
+            // Debug only: Scene view labels "#id plan state" above the cars.
+            agents.SetDebugTraffic(traffic);
+
             // Why: tracked, not registered — module 11 adds a second location with its own traffic and agents.
             Track(traffic);
             Track(agents);

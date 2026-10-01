@@ -1,5 +1,7 @@
 using System.Collections.Generic;
+using AutoService.Domain.Traffic;
 using AutoService.Presentation.Traffic.Routing;
+using AutoService.Services.Traffic;
 using UnityEngine;
 using UnityEngine.AI;
 
@@ -45,6 +47,9 @@ namespace AutoService.Presentation.Traffic
         private bool _waitingForZone;
         private bool _aligning;
         private bool _snapToNode;
+
+        // Editor-only debugging: where the gizmo label reads the car's plan and state from (may stay null).
+        private LocationTraffic _debugTraffic;
 
         /// <summary>True while the car has a route it has not reported finishing yet.</summary>
         public bool IsDriving => _pathIndex < _path.Count;
@@ -198,6 +203,15 @@ namespace AutoService.Presentation.Traffic
 
             // Why: a halted car will not move on by itself; holding a zone would block that merge for everybody forever.
             ReleaseZone();
+        }
+
+        /// <summary>
+        /// Debug only: lets the Scene view label above the car show its plan and state (<c>#id plan state</c>).
+        /// Pass null to show just the id.
+        /// </summary>
+        public void SetDebugTraffic(LocationTraffic traffic)
+        {
+            _debugTraffic = traffic;
         }
 
         /// <summary>Clears all runtime state (route, zone) before the car goes back to the pool.</summary>
@@ -364,6 +378,25 @@ namespace AutoService.Presentation.Traffic
             {
                 _agent.ResetPath();
             }
+        }
+
+        private void OnDrawGizmos()
+        {
+#if UNITY_EDITOR
+            if (_carId == NoCar)
+            {
+                return;
+            }
+
+            // Why: editor-only gizmo, so building the string every repaint is acceptable (never runs in a build or a tick).
+            string label = "#" + _carId;
+            if (_debugTraffic != null && _debugTraffic.TryGetCar(_carId, out Car car))
+            {
+                label += " " + car.Plan + " " + car.State;
+            }
+
+            UnityEditor.Handles.Label(transform.position + Vector3.up * 2.2f, label);
+#endif
         }
 
         // Why: nodes may be tilted in the scene; a car only ever rotates around the vertical axis.

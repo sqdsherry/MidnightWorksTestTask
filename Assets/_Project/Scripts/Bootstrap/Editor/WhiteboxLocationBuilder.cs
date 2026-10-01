@@ -78,7 +78,7 @@ namespace AutoService.Bootstrap.Editor
             new NodeSpec("D1", 30f, -3f, 180f, ZoneJ, "D2"),
             new NodeSpec("D2", 30f, -24f, 90f, null, "N_Exit"),
             new NodeSpec("N_Exit", 35f, -24f, 90f, null),
-            new NodeSpec("R1", 6f, -19f, 90f, null, MainEntranceSpot),
+            new NodeSpec("R1", 0f, -19f, 90f, null, MainEntranceSpot),
             new NodeSpec("B1N", 11f, -16f, 0f, null, "KIN"),
             new NodeSpec("B2S", 11f, -1f, 180f, null, "KIN"),
             new NodeSpec("KIN", 11f, -13f, 90f, ZoneM, "K14"),
@@ -107,17 +107,24 @@ namespace AutoService.Bootstrap.Editor
         private static readonly string[] WashSpotNext = { "WX" };
         private static readonly string[] WashBufferNames = { "WB0", "WB1" };
 
-        // Parking entrances: post, car spot, work spot (facing east), arm along +X lifted around Z.
-        // Why: the car spot sits 3 m before the arm (z of the post ± 3), so a waiting car's nose stays in front of it.
+        // Parking entrances: post, car spot (the car waits in front of the arm), work spot (facing east) and the arm.
+        // Barrier 1 stands beside the road: its arm reaches south across the queue lane and lifts around X.
+        // Barrier 2 stands beside the service lane: its arm reaches east across it and lifts around Z.
+        // Why +80 for both: rotating (0,0,-1) by +80° around +X and (1,0,0) by +80° around +Z both raise the tip (y > 0).
         private static readonly BarrierSpec MainEntrance = new BarrierSpec(
-            MainEntrancePointId, new Vector3(9f, 0.5f, -17.5f), new Vector3(11f, 0f, -20.5f), 0f, new Vector3(7.5f, 0f, -17f), "B1N");
+            MainEntrancePointId, new Vector3(9f, 0.5f, -17f), new Vector3(5f, 0f, -19f), 90f, new Vector3(7.5f, 0f, -17f), "B1N",
+            new Vector3(0f, 0f, -2f), new Vector3(0.15f, 0.15f, 4f), Vector3.right, 80f);
 
         private static readonly BarrierSpec ServiceEntrance = new BarrierSpec(
-            ServiceEntrancePointId, new Vector3(9f, 0.5f, 2.5f), new Vector3(11f, 0f, 5.5f), 180f, new Vector3(7.5f, 0f, 3f), "B2S");
+            ServiceEntrancePointId, new Vector3(9f, 0.5f, 2.5f), new Vector3(11f, 0f, 5.5f), 180f, new Vector3(7.5f, 0f, 3f), "B2S",
+            new Vector3(2f, 0f, 0f), new Vector3(4f, 0.15f, 0.15f), Vector3.forward, 80f);
 
         private const float WorkSpotYaw = 90f;
-        private static readonly Vector3 ArmLocalPosition = new Vector3(2f, 0f, 0f);
-        private static readonly Vector3 ArmScale = new Vector3(4f, 0.15f, 0.15f);
+        private const string ArmPivotName = "ArmPivot";
+        private const string ArmName = "Arm";
+        private static readonly Vector3 PostScale = new Vector3(0.5f, 1f, 0.5f);
+        private static readonly Vector3 PivotLocalPosition = new Vector3(0f, 0.5f, 0f);
+        private static readonly Vector3 PivotLocalScale = new Vector3(2f, 1f, 2f); // undoes the post's scale
 
         // ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -348,6 +355,7 @@ namespace AutoService.Bootstrap.Editor
             Transform post = barrier.transform;
             Undo.RecordObject(post, "Move " + spec.PointId);
             post.SetPositionAndRotation(spec.PostPosition, Quaternion.identity);
+            post.localScale = PostScale;
 
             Transform spot = barrier.CarSpot;
             Undo.RecordObject(spot, "Move " + spec.PointId + " car spot");
@@ -363,40 +371,46 @@ namespace AutoService.Bootstrap.Editor
                 Debug.LogWarning("[Whitebox] Barrier '" + barrier.name + "' has no Approach Point; the worker stands at the post.", barrier);
             }
 
-            TurnArm(barrier);
+            RebuildArm(barrier, spec);
 
             RoadNode node = GetOrAddNode(spot.gameObject);
             SetNext(node, new[] { spec.Next }, nodes);
             return node;
         }
 
-        private static void TurnArm(ServicePointView barrier)
+        // Why: the builder owns the arm geometry — rebuilding it every run beats patching whatever an older layout left.
+        private static void RebuildArm(ServicePointView barrier, BarrierSpec spec)
         {
-            if (!barrier.TryGetComponent(out BarrierArm barrierArm))
+            Transform post = barrier.transform;
+            for (int i = post.childCount - 1; i >= 0; i--)
             {
-                Debug.LogWarning("[Whitebox] Barrier '" + barrier.name + "' has no BarrierArm; the arm was not turned.", barrier);
-                return;
+                Transform child = post.GetChild(i);
+                if (child.name == ArmPivotName || child.name == ArmName)
+                {
+                    Undo.DestroyObjectImmediate(child.gameObject);
+                }
             }
 
+            GameObject pivot = CreateChild(ArmPivotName, post);
+            pivot.transform.localPosition = PivotLocalPosition;
+            pivot.transform.localScale = PivotLocalScale;
+            Undo.RegisterCreatedObjectUndo(pivot, "Create barrier arm");
+
+            GameObject arm = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            arm.name = ArmName;
+
+            // Why: a visual only — a collider would catch clicks meant for the barrier and block the player's NavMesh.
+            Object.DestroyImmediate(arm.GetComponent<Collider>());
+            arm.transform.SetParent(pivot.transform, false);
+            arm.transform.localPosition = spec.ArmLocalPosition;
+            arm.transform.localScale = spec.ArmScale;
+
+            BarrierArm barrierArm = barrier.TryGetComponent(out BarrierArm existing) ? existing : Undo.AddComponent<BarrierArm>(barrier.gameObject);
             var serialized = new SerializedObject(barrierArm);
-            serialized.FindProperty("_openAxis").vector3Value = Vector3.forward;
+            serialized.FindProperty("_arm").objectReferenceValue = pivot.transform;
+            serialized.FindProperty("_openAxis").vector3Value = spec.OpenAxis;
+            serialized.FindProperty("_openAngle").floatValue = spec.OpenAngle;
             serialized.ApplyModifiedProperties();
-
-            var pivot = serialized.FindProperty("_arm").objectReferenceValue as Transform;
-            if (pivot == null || pivot.childCount == 0)
-            {
-                Debug.LogWarning("[Whitebox] BarrierArm of '" + barrier.name + "' has no pivot with an arm child; the arm was not turned.", barrier);
-                return;
-            }
-
-            Undo.RecordObject(pivot, "Reset barrier arm pivot");
-            pivot.localRotation = Quaternion.identity;
-
-            Transform arm = pivot.GetChild(0);
-            Undo.RecordObject(arm, "Turn barrier arm");
-            arm.localPosition = ArmLocalPosition;
-            arm.localRotation = Quaternion.identity;
-            arm.localScale = ArmScale;
         }
 
         private static void LinkNodes(Dictionary<string, RoadNode> nodes)
@@ -519,8 +533,22 @@ namespace AutoService.Bootstrap.Editor
 
         private readonly struct BarrierSpec
         {
-            public BarrierSpec(string pointId, Vector3 postPosition, Vector3 spotPosition, float spotYaw, Vector3 workSpotPosition, string next)
+            public BarrierSpec(
+                string pointId,
+                Vector3 postPosition,
+                Vector3 spotPosition,
+                float spotYaw,
+                Vector3 workSpotPosition,
+                string next,
+                Vector3 armLocalPosition,
+                Vector3 armScale,
+                Vector3 openAxis,
+                float openAngle)
             {
+                ArmLocalPosition = armLocalPosition;
+                ArmScale = armScale;
+                OpenAxis = openAxis;
+                OpenAngle = openAngle;
                 PointId = pointId;
                 PostPosition = postPosition;
                 SpotPosition = spotPosition;
@@ -542,6 +570,17 @@ namespace AutoService.Bootstrap.Editor
 
             /// <summary>Node the car drives to after paying.</summary>
             public string Next { get; }
+
+            /// <summary>Arm cube position relative to the pivot on top of the post (its centre: half the arm's length out).</summary>
+            public Vector3 ArmLocalPosition { get; }
+
+            public Vector3 ArmScale { get; }
+
+            /// <summary>Local axis of the pivot the arm lifts around (<c>BarrierArm._openAxis</c>).</summary>
+            public Vector3 OpenAxis { get; }
+
+            /// <summary>Opening angle in degrees (<c>BarrierArm._openAngle</c>); positive lifts the arm for the axes above.</summary>
+            public float OpenAngle { get; }
         }
 
         private readonly struct NodeSpec
