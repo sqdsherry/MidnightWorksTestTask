@@ -21,8 +21,15 @@ namespace AutoService.Services.Config
         /// <summary>Car flow settings.</summary>
         TrafficSettings Traffic { get; }
 
+        /// <summary>All buildables (bays, extra parking slots), in config order. Ids are unique.</summary>
+        IReadOnlyList<BuildableSettings> Buildables { get; }
+
         /// <summary>Looks up a service type by id.</summary>
         /// <returns>False (and null) when no type has this id.</returns>
         bool TryGetServiceType(string id, out ServiceTypeSettings settings);
+
+        /// <summary>Looks up a buildable by id.</summary>
+        /// <returns>False (and null) when no buildable has this id.</returns>
+        bool TryGetBuildable(string id, out BuildableSettings settings);
     }
 }

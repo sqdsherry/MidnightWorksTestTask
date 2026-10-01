@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0646354fd75556a40a0f274ea51cc213, type: 3}
+  m_Name: ST_Tires
+  m_EditorClassIdentifier: AutoService.Infrastructure::AutoService.Infrastructure.Config.ServiceTypeConfig
+  _id: tires
+  _displayName: Tire Service
+  _kind: 1
+  _basePrice: 35
+  _pricePerSecond: 0
+  _serviceDuration: 12
+  _acceptDelay: 0.4
+  _clearDelay: 1.5

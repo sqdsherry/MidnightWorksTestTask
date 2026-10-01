@@ -26,6 +26,10 @@ namespace AutoService.Infrastructure.Config
         [Tooltip("Car flow settings.")]
         private TrafficSection _traffic = new TrafficSection();
 
+        [SerializeField]
+        [Tooltip("Every buildable referenced by scene build plots (bays, extra parking slots). Ids must be unique.")]
+        private BuildableConfig[] _buildables = new BuildableConfig[0];
+
         /// <summary>Global economy settings.</summary>
         public EconomySection Economy => _economy;
 
@@ -37,6 +41,9 @@ namespace AutoService.Infrastructure.Config
 
         /// <summary>Car flow settings.</summary>
         public TrafficSection Traffic => _traffic;
+
+        /// <summary>Buildable assets (may contain nulls if left empty in the inspector).</summary>
+        public BuildableConfig[] Buildables => _buildables;
 
         private void OnValidate()
         {
