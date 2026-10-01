@@ -51,11 +51,14 @@ namespace AutoService.Presentation.Player
         {
             bool blocked = _pause.IsPaused || IsPointerOverUi();
 
+            // Why: one raycast per tick feeds both hover and the click, so they can never disagree about the target.
+            PointerHit hit = default;
+            bool hasHit = !blocked && _raycaster.TryRaycast(_input.PointerPosition, out hit);
+
             IInteractable underPointer = null;
-            Vector2 pointer = _input.PointerPosition;
-            if (!blocked && _raycaster.TryGetInteractable(pointer, out IInteractable found) && found.IsInteractable)
+            if (hasHit && hit.Interactable != null && hit.Interactable.IsInteractable)
             {
-                underPointer = found;
+                underPointer = hit.Interactable;
             }
 
             SetHovered(underPointer);
@@ -63,9 +66,9 @@ namespace AutoService.Presentation.Player
             if (_clickPending)
             {
                 _clickPending = false;
-                if (!blocked)
+                if (hasHit)
                 {
-                    HandleClick(underPointer, pointer);
+                    HandleClick(underPointer, hit);
                 }
             }
         }
@@ -88,7 +91,9 @@ namespace AutoService.Presentation.Player
         // the hover raycast anyway.
         private void OnClicked() => _clickPending = true;
 
-        private void HandleClick(IInteractable underPointer, Vector2 pointer)
+        // Why: a click on a non-interactable (e.g. locked) object does nothing — the ground behind it is occluded,
+        // so the character must not walk "through" the object to the floor point.
+        private void HandleClick(IInteractable underPointer, in PointerHit hit)
         {
             if (underPointer != null)
             {
@@ -96,12 +101,12 @@ namespace AutoService.Presentation.Player
                 return;
             }
 
-            if (_raycaster.TryGetGroundPoint(pointer, out Vector3 point))
+            if (hit.HasGroundPoint)
             {
-                _player.MoveTo(point);
+                _player.MoveTo(hit.GroundPoint);
                 if (_clickMarker != null)
                 {
-                    _clickMarker.Show(point);
+                    _clickMarker.Show(hit.GroundPoint);
                 }
             }
         }

@@ -56,6 +56,10 @@ namespace AutoService.Bootstrap
         [Tooltip("Layers of walkable ground.")]
         private LayerMask _groundMask;
 
+        [SerializeField]
+        [Tooltip("Layers that block pointer raycasts without being clickable (walls, roofs). May be empty.")]
+        private LayerMask _occluderMask;
+
         // Why: lifecycle lists are filled while registering, so every service created here is initialized
         // and ticked without each module having to remember to wire itself in.
         private readonly List<IInitializable> _initializables = new List<IInitializable>();
@@ -153,7 +157,7 @@ namespace AutoService.Bootstrap
             Register(input);
             input.Enable();
 
-            var raycaster = new PointerRaycaster(_camera, _interactableMask, _groundMask);
+            var raycaster = new PointerRaycaster(_camera, _interactableMask, _groundMask, _occluderMask);
             Register(new PlayerMotor(_player));
             Register(new PlayerInputPresenter(input, raycaster, _player, pause, _clickMarker));
             _cameraRig.Construct(input, _player);
