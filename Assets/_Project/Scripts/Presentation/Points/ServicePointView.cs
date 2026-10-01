@@ -1,5 +1,6 @@
 using AutoService.Domain.Points;
 using AutoService.Presentation.Interaction;
+using AutoService.Presentation.Traffic.Routing;
 using AutoService.Services.Points;
 using UnityEngine;
 
@@ -31,6 +32,11 @@ namespace AutoService.Presentation.Points
         private Transform _carSpot;
 
         [SerializeField]
+        [Tooltip("Road nodes where cars wait for this service point; element 0 is the one nearest to the point. " +
+                 "Leave empty for barriers. Every service point of a location needs the same number.")]
+        private RoadNode[] _bufferSlots = new RoadNode[0];
+
+        [SerializeField]
         [Tooltip("Work spot of the player/worker; its forward is the direction they face.")]
         private Transform _approachPoint;
 
@@ -52,6 +58,9 @@ namespace AutoService.Presentation.Points
 
         /// <summary>Where the car stops (may be null if not assigned).</summary>
         public Transform CarSpot => _carSpot;
+
+        /// <summary>Buffer slots in front of the point (0 = nearest to it); elements may be null if left empty.</summary>
+        public RoadNode[] BufferSlots => _bufferSlots;
 
         /// <summary>World-space indicators, or null.</summary>
         public ServicePointHud Hud => _hud;

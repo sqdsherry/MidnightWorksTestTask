@@ -229,11 +229,12 @@ namespace AutoService.Bootstrap
             var points = new ServicePointService(_container.Resolve<IWalletService>(), eventBus);
             Register<IServicePointService>(points);
 
-            // Why: every car leaving the lot pays at the parking exit, so it must be a Barrier-kind point; without it the
-            // traffic cannot run (the check of the kind happens inside TryRegisterPoint).
-            if (!TryRegisterPoint(points, config, _location1.ParkingExit, PointKind.Barrier, presenters))
+            // Why: every parking visit pays at one of the two entrances, so both must be Barrier-kind points; without them
+            // the traffic cannot run (the kind is checked inside TryRegisterPoint). Non-short-circuit `|` reports both.
+            if (!TryRegisterPoint(points, config, _location1.MainEntrance, PointKind.Barrier, presenters)
+                | !TryRegisterPoint(points, config, _location1.ServiceEntrance, PointKind.Barrier, presenters))
             {
-                _logger.Error("[Gameplay] Traffic skipped: location '" + _location1.LocationId + "' has no valid parking exit.");
+                _logger.Error("[Gameplay] Traffic skipped: location '" + _location1.LocationId + "' needs two valid parking entrances.");
                 return null;
             }
 
@@ -298,7 +299,12 @@ namespace AutoService.Bootstrap
             }
 
             var definition = new LocationTrafficDefinition(
-                _location1.LocationId, _location1.ParkingExit.PointId, _location1.QueueSlotCount, _location1.ParkingSlotCount);
+                _location1.LocationId,
+                _location1.MainEntrance.PointId,
+                _location1.ServiceEntrance.PointId,
+                _location1.QueueSlotCount,
+                _location1.ParkingSlotCount,
+                _location1.ServiceBufferCapacity);
             var agents = new CarAgents(_location1, _carVisuals, _carPoolRoot);
 
             LocationTraffic traffic;
