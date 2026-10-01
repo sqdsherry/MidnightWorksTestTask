@@ -103,8 +103,8 @@ namespace AutoService.Services.Save
 
         /// <summary>
         /// Captures every saveable in registration order and writes the save immediately.
-        /// Restarts the autosave interval, clears a pending <see cref="RequestSave"/> and re-enables saving after
-        /// <see cref="ResetProgress"/>.
+        /// Restarts the autosave interval and clears a pending <see cref="RequestSave"/>.
+        /// Writes nothing after <see cref="ResetProgress"/> until the next <see cref="TryRestore"/>.
         /// </summary>
         /// <remarks>
         /// A saveable that throws is logged and skipped (its slice keeps the empty defaults); the others are still
@@ -118,7 +118,13 @@ namespace AutoService.Services.Save
                 return;
             }
 
-            _savingSuspended = false;
+            // Why: SaveCoordinator is scene-scoped; after a reset the scene is reloaded and a NEW coordinator is built,
+            // so the old instance must stay silent until it dies, including the OnApplicationQuit save (module 08b).
+            if (_savingSuspended)
+            {
+                return;
+            }
+
             _saveRequested = false;
             _sinceLastSave = 0f;
 
@@ -148,7 +154,7 @@ namespace AutoService.Services.Save
         /// <summary>
         /// Asks for a save on the next <see cref="Tick"/>. Any number of requests before that tick produce one save.
         /// Use it after important actions (building, hiring) instead of <see cref="SaveNow"/>, so a burst of actions
-        /// in one frame is written once. Ignored after <see cref="ResetProgress"/>.
+        /// in one frame is written once. Ignored after <see cref="ResetProgress"/> until the next <see cref="TryRestore"/>.
         /// </summary>
         public void RequestSave()
         {
@@ -159,11 +165,13 @@ namespace AutoService.Services.Save
         }
 
         /// <summary>
-        /// Deletes the save and stops all saving until the next <see cref="TryRestore"/> or <see cref="SaveNow"/>.
+        /// Deletes the save and stops all saving (autosave, <see cref="RequestSave"/> and <see cref="SaveNow"/>)
+        /// until the next <see cref="TryRestore"/>.
         /// </summary>
         /// <remarks>
-        /// Why the suspension: the scene is reloaded after a reset, and without it an autosave or a pending request
-        /// in between would write the old in-memory progress straight back to disk.
+        /// Why the suspension: the scene is reloaded after a reset and builds a new coordinator; without it an
+        /// autosave, a pending request or a quit save on this old instance would write the old in-memory progress
+        /// straight back to disk.
         /// </remarks>
         public void ResetProgress()
         {

@@ -163,6 +163,19 @@ namespace AutoService.Tests.EditMode
         }
 
         [Test]
+        public void ResetProgress_ThenSaveNow_WritesNothing()
+        {
+            _coordinator.Add(new FakeSaveable("a", _log));
+            _coordinator.ResetProgress();
+
+            _coordinator.SaveNow();
+            _coordinator.Tick(Interval);
+
+            Assert.AreEqual(0, _saveService.Saved.Count);
+            Assert.AreEqual(0, _log.Count);
+        }
+
+        [Test]
         public void ResetProgress_ThenTryRestore_ResumesAutosave()
         {
             _coordinator.ResetProgress();
