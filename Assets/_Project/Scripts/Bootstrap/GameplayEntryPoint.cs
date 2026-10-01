@@ -68,7 +68,7 @@ namespace AutoService.Bootstrap
 
         [Header("Location")]
         [SerializeField]
-        [Tooltip("Markup of location 1: points, queue and parking slots, spawn/exit.")]
+        [Tooltip("Markup of location 1: points, road graph, queue and parking slots, spawn/exit.")]
         private LocationLayout _location1;
 
         [SerializeField]
@@ -229,9 +229,11 @@ namespace AutoService.Bootstrap
             var points = new ServicePointService(_container.Resolve<IWalletService>(), eventBus);
             Register<IServicePointService>(points);
 
-            if (!TryRegisterPoint(points, config, _location1.Barrier, PointKind.Barrier, presenters))
+            // Why: every car leaving the lot pays at the parking exit, so it must be a Barrier-kind point; without it the
+            // traffic cannot run (the check of the kind happens inside TryRegisterPoint).
+            if (!TryRegisterPoint(points, config, _location1.ParkingExit, PointKind.Barrier, presenters))
             {
-                _logger.Error("[Gameplay] Traffic skipped: location '" + _location1.LocationId + "' has no valid barrier.");
+                _logger.Error("[Gameplay] Traffic skipped: location '" + _location1.LocationId + "' has no valid parking exit.");
                 return null;
             }
 
@@ -296,7 +298,7 @@ namespace AutoService.Bootstrap
             }
 
             var definition = new LocationTrafficDefinition(
-                _location1.LocationId, _location1.Barrier.PointId, _location1.QueueSlotCount, _location1.ParkingSlotCount);
+                _location1.LocationId, _location1.ParkingExit.PointId, _location1.QueueSlotCount, _location1.ParkingSlotCount);
             var agents = new CarAgents(_location1, _carVisuals, _carPoolRoot);
 
             LocationTraffic traffic;
