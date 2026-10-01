@@ -4,6 +4,7 @@
     "references": [
         "AutoService.Domain",
         "AutoService.Services",
+        "AutoService.Infrastructure",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

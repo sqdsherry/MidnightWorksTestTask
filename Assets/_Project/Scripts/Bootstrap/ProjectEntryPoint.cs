@@ -3,10 +3,14 @@ using AutoService.Infrastructure.Config;
 using AutoService.Infrastructure.Logging;
 using AutoService.Infrastructure.Pause;
 using AutoService.Infrastructure.Randomness;
+using AutoService.Infrastructure.Save;
+using AutoService.Infrastructure.Settings;
 using AutoService.Infrastructure.Timing;
 using AutoService.Services.Config;
 using AutoService.Services.Core;
 using AutoService.Services.Events;
+using AutoService.Services.Save;
+using AutoService.Services.Settings;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -18,6 +22,9 @@ namespace AutoService.Bootstrap
     /// </summary>
     public sealed class ProjectEntryPoint : MonoBehaviour
     {
+        private const float DefaultMusicVolume = 0.7f;
+        private const float DefaultSfxVolume = 0.8f;
+
         [SerializeField]
         [Tooltip("Root game configuration asset.")]
         private GameConfig _gameConfig;
@@ -36,12 +43,16 @@ namespace AutoService.Bootstrap
             _logger = new UnityGameLogger();
             _container = new ServiceContainer();
 
+            ITimeProvider timeProvider = new SystemTimeProvider();
+
             _container.Register<IGameLogger>(_logger);
-            _container.Register<ITimeProvider>(new SystemTimeProvider());
+            _container.Register<ITimeProvider>(timeProvider);
             _container.Register<IRandom>(new SystemRandom());
             _container.Register<IPauseService>(new TimeScalePauseService(_logger));
             _container.Register<IEventBus>(new EventBus(_logger));
             _container.Register<IConfigProvider>(new ScriptableObjectConfigProvider(_gameConfig));
+            _container.Register<ISaveService>(CreateSaveService(timeProvider));
+            _container.Register<ISettingsService>(CreateSettingsService());
         }
 
         // TODO(09-scenes-ui): replace with ISceneLoader + loading screen.
@@ -78,6 +89,31 @@ namespace AutoService.Bootstrap
         {
             _container?.Dispose();
             _container = null;
+        }
+
+        private ISaveService CreateSaveService(ITimeProvider timeProvider)
+        {
+            var storage = new FileSaveStorage(Application.persistentDataPath, FileSaveStorage.DefaultFileName, _logger);
+            return new SaveService(storage, new JsonUtilitySaveSerializer(), timeProvider, _logger);
+        }
+
+        private static ISettingsService CreateSettingsService()
+        {
+            // Why: quality and window mode default to what the player launched with, so the first launch changes nothing.
+            var defaults = new GameSettings(
+                DefaultMusicVolume,
+                DefaultSfxVolume,
+                QualitySettings.GetQualityLevel(),
+                Screen.fullScreen,
+                resolutionWidth: 0,
+                resolutionHeight: 0);
+
+            var settings = new SettingsService(new PlayerPrefsSettingsStore(), new UnitySettingsApplier(), defaults);
+
+            // Why: applied right here rather than with the scene's IInitializable pass, because settings are
+            // project-wide and must be in effect before (and independently of) any scene.
+            settings.Initialize();
+            return settings;
         }
 
         private void EnterScene(Scene scene)
