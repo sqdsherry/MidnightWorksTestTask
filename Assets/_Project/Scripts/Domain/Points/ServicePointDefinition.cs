@@ -18,7 +18,11 @@ namespace AutoService.Domain.Points
         /// <param name="serviceDuration">Seconds of occupied work needed to finish the service.</param>
         /// <param name="acceptDelay">Seconds the work spot must be occupied before the order is accepted.</param>
         /// <param name="clearDelay">Seconds the point stays unavailable after a car has been served.</param>
-        /// <exception cref="ArgumentException">Thrown for empty ids, a negative/NaN price per second or negative/NaN durations.</exception>
+        /// <param name="supplyTypeId">Consumable every accepted order uses; empty = the point needs none (the barriers).</param>
+        /// <param name="supplyCapacity">Units the point's stock holds; must be &gt; 0 when <paramref name="supplyTypeId"/> is set.</param>
+        /// <exception cref="ArgumentException">
+        /// Thrown for empty ids, a negative/NaN price per second, negative/NaN durations or a supply type without capacity.
+        /// </exception>
         public ServicePointDefinition(
             string id,
             string locationId,
@@ -28,7 +32,9 @@ namespace AutoService.Domain.Points
             double pricePerSecond,
             float serviceDuration,
             float acceptDelay,
-            float clearDelay)
+            float clearDelay,
+            string supplyTypeId = "",
+            int supplyCapacity = 0)
         {
             RequireId(id, nameof(id));
             RequireId(locationId, nameof(locationId));
@@ -37,6 +43,12 @@ namespace AutoService.Domain.Points
             RequireDuration(serviceDuration, nameof(serviceDuration));
             RequireDuration(acceptDelay, nameof(acceptDelay));
             RequireDuration(clearDelay, nameof(clearDelay));
+            bool needsSupply = !string.IsNullOrWhiteSpace(supplyTypeId);
+            if (needsSupply && supplyCapacity <= 0)
+            {
+                throw new ArgumentException(
+                    "Supply capacity must be positive for supply type '" + supplyTypeId + "', got " + supplyCapacity + ".", nameof(supplyCapacity));
+            }
 
             Id = id;
             LocationId = locationId;
@@ -47,6 +59,8 @@ namespace AutoService.Domain.Points
             ServiceDuration = serviceDuration;
             AcceptDelay = acceptDelay;
             ClearDelay = clearDelay;
+            SupplyTypeId = needsSupply ? supplyTypeId : string.Empty;
+            SupplyCapacity = needsSupply ? supplyCapacity : 0;
         }
 
         /// <summary>Unique point id.</summary>
@@ -75,6 +89,15 @@ namespace AutoService.Domain.Points
 
         /// <summary>Seconds the point stays unavailable after the car has been served (it is driving away).</summary>
         public float ClearDelay { get; }
+
+        /// <summary>Consumable every accepted order uses; empty when the point needs none.</summary>
+        public string SupplyTypeId { get; }
+
+        /// <summary>Units the point's stock holds (0 without a consumable).</summary>
+        public int SupplyCapacity { get; }
+
+        /// <summary>True when the point has a consumable stock.</summary>
+        public bool HasSupply => SupplyCapacity > 0;
 
         private static void RequireId(string value, string parameterName)
         {
