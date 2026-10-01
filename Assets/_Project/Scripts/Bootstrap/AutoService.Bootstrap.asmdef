@@ -5,7 +5,8 @@
         "AutoService.Domain",
         "AutoService.Services",
         "AutoService.Infrastructure",
-        "AutoService.Presentation"
+        "AutoService.Presentation",
+        "Unity.InputSystem"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
