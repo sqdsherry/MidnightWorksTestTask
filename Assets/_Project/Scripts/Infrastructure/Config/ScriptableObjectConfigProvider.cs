@@ -138,7 +138,13 @@ namespace AutoService.Infrastructure.Config
             TrafficSection section = config.Traffic ?? new TrafficSection();
             try
             {
-                return new TrafficSettings(section.SpawnInterval, section.SpawnIntervalJitter, section.MaxCarsAlive);
+                return new TrafficSettings(
+                    section.SpawnInterval,
+                    section.SpawnIntervalJitter,
+                    section.MaxCarsAlive,
+                    section.ParkOnlyChance,
+                    section.ParkingStayMin,
+                    section.ParkingStayMax);
             }
             catch (ArgumentException exception)
             {

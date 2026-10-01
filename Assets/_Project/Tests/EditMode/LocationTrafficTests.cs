@@ -53,7 +53,7 @@ namespace AutoService.Tests.EditMode
             _points = new ServicePointService(_wallet, _bus);
             _agents = new FakeCarAgents();
             _random = new FakeRandom();
-            _config = new FakeConfigProvider { Traffic = new TrafficSettings(SpawnInterval, 0f, 12) };
+            _config = new FakeConfigProvider { Traffic = new TrafficSettings(SpawnInterval, 0f, 12, 0f, 0f, 0f) };
 
             var parking = new ServiceTypeSettings(ParkingType, "Parking", PointKind.Barrier, new Money(2), BarrierDuration, 0f, 0f);
             var wash = new ServiceTypeSettings(WashType, "Wash", PointKind.Service, new Money(12), WashDuration, 0f, 0f);

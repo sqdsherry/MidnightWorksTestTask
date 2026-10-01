@@ -37,5 +37,10 @@ namespace AutoService.Infrastructure.Config
 
         /// <summary>Car flow settings.</summary>
         public TrafficSection Traffic => _traffic;
+
+        private void OnValidate()
+        {
+            _traffic?.Sanitize();
+        }
     }
 }
