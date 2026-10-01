@@ -254,7 +254,10 @@ namespace AutoService.Presentation.Traffic
                 {
                     problem = "Build plot '" + plot.name + "': buildable '" + plot.PlotId + "' is not in GameConfig";
                 }
-                else if (!targets.Add(settings.Kind + ":" + settings.TargetId))
+                // Why: slots are compared by their parsed index, so "2" and "02" count as the same slot.
+                else if (!targets.Add(settings.Kind == BuildableKind.ParkingSlot
+                             ? "slot:" + settings.PlotDefinition.ParkingSlotIndex
+                             : "point:" + settings.TargetId))
                 {
                     problem = "Build plot '" + plot.name + "': another plot already builds '" + settings.TargetId + "'";
                 }
