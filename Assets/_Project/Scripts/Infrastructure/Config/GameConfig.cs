@@ -30,6 +30,18 @@ namespace AutoService.Infrastructure.Config
         [Tooltip("Every buildable referenced by scene build plots (bays, extra parking slots). Ids must be unique.")]
         private BuildableConfig[] _buildables = new BuildableConfig[0];
 
+        [SerializeField]
+        [Tooltip("Every consumable referenced by service types (shampoo, oil, tires). Ids must be unique.")]
+        private SupplyTypeConfig[] _supplyTypes = new SupplyTypeConfig[0];
+
+        [SerializeField]
+        [Tooltip("Point upgrades, at most one per kind (Speed, Price).")]
+        private UpgradeConfig[] _upgrades = new UpgradeConfig[0];
+
+        [SerializeField]
+        [Tooltip("Location-wide staff: the storekeeper offer and its restocking rule.")]
+        private StaffSection _staff = new StaffSection();
+
         /// <summary>Global economy settings.</summary>
         public EconomySection Economy => _economy;
 
@@ -44,6 +56,15 @@ namespace AutoService.Infrastructure.Config
 
         /// <summary>Buildable assets (may contain nulls if left empty in the inspector).</summary>
         public BuildableConfig[] Buildables => _buildables;
+
+        /// <summary>Supply type assets (may contain nulls if left empty in the inspector).</summary>
+        public SupplyTypeConfig[] SupplyTypes => _supplyTypes;
+
+        /// <summary>Upgrade assets (may contain nulls if left empty in the inspector).</summary>
+        public UpgradeConfig[] Upgrades => _upgrades;
+
+        /// <summary>Staff settings.</summary>
+        public StaffSection Staff => _staff;
 
         private void OnValidate()
         {
