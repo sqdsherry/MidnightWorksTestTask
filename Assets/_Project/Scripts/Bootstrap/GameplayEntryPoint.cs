@@ -5,6 +5,9 @@ using AutoService.Presentation.CameraControl;
 using AutoService.Presentation.Hud;
 using AutoService.Presentation.Panels;
 using AutoService.Presentation.Player;
+using AutoService.Presentation.Points.Panel;
+using AutoService.Presentation.Staff;
+using AutoService.Presentation.Supplies;
 using AutoService.Presentation.Traffic;
 using AutoService.Services.Core;
 using AutoService.Services.Economy;
@@ -82,6 +85,35 @@ namespace AutoService.Bootstrap
         [Tooltip("Screen-space build panel shown next to a plot the character stands at.")]
         private OfferPanelView _buildPanel;
 
+        [Header("Staff & Supplies")]
+        [SerializeField]
+        [Tooltip("Screen-space management panel opened from a point's blue pad.")]
+        private PointPanelView _pointPanel;
+
+        [SerializeField]
+        [Tooltip("Screen-space storekeeper offer opened from the warehouse's blue pad.")]
+        private OfferPanelView _storekeeperPanel;
+
+        [SerializeField]
+        [Tooltip("Body prefab of hired NPCs (Prefabs/Staff).")]
+        private StaffView _staffPrefab;
+
+        [SerializeField]
+        [Tooltip("Staff role → body material.")]
+        private StaffVisualCatalog _staffVisuals;
+
+        [SerializeField]
+        [Tooltip("Consumable → box color.")]
+        private SupplyVisualCatalog _supplyVisuals;
+
+        [SerializeField]
+        [Tooltip("Parent of NPC instances. Optional (scene root if empty).")]
+        private Transform _staffRoot;
+
+        [SerializeField]
+        [Tooltip("Shows the box in the player's hands (on the Player object).")]
+        private PlayerCarryView _playerCarry;
+
         // Why: lifecycle lists are filled by the installers (through GameplayContext), so every service created there is
         // initialized and ticked without each module having to remember to wire itself in.
         private readonly List<IInitializable> _initializables = new List<IInitializable>();
@@ -117,12 +149,14 @@ namespace AutoService.Bootstrap
             // Why: the order is the dependency order — every installer only uses what the ones above it produced.
             var player = new PlayerInstaller();
             var serviceLoop = new ServiceLoopInstaller();
+            var building = new BuildingInstaller(serviceLoop, player);
             IGameplayInstaller[] installers =
             {
                 new EconomyInstaller(),
                 player,
                 serviceLoop,
-                new BuildingInstaller(serviceLoop, player),
+                building,
+                new StaffSuppliesInstaller(serviceLoop, building, player),
                 new HudInstaller(),
             };
 
@@ -160,7 +194,14 @@ namespace AutoService.Bootstrap
                 _carVisuals,
                 _carPoolRoot,
                 _balanceView,
-                _buildPanel);
+                _buildPanel,
+                _pointPanel,
+                _storekeeperPanel,
+                _staffPrefab,
+                _staffVisuals,
+                _supplyVisuals,
+                _staffRoot,
+                _playerCarry);
         }
 
         // Why: reverse order, like the container — dependents go before what they depend on.

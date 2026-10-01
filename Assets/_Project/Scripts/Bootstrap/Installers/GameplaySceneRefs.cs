@@ -2,6 +2,9 @@ using AutoService.Presentation.CameraControl;
 using AutoService.Presentation.Hud;
 using AutoService.Presentation.Panels;
 using AutoService.Presentation.Player;
+using AutoService.Presentation.Points.Panel;
+using AutoService.Presentation.Staff;
+using AutoService.Presentation.Supplies;
 using AutoService.Presentation.Traffic;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -32,7 +35,14 @@ namespace AutoService.Bootstrap.Installers
             CarVisualCatalog carVisuals,
             Transform carPoolRoot,
             BalanceView balanceView,
-            OfferPanelView buildPanel)
+            OfferPanelView buildPanel,
+            PointPanelView pointPanel,
+            OfferPanelView storekeeperPanel,
+            StaffView staffPrefab,
+            StaffVisualCatalog staffVisuals,
+            SupplyVisualCatalog supplyVisuals,
+            Transform staffRoot,
+            PlayerCarryView playerCarry)
         {
             InputActions = inputActions;
             Camera = camera;
@@ -47,6 +57,13 @@ namespace AutoService.Bootstrap.Installers
             CarPoolRoot = carPoolRoot;
             BalanceView = balanceView;
             BuildPanel = buildPanel;
+            PointPanel = pointPanel;
+            StorekeeperPanel = storekeeperPanel;
+            StaffPrefab = staffPrefab;
+            StaffVisuals = staffVisuals;
+            SupplyVisuals = supplyVisuals;
+            StaffRoot = staffRoot;
+            PlayerCarry = playerCarry;
         }
 
         /// <summary>GameControls asset with the 'Gameplay' action map.</summary>
@@ -87,5 +104,26 @@ namespace AutoService.Bootstrap.Installers
 
         /// <summary>Screen-space build panel.</summary>
         public OfferPanelView BuildPanel { get; }
+
+        /// <summary>Screen-space management panel of a point.</summary>
+        public PointPanelView PointPanel { get; }
+
+        /// <summary>Screen-space storekeeper offer (second offer panel).</summary>
+        public OfferPanelView StorekeeperPanel { get; }
+
+        /// <summary>Body prefab of hired NPCs.</summary>
+        public StaffView StaffPrefab { get; }
+
+        /// <summary>Staff role → body material.</summary>
+        public StaffVisualCatalog StaffVisuals { get; }
+
+        /// <summary>Consumable → box color.</summary>
+        public SupplyVisualCatalog SupplyVisuals { get; }
+
+        /// <summary>Parent of NPC instances (may be null: scene root).</summary>
+        public Transform StaffRoot { get; }
+
+        /// <summary>The box in the player's hands.</summary>
+        public PlayerCarryView PlayerCarry { get; }
     }
 }
