@@ -2,12 +2,14 @@ using System.Collections.Generic;
 using AutoService.Presentation.Building;
 using AutoService.Presentation.Interaction;
 using AutoService.Presentation.Points;
+using AutoService.Presentation.Supplies;
 using AutoService.Presentation.Traffic;
 using AutoService.Presentation.Traffic.Routing;
 using TMPro;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.AI;
 using UnityEngine.Rendering;
 using UnityEngine.UI;
 
@@ -18,7 +20,8 @@ namespace AutoService.Bootstrap.Editor
     /// road surfaces, the one-way <see cref="RoadNode"/> graph and the merge zones — places the row of four bays (wash 1
     /// plus three copies that start as build plots), both parking entrances (creating the second one as a copy of the
     /// first), the ghosts of the bays and of parking slots 3–4, and fills the layout's references.
-    /// One undoable step; safe to re-run.
+    /// Module A2 adds the yellow work pads and blue manage pads of every point, the warehouse with its pad, the staff room
+    /// and NavMesh obstacles on the bay walls (TDD K4). One undoable step; safe to re-run.
     /// </summary>
     /// <remarks>
     /// Why a script: ~50 linked nodes and five ghosts by hand is an hour of clicking and typos; this is one click and
@@ -165,7 +168,9 @@ namespace AutoService.Bootstrap.Editor
 
         // Ghost look and world-space price tag / dwell ring.
         private const string GhostMaterialPath = "Assets/_Project/Materials/M_Ghost.mat";
-        private static readonly Color GhostColor = new Color(1f, 1f, 1f, 0.35f);
+
+        // Why (A2): ghosts are purchases, and purchases are blue — the same language as the manage pads.
+        private static readonly Color GhostColor = new Color(0.55f, 0.75f, 1f, 0.35f);
         private const float TagHeightAboveGhost = 0.8f;
         private const float ParkingTagHeight = 1.5f;
         private const float DefaultCanvasScale = 0.01f;
@@ -193,16 +198,69 @@ namespace AutoService.Bootstrap.Editor
         private static readonly Vector3 PivotLocalPosition = new Vector3(0f, 0.5f, 0f);
         private static readonly Vector3 PivotLocalScale = new Vector3(2f, 1f, 2f); // undoes the post's scale
 
+        // ── A2: work / manage pads, warehouse, staff room (prompt 05 §8). World coordinates unless noted. ─────────────
+
+        // Why: in layout v3.1 the work spot of a bay at its local (3.5, 0, 0) falls into the pillar of the next bay to the
+        // east (bays are 6 m apart, pillars at ±2.5). South of the east pillar's end is free: off the car lane (cars are
+        // ±1 m around the lane) and in front of the bay, where the player can see the car.
+        private static readonly Vector3 BayWorkSpotLocal = new Vector3(2.5f, 0f, -3.5f);
+
+        // Manage pad of a bay: 2 m further south, in line with the bay's outer wall (not on the lane, not on the NPC path).
+        private static readonly Vector3 BayPadFromWorkSpot = new Vector3(0f, 0f, -2f);
+
+        // Manage pads of the entrances: beside their booths, off the road and off the walk from the staff room.
+        private static readonly Vector3 MainEntrancePad = new Vector3(5.5f, 0f, -15.5f);
+        private static readonly Vector3 ServiceEntrancePad = new Vector3(7.5f, 0f, 1f);
+
+        // Both buildings stand on the island between wash 1 (x = -3), the parking (x >= 9), the main and the top road.
+        private const string WarehouseObjectName = "Warehouse_1";
+        private static readonly Vector3 WarehousePosition = new Vector3(4f, 0f, -6f);
+        private static readonly Vector3 WarehouseSize = new Vector3(4f, 2.5f, 3f);
+        private const string StaffRoomObjectName = "StaffRoom_1";
+        private static readonly Vector3 StaffRoomPosition = new Vector3(4f, 0f, 2f);
+        private static readonly Vector3 StaffRoomSize = new Vector3(3f, 2.5f, 3f);
+
+        // Why: approach points and the door stand this far from a wall — beyond the agent radius the NavMesh is cut by.
+        private const float StandOffWall = 1.2f;
+
+        private const string WorkPadMaterialPath = "Assets/_Project/Materials/M_WorkPad.mat";
+        private const string ManagePadMaterialPath = "Assets/_Project/Materials/M_ManagePad.mat";
+        private const string WarehouseMaterialPath = "Assets/_Project/Materials/M_Warehouse.mat";
+        private const string StaffRoomMaterialPath = "Assets/_Project/Materials/M_StaffRoom.mat";
+        private static readonly Color WorkPadColor = new Color(1f, 0.8f, 0.15f, 1f);
+        private static readonly Color ManagePadColor = new Color(0.2f, 0.5f, 1f, 1f);
+        private static readonly Color WarehouseColor = new Color(0.6f, 0.45f, 0.3f, 1f);
+        private static readonly Color StaffRoomColor = new Color(0.45f, 0.55f, 0.65f, 1f);
+        private const float WorkPadSize = 1.2f;
+        private const float ManagePadDiameter = 1.2f;
+        private const float PadThickness = 0.02f;
+
+        // Why: just above Surface_ServiceArea (top at y = 0.05) and the ground, so the pads never z-fight the asphalt.
+        private const float PadTop = 0.07f;
+        private static readonly Vector3 PadColliderCenter = new Vector3(0f, 0.25f, 0f);
+        private static readonly Vector3 PadColliderSize = new Vector3(1.2f, 0.5f, 1.2f);
+        private const float PadCanvasHeight = 1.2f;
+        private const float PanelAnchorHeight = 1f;
+        private static readonly Vector2 PadCanvasSize = new Vector2(200f, 200f);
+        private const float PadArrowSize = 80f;
+        private const string ArrowSpritePath = "UI/Skin/DropdownArrow.psd";
+        private const float WarehouseLabelHeight = 0.8f;
+        private const float WarehouseLabelFontSize = 60f;
+
         // ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
         [MenuItem("AutoService/Whitebox/Build Location 1 Roads")]
-        private static void BuildLocation1Roads()
+        private static void BuildLocation1Roads() => Run();
+
+        /// <summary>Builds the whitebox layout of location 1. Also step 2 of <see cref="ModuleSetupA2"/>.</summary>
+        /// <returns>False when the layout is missing or something could not be placed (logged).</returns>
+        internal static bool Run()
         {
             LocationLayout layout = FindLayout();
             if (layout == null)
             {
                 Debug.LogError("[Whitebox] Select the LocationLayout object (or name it '" + LocationObjectName + "') and run again.");
-                return;
+                return false;
             }
 
             Undo.IncrementCurrentGroup();
@@ -250,8 +308,27 @@ namespace AutoService.Bootstrap.Editor
                 problems++;
             }
 
+            var pads = new List<ManagePadView>();
+            Material managePadMaterial = GetOrCreateColorMaterial(ManagePadMaterialPath, "M_ManagePad", ManagePadColor);
+            Material workPadMaterial = GetOrCreateColorMaterial(WorkPadMaterialPath, "M_WorkPad", WorkPadColor);
+            ServicePointHud referenceHud = wash != null ? wash.Hud : null;
+            for (int i = 0; i < bays.Count; i++)
+            {
+                pads.Add(AddBayPads(bays[i], workPadMaterial, managePadMaterial, referenceHud));
+            }
+
+            if (main != null)
+            {
+                pads.Add(AddEntrancePads(layout.transform, main, MainEntrancePad, workPadMaterial, managePadMaterial, referenceHud));
+                pads.Add(AddEntrancePads(layout.transform, service, ServiceEntrancePad, workPadMaterial, managePadMaterial, referenceHud));
+            }
+
+            WarehouseView warehouse = CreateWarehouse(layout, managePadMaterial, referenceHud, out ManagePadView warehousePad);
+            Transform staffRoomDoor = CreateStaffRoom(layout.transform);
+
             LinkNodes(nodes);
             FillLayout(layout, nodes, main, service, bays, plots);
+            FillStaffSupplies(layout, warehouse, warehousePad, staffRoomDoor, pads);
 
             Undo.CollapseUndoOperations(undoGroup);
             EditorSceneManager.MarkSceneDirty(layout.gameObject.scene);
@@ -260,12 +337,14 @@ namespace AutoService.Bootstrap.Editor
             // Why: no LocationLayout.Validate here — it caches the graph on the instance, and a second run of this tool
             // would then validate against the destroyed nodes. GameplayEntryPoint validates the layout on Play.
             Debug.Log("[Whitebox] Location 1 roads v3.1 built: " + Nodes.Length + " nodes, " + Zones.Length + " zones, "
-                + bays.Count + " bays, " + plots.Count + " build plots"
+                + bays.Count + " bays, " + plots.Count + " build plots, " + pads.Count + " manage pads, warehouse and staff room"
                 + (problems == 0 ? ". Bake both NavMesh surfaces, then press Play: the layout is validated on start."
                     : ", " + problems + " problem(s) above."), root);
+            return problems == 0;
         }
 
-        private static LocationLayout FindLayout()
+        /// <summary>The location 1 layout of the open scene (selection first, then by name), or null.</summary>
+        internal static LocationLayout FindLayout()
         {
             GameObject selected = Selection.activeGameObject;
             if (selected != null)
@@ -471,6 +550,49 @@ namespace AutoService.Bootstrap.Editor
             view.ApplyModifiedProperties();
 
             SetNext(GetOrAddNode(bay.CarSpot.gameObject), new[] { ExitNode(spec.X) }, nodes);
+            PlaceBayWorkSpot(bay);
+            AddWallObstacles(bay);
+        }
+
+        private static void PlaceBayWorkSpot(ServicePointView bay)
+        {
+            Transform work = ApproachOf(bay);
+            if (work == bay.transform)
+            {
+                Debug.LogWarning("[Whitebox] Bay '" + bay.name + "' has no Approach Point; the work spot stays at its root.", bay);
+                return;
+            }
+
+            // Why: facing the car spot (the bay's local origin), so the player looks at the car being served.
+            Vector3 towardsCar = -BayWorkSpotLocal;
+            towardsCar.y = 0f;
+            Undo.RecordObject(work, "Move work spot of " + bay.name);
+            work.localPosition = BayWorkSpotLocal;
+            work.localRotation = Quaternion.LookRotation(towardsCar);
+        }
+
+        // Why (TDD K4): the NavMesh is baked while the built-later bays are off, so their walls are not cut out of it;
+        // carving obstacles on the walls block the character and the NPCs without a rebake.
+        private static void AddWallObstacles(ServicePointView bay)
+        {
+            BoxCollider[] colliders = bay.GetComponentsInChildren<BoxCollider>(true);
+            for (int i = 0; i < colliders.Length; i++)
+            {
+                BoxCollider wall = colliders[i];
+                if (!wall.name.StartsWith("Pillar"))
+                {
+                    continue;
+                }
+
+                NavMeshObstacle obstacle = wall.TryGetComponent(out NavMeshObstacle existing)
+                    ? existing
+                    : Undo.AddComponent<NavMeshObstacle>(wall.gameObject);
+                obstacle.shape = NavMeshObstacleShape.Box;
+                obstacle.center = wall.center;
+                obstacle.size = wall.size;
+                obstacle.carving = true;
+                obstacle.carveOnlyStationary = true;
+            }
         }
 
         /// <summary>Translucent copy of the bay (renderers only) with a clickable collider, price tag, ring and plot view.</summary>
@@ -568,6 +690,13 @@ namespace AutoService.Bootstrap.Editor
             {
                 Object.DestroyImmediate(colliders[i]);
             }
+
+            // Why: not a MonoBehaviour, so it survives the loop above; a ghost must not carve the NavMesh.
+            NavMeshObstacle[] obstacles = copy.GetComponentsInChildren<NavMeshObstacle>(true);
+            for (int i = 0; i < obstacles.Length; i++)
+            {
+                Object.DestroyImmediate(obstacles[i]);
+            }
         }
 
         /// <returns>World bounds of the ghost's renderers.</returns>
@@ -633,18 +762,7 @@ namespace AutoService.Bootstrap.Editor
         /// <param name="placeholder">Initial text (the game writes "name · price" on start).</param>
         private static GhostTag CreateTag(Transform parent, Vector3 position, ServicePointHud referenceHud, string placeholder)
         {
-            var canvasObject = new GameObject("Tag", typeof(RectTransform), typeof(Canvas));
-            canvasObject.transform.SetParent(parent, false);
-            var canvas = canvasObject.GetComponent<Canvas>();
-            canvas.renderMode = RenderMode.WorldSpace;
-
-            Transform reference = referenceHud != null ? referenceHud.transform : null;
-            var rect = (RectTransform)canvasObject.transform;
-            rect.sizeDelta = TagCanvasSize;
-            rect.SetPositionAndRotation(position, reference != null ? reference.rotation : Quaternion.identity);
-            float scale = reference != null ? reference.lossyScale.x : DefaultCanvasScale;
-            Vector3 parentScale = parent.lossyScale;
-            rect.localScale = new Vector3(scale / parentScale.x, scale / parentScale.y, scale / parentScale.z);
+            GameObject canvasObject = CreateWorldCanvas("Tag", parent, position, TagCanvasSize, referenceHud).gameObject;
 
             var labelObject = new GameObject("PriceTag", typeof(RectTransform));
             labelObject.transform.SetParent(canvasObject.transform, false);
@@ -721,6 +839,12 @@ namespace AutoService.Bootstrap.Editor
             var existing = AssetDatabase.LoadAssetAtPath<Material>(GhostMaterialPath);
             if (existing != null)
             {
+                if (existing.HasProperty("_BaseColor") && existing.GetColor("_BaseColor") != GhostColor)
+                {
+                    existing.SetColor("_BaseColor", GhostColor);
+                    EditorUtility.SetDirty(existing);
+                }
+
                 return existing;
             }
 
@@ -849,6 +973,278 @@ namespace AutoService.Bootstrap.Editor
 
             kept.Add(arm);
             SetArray(renderers, kept);
+            serialized.ApplyModifiedProperties();
+        }
+
+        // ── A2: pads, warehouse, staff room ──────────────────────────────────────────────────────────────────────────
+
+        /// <summary>Yellow work pad under the bay's work spot and its blue manage pad, both inside the bay (they appear with it).</summary>
+        private static ManagePadView AddBayPads(ServicePointView bay, Material workPad, Material managePad, ServicePointHud referenceHud)
+        {
+            Transform work = ApproachOf(bay);
+            CreateWorkPad(bay.transform, work.position, workPad);
+            Vector3 padPosition = work.position + bay.transform.rotation * BayPadFromWorkSpot;
+            return CreateManagePad(bay.transform, bay.PointId, ManagePadTarget.ServicePoint, padPosition, work.position, managePad, referenceHud);
+        }
+
+        /// <summary>Pads of an entrance, under the location root: the barrier post is scaled and would squash them.</summary>
+        private static ManagePadView AddEntrancePads(
+            Transform parent,
+            ServicePointView barrier,
+            Vector3 padPosition,
+            Material workPad,
+            Material managePad,
+            ServicePointHud referenceHud)
+        {
+            Transform work = ApproachOf(barrier);
+            CreateWorkPad(parent, work.position, workPad);
+            return CreateManagePad(parent, barrier.PointId, ManagePadTarget.ServicePoint, padPosition, barrier.transform.position, managePad, referenceHud);
+        }
+
+        // Why: no collider — the point itself is what gets clicked; the pad only shows where the work happens.
+        private static void CreateWorkPad(Transform parent, Vector3 workSpot, Material material)
+        {
+            GameObject pad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            pad.name = "WorkPad";
+            Object.DestroyImmediate(pad.GetComponent<Collider>());
+            pad.transform.SetParent(parent, false);
+            pad.transform.SetPositionAndRotation(new Vector3(workSpot.x, PadTop - 0.01f, workSpot.z), Quaternion.Euler(90f, 0f, 0f));
+            pad.transform.localScale = new Vector3(WorkPadSize, WorkPadSize, 1f);
+            pad.GetComponent<Renderer>().sharedMaterial = material;
+            pad.GetComponent<Renderer>().shadowCastingMode = ShadowCastingMode.Off;
+            pad.AddComponent<WhiteboxGenerated>();
+            Undo.RegisterCreatedObjectUndo(pad, "Create work pad");
+        }
+
+        /// <summary>Blue disc with a clickable volume, an approach point facing <paramref name="faceTowards"/>, ⬆ icon and ring.</summary>
+        private static ManagePadView CreateManagePad(
+            Transform parent,
+            string targetId,
+            ManagePadTarget target,
+            Vector3 position,
+            Vector3 faceTowards,
+            Material material,
+            ServicePointHud referenceHud)
+        {
+            Vector3 ground = new Vector3(position.x, 0f, position.z);
+            Vector3 facing = faceTowards - ground;
+            facing.y = 0f;
+            Quaternion rotation = facing.sqrMagnitude > 0.0001f ? Quaternion.LookRotation(facing) : Quaternion.identity;
+
+            GameObject root = CreateChild("ManagePad_" + targetId, parent);
+            root.transform.SetPositionAndRotation(ground, rotation);
+            root.AddComponent<WhiteboxGenerated>();
+
+            GameObject disc = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            disc.name = "Disc";
+            Object.DestroyImmediate(disc.GetComponent<Collider>());
+            disc.transform.SetParent(root.transform, false);
+            disc.transform.localPosition = Vector3.up * (PadTop - PadThickness * 0.5f);
+
+            // Why: a cylinder primitive is 2 units tall, so half the thickness gives the wanted height.
+            disc.transform.localScale = new Vector3(ManagePadDiameter, PadThickness * 0.5f, ManagePadDiameter);
+            var discRenderer = disc.GetComponent<Renderer>();
+            discRenderer.sharedMaterial = material;
+            discRenderer.shadowCastingMode = ShadowCastingMode.Off;
+
+            // Why: the clickable volume rises above the ground, like the parking ghosts, so the ground never wins the ray.
+            var box = root.AddComponent<BoxCollider>();
+            box.center = PadColliderCenter;
+            box.size = PadColliderSize;
+            SetInteractableLayer(root);
+
+            Transform approach = CreateChild("ApproachPoint", root.transform).transform;
+            approach.SetPositionAndRotation(ground, rotation);
+            Transform anchor = CreateChild("PanelAnchor", root.transform).transform;
+            anchor.position = ground + Vector3.up * PanelAnchorHeight;
+            DwellRingView ring = CreatePadCanvas(root.transform, ground + Vector3.up * PadCanvasHeight, referenceHud);
+
+            var highlight = root.AddComponent<InteractableHighlight>();
+            var highlightObject = new SerializedObject(highlight);
+            SetArray(highlightObject.FindProperty("_renderers"), new List<Renderer> { discRenderer });
+            highlightObject.ApplyModifiedPropertiesWithoutUndo();
+
+            var pad = root.AddComponent<ManagePadView>();
+            var serialized = new SerializedObject(pad);
+            serialized.FindProperty("_targetId").stringValue = targetId;
+            serialized.FindProperty("_target").intValue = (int)target;
+            serialized.FindProperty("_approachPoint").objectReferenceValue = approach;
+            serialized.FindProperty("_highlight").objectReferenceValue = highlight;
+            serialized.FindProperty("_ring").objectReferenceValue = ring;
+            serialized.FindProperty("_panelAnchor").objectReferenceValue = anchor;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+
+            Undo.RegisterCreatedObjectUndo(root, "Create manage pad " + targetId);
+            return pad;
+        }
+
+        /// <summary>World-space canvas above a pad: the ⬆ "buy" icon and the dwell ring around it.</summary>
+        private static DwellRingView CreatePadCanvas(Transform parent, Vector3 position, ServicePointHud referenceHud)
+        {
+            RectTransform canvas = CreateWorldCanvas("Tag", parent, position, PadCanvasSize, referenceHud);
+
+            var arrowObject = new GameObject("Arrow", typeof(RectTransform));
+            arrowObject.transform.SetParent(canvas, false);
+            var arrowRect = (RectTransform)arrowObject.transform;
+            arrowRect.sizeDelta = new Vector2(PadArrowSize, PadArrowSize);
+
+            // Why: the built-in dropdown arrow points down; turned over it is the "upgrade" arrow.
+            arrowRect.localRotation = Quaternion.Euler(0f, 0f, 180f);
+            var arrow = arrowObject.AddComponent<Image>();
+            arrow.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>(ArrowSpritePath);
+            arrow.color = Color.white;
+            arrow.raycastTarget = false;
+
+            var ringObject = new GameObject("Ring", typeof(RectTransform));
+            ringObject.transform.SetParent(canvas, false);
+            ((RectTransform)ringObject.transform).sizeDelta = new Vector2(PadCanvasSize.x * 0.8f, PadCanvasSize.y * 0.8f);
+            var ring = ringObject.AddComponent<Image>();
+            ring.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>(RingSpritePath);
+            ring.type = Image.Type.Filled;
+            ring.fillMethod = Image.FillMethod.Radial360;
+            ring.fillOrigin = (int)Image.Origin360.Top;
+            ring.fillClockwise = true;
+            ring.fillAmount = 0f;
+            ring.color = new Color(1f, 1f, 1f, 0.8f);
+            ring.raycastTarget = false;
+
+            var ringView = canvas.gameObject.AddComponent<DwellRingView>();
+            var serialized = new SerializedObject(ringView);
+            serialized.FindProperty("_fill").objectReferenceValue = ring;
+            serialized.FindProperty("_root").objectReferenceValue = ringObject;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+            return ringView;
+        }
+
+        /// <summary>World-space canvas tilted and scaled like the reference HUD, so it faces the fixed camera the same way.</summary>
+        private static RectTransform CreateWorldCanvas(string name, Transform parent, Vector3 position, Vector2 size, ServicePointHud referenceHud)
+        {
+            var canvasObject = new GameObject(name, typeof(RectTransform), typeof(Canvas));
+            canvasObject.transform.SetParent(parent, false);
+            canvasObject.GetComponent<Canvas>().renderMode = RenderMode.WorldSpace;
+
+            Transform reference = referenceHud != null ? referenceHud.transform : null;
+            var rect = (RectTransform)canvasObject.transform;
+            rect.sizeDelta = size;
+            rect.SetPositionAndRotation(position, reference != null ? reference.rotation : Quaternion.identity);
+            float scale = reference != null ? reference.lossyScale.x : DefaultCanvasScale;
+            Vector3 parentScale = parent.lossyScale;
+            rect.localScale = new Vector3(scale / parentScale.x, scale / parentScale.y, scale / parentScale.z);
+            return rect;
+        }
+
+        /// <summary>Warehouse box with its click volume, approach point (west), failure label and blue pad (south).</summary>
+        private static WarehouseView CreateWarehouse(
+            LocationLayout layout,
+            Material padMaterial,
+            ServicePointHud referenceHud,
+            out ManagePadView pad)
+        {
+            GameObject root = CreateChild(WarehouseObjectName, layout.transform);
+            root.transform.SetPositionAndRotation(WarehousePosition, Quaternion.identity);
+            root.AddComponent<WhiteboxGenerated>();
+
+            Renderer body = CreateBlock(root.transform, WarehouseSize, GetOrCreateColorMaterial(WarehouseMaterialPath, "M_Warehouse", WarehouseColor));
+            var box = root.AddComponent<BoxCollider>();
+            box.center = Vector3.up * (WarehouseSize.y * 0.5f);
+            box.size = WarehouseSize;
+            SetInteractableLayer(root);
+
+            Transform approach = CreateChild("ApproachPoint", root.transform).transform;
+            approach.SetPositionAndRotation(
+                WarehousePosition + Vector3.left * (WarehouseSize.x * 0.5f + StandOffWall), Quaternion.LookRotation(Vector3.right));
+
+            RectTransform labelCanvas = CreateWorldCanvas(
+                "Label", root.transform, WarehousePosition + Vector3.up * (WarehouseSize.y + WarehouseLabelHeight), new Vector2(600f, 120f), referenceHud);
+            var labelObject = new GameObject("Message", typeof(RectTransform));
+            labelObject.transform.SetParent(labelCanvas, false);
+            ((RectTransform)labelObject.transform).sizeDelta = new Vector2(600f, 120f);
+            var label = labelObject.AddComponent<TextMeshProUGUI>();
+            label.text = "Need $0";
+            label.fontSize = WarehouseLabelFontSize;
+            label.fontStyle = FontStyles.Bold;
+            label.alignment = TextAlignmentOptions.Center;
+            label.color = new Color(1f, 0.84f, 0.31f, 1f);
+            label.raycastTarget = false;
+            labelObject.SetActive(false);
+
+            var highlight = root.AddComponent<InteractableHighlight>();
+            var highlightObject = new SerializedObject(highlight);
+            SetArray(highlightObject.FindProperty("_renderers"), new List<Renderer> { body });
+            highlightObject.ApplyModifiedPropertiesWithoutUndo();
+
+            var warehouse = root.AddComponent<WarehouseView>();
+            var serialized = new SerializedObject(warehouse);
+            serialized.FindProperty("_locationId").stringValue = layout.LocationId;
+            serialized.FindProperty("_approachPoint").objectReferenceValue = approach;
+            serialized.FindProperty("_highlight").objectReferenceValue = highlight;
+            serialized.FindProperty("_messageLabel").objectReferenceValue = label;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+            Undo.RegisterCreatedObjectUndo(root, "Create warehouse");
+
+            Vector3 padPosition = WarehousePosition + Vector3.back * (WarehouseSize.z * 0.5f + StandOffWall);
+            pad = CreateManagePad(layout.transform, layout.LocationId, ManagePadTarget.Warehouse, padPosition, WarehousePosition, padMaterial, referenceHud);
+            return warehouse;
+        }
+
+        /// <returns>The door: where hired NPCs appear, facing west (towards the bays).</returns>
+        private static Transform CreateStaffRoom(Transform parent)
+        {
+            GameObject root = CreateChild(StaffRoomObjectName, parent);
+            root.transform.SetPositionAndRotation(StaffRoomPosition, Quaternion.identity);
+            root.AddComponent<WhiteboxGenerated>();
+            CreateBlock(root.transform, StaffRoomSize, GetOrCreateColorMaterial(StaffRoomMaterialPath, "M_StaffRoom", StaffRoomColor));
+
+            Transform door = CreateChild("Door", root.transform).transform;
+            door.SetPositionAndRotation(
+                StaffRoomPosition + Vector3.left * (StaffRoomSize.x * 0.5f + StandOffWall), Quaternion.LookRotation(Vector3.left));
+            Undo.RegisterCreatedObjectUndo(root, "Create staff room");
+            return door;
+        }
+
+        // Why: render-only — the NavMesh is baked from render meshes, and a collider would only catch clicks for nothing.
+        private static Renderer CreateBlock(Transform parent, Vector3 size, Material material)
+        {
+            GameObject block = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            block.name = "Body";
+            Object.DestroyImmediate(block.GetComponent<Collider>());
+            block.transform.SetParent(parent, false);
+            block.transform.localPosition = Vector3.up * (size.y * 0.5f);
+            block.transform.localScale = size;
+            var renderer = block.GetComponent<Renderer>();
+            renderer.sharedMaterial = material;
+            return renderer;
+        }
+
+        /// <summary>Opaque URP Lit material of one color; an existing asset is kept as it is (it may have been tuned).</summary>
+        internal static Material GetOrCreateColorMaterial(string path, string name, Color color)
+        {
+            var existing = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (existing != null)
+            {
+                return existing;
+            }
+
+            Shader shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+            var material = new Material(shader) { name = name };
+            material.SetColor("_BaseColor", color);
+            material.color = color;
+            AssetDatabase.CreateAsset(material, path);
+            return material;
+        }
+
+        private static void FillStaffSupplies(
+            LocationLayout layout,
+            WarehouseView warehouse,
+            ManagePadView warehousePad,
+            Transform staffRoomDoor,
+            List<ManagePadView> pads)
+        {
+            var serialized = new SerializedObject(layout);
+            serialized.FindProperty("_warehouse").objectReferenceValue = warehouse;
+            serialized.FindProperty("_warehousePad").objectReferenceValue = warehousePad;
+            serialized.FindProperty("_staffRoom").objectReferenceValue = staffRoomDoor;
+            SetArray(serialized.FindProperty("_managePads"), pads);
             serialized.ApplyModifiedProperties();
         }
 
