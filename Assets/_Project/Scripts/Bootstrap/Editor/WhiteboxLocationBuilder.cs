@@ -46,8 +46,8 @@ namespace AutoService.Bootstrap.Editor
         private static readonly SurfaceSpec[] Surfaces =
         {
             new SurfaceSpec("Surface_Road", new Vector3(0f, 0f, -21.5f), new Vector3(72f, 0.1f, 8f)),
-            new SurfaceSpec("Surface_Driveway", new Vector3(3f, 0f, -4f), new Vector3(5f, 0.1f, 28f)),
-            new SurfaceSpec("Surface_TopRoad", new Vector3(17f, 0f, 8f), new Vector3(32f, 0.1f, 5f)),
+            new SurfaceSpec("Surface_Driveway", new Vector3(-3f, 0f, -4f), new Vector3(5f, 0.1f, 28f)),
+            new SurfaceSpec("Surface_TopRoad", new Vector3(14f, 0f, 8f), new Vector3(40f, 0.1f, 5f)),
             new SurfaceSpec("Surface_Entrance2Lane", new Vector3(11f, 0f, 3f), new Vector3(4f, 0.1f, 6f)),
             new SurfaceSpec("Surface_Parking", new Vector3(19f, 0f, -8.25f), new Vector3(20f, 0.1f, 18.5f)),
             new SurfaceSpec("Surface_ExitRoad", new Vector3(30f, 0f, -8f), new Vector3(5f, 0.1f, 34f)),
@@ -63,16 +63,16 @@ namespace AutoService.Bootstrap.Editor
         // (LocationLayout.Validate reports a route that would drive through a spot or a parking slot).
         private static readonly NodeSpec[] Nodes =
         {
-            new NodeSpec("N_Spawn", -32f, -19f, 90f, null, "Q3"),
-            new NodeSpec("Q3", -21f, -19f, 90f, null, "Q2"),
-            new NodeSpec("Q2", -15f, -19f, 90f, null, "Q1"),
-            new NodeSpec("Q1", -9f, -19f, 90f, null, "Q0"),
-            new NodeSpec("Q0", -3f, -19f, 90f, null, "F1", "R1"),
-            new NodeSpec("F1", 3f, -16f, 0f, null, "WB1"),
-            new NodeSpec("WB1", 3f, -12f, 0f, null, "WB0"),
-            new NodeSpec("WB0", 3f, -7f, 0f, null, WashSpot),
-            new NodeSpec("WX", 3f, 4f, 0f, null, "T1"),
-            new NodeSpec("T1", 3f, 8f, 90f, null, "T2"),
+            new NodeSpec("N_Spawn", -34f, -19f, 90f, null, "Q3"),
+            new NodeSpec("Q3", -27f, -19f, 90f, null, "Q2"),
+            new NodeSpec("Q2", -21f, -19f, 90f, null, "Q1"),
+            new NodeSpec("Q1", -15f, -19f, 90f, null, "Q0"),
+            new NodeSpec("Q0", -9f, -19f, 90f, null, "F1", "R1"),
+            new NodeSpec("F1", -3f, -16f, 0f, null, "WB1"),
+            new NodeSpec("WB1", -3f, -12f, 0f, null, "WB0"),
+            new NodeSpec("WB0", -3f, -7f, 0f, null, WashSpot),
+            new NodeSpec("WX", -3f, 4f, 0f, null, "T1"),
+            new NodeSpec("T1", -3f, 8f, 90f, null, "T2"),
             new NodeSpec("T2", 11f, 8f, 90f, null, ServiceEntranceSpot, "T3"),
             new NodeSpec("T3", 30f, 8f, 180f, null, "D1"),
             new NodeSpec("D1", 30f, -3f, 180f, ZoneJ, "D2"),
@@ -102,17 +102,18 @@ namespace AutoService.Bootstrap.Editor
         private static readonly string[] ParkingSlotNames = { "P0", "P1", "P2", "P3" };
 
         // Wash (drive-through): the car spot lands here (XZ; the bay keeps its height), facing north; buffer 0 = nearest.
-        private static readonly Vector3 WashSpotPosition = new Vector3(3f, 0f, -2f);
+        private static readonly Vector3 WashSpotPosition = new Vector3(-3f, 0f, -2f);
         private const float WashSpotYaw = 0f;
         private static readonly string[] WashSpotNext = { "WX" };
         private static readonly string[] WashBufferNames = { "WB0", "WB1" };
 
         // Parking entrances: post, car spot, work spot (facing east), arm along +X lifted around Z.
+        // Why: the car spot sits 3 m before the arm (z of the post ± 3), so a waiting car's nose stays in front of it.
         private static readonly BarrierSpec MainEntrance = new BarrierSpec(
-            MainEntrancePointId, new Vector3(9f, 0.5f, -17.5f), new Vector3(11f, 0f, -19f), 0f, new Vector3(7.5f, 0f, -17f), "B1N");
+            MainEntrancePointId, new Vector3(9f, 0.5f, -17.5f), new Vector3(11f, 0f, -20.5f), 0f, new Vector3(7.5f, 0f, -17f), "B1N");
 
         private static readonly BarrierSpec ServiceEntrance = new BarrierSpec(
-            ServiceEntrancePointId, new Vector3(9f, 0.5f, 2.5f), new Vector3(11f, 0f, 4f), 180f, new Vector3(7.5f, 0f, 3f), "B2S");
+            ServiceEntrancePointId, new Vector3(9f, 0.5f, 2.5f), new Vector3(11f, 0f, 5.5f), 180f, new Vector3(7.5f, 0f, 3f), "B2S");
 
         private const float WorkSpotYaw = 90f;
         private static readonly Vector3 ArmLocalPosition = new Vector3(2f, 0f, 0f);
