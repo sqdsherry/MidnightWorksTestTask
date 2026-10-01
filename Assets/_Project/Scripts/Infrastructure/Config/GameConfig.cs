@@ -14,7 +14,28 @@ namespace AutoService.Infrastructure.Config
         [Tooltip("Global economy settings.")]
         private EconomySection _economy = new EconomySection();
 
+        [SerializeField]
+        [Tooltip("Every service type used by scene points (parking barrier, wash...). Ids must be unique.")]
+        private ServiceTypeConfig[] _serviceTypes = new ServiceTypeConfig[0];
+
+        [SerializeField]
+        [Tooltip("Every car type that can spawn. Ids must be unique.")]
+        private CarTypeConfig[] _carTypes = new CarTypeConfig[0];
+
+        [SerializeField]
+        [Tooltip("Car flow settings.")]
+        private TrafficSection _traffic = new TrafficSection();
+
         /// <summary>Global economy settings.</summary>
         public EconomySection Economy => _economy;
+
+        /// <summary>Service type assets (may contain nulls if left empty in the inspector).</summary>
+        public ServiceTypeConfig[] ServiceTypes => _serviceTypes;
+
+        /// <summary>Car type assets (may contain nulls if left empty in the inspector).</summary>
+        public CarTypeConfig[] CarTypes => _carTypes;
+
+        /// <summary>Car flow settings.</summary>
+        public TrafficSection Traffic => _traffic;
     }
 }
