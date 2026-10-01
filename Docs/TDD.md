@@ -256,7 +256,7 @@ EditMode: `Wallet`, `PriceFormula`, `ServicePoint` (прогресс тольк�
 | 04 | `feature/04-build` | **A1** Стройка: ряд 4 боксов с буферами, места парковки, рост потока, панель постройки — [промпт](Prompts/04-a1-build.md), [фикс](Prompts/04c-a1-setup-tools.md) | Д1 | M | ✔️ смержен |
 | 05 | `feature/05-staff-supplies` | **A2** R1-инсталлеры + персонал (работник точки, кладовщик), склад/расходники/перенос, ManagePad + панель точки + апгрейды — [промпт](Prompts/05-a2-staff-supplies.md) | Д2 | M | 📝 промпт готов |
 | 07 | `feature/07-progression` | Progression (XP/уровень — **пишет пользователь** с подсказками архитектора) + Unlocks (кодер) | 2 | M | ⏳ |
-| 08a | `feature/08a-save-core` | Ядро сейва (SaveData, атомарная запись, SaveCoordinator, автосейв) + Settings — [промпт](Prompts/08a-save-core.md) | Д1 | M | 🔨 ревью ✔️, ждёт проверки в Unity |
+| 08a | `feature/08a-save-core` | Ядро сейва (SaveData, атомарная запись, SaveCoordinator, автосейв) + Settings — [промпт](Prompts/08a-save-core.md) | Д1 | M | ✔️ смержен |
 | 08b | `feature/08b-save-wiring` | Подключение сервисов к сейву (`ISaveable`), загрузка на старте, сейв при выходе | 2 | M | ⏳ |
 | 09 | `feature/09-scenes-ui` | Scene Flow + Loading + MainMenu + Settings + HUD + панели/попапы | 3 | M | ⏳ |
 | 10 | `feature/10-onboarding` | Onboarding | 3 | M | ⏳ |
