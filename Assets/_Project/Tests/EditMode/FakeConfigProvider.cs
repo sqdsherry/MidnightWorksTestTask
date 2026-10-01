@@ -25,7 +25,7 @@ namespace AutoService.Tests.EditMode
         public IReadOnlyList<CarType> CarTypes => CarTypeList;
 
         /// <inheritdoc />
-        public TrafficSettings Traffic { get; set; } = new TrafficSettings(7f, 0f, 12, 0f, 0f, 0f);
+        public TrafficSettings Traffic { get; set; } = new TrafficSettings(7f, 0f, 12, 35, 35, 30, 0f, 0f);
 
         /// <inheritdoc />
         public bool TryGetServiceType(string id, out ServiceTypeSettings settings)

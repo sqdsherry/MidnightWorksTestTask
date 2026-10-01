@@ -8,14 +8,10 @@ namespace AutoService.Tests.EditMode
     public sealed class CarTests
     {
         private const float Patience = 10f;
+        private const string Wash = "wash_1";
+        private const string Entrance = "entrance_1";
 
-        private Car _car;
-
-        [SetUp]
-        public void SetUp()
-        {
-            _car = new Car(1, new CarType("sedan", 1, 1.0, Patience), "wash");
-        }
+        private static readonly CarType Sedan = new CarType("sedan", 1, 1.0, Patience);
 
         [Test]
         public void CarType_RejectsInvalidValues()
@@ -28,244 +24,242 @@ namespace AutoService.Tests.EditMode
         }
 
         [Test]
+        public void Constructor_ServiceTypeMustMatchPlan()
+        {
+            Assert.Throws<ArgumentException>(() => new Car(1, Sedan, CarVisitPlan.ParkOnly, "wash"));
+            Assert.Throws<ArgumentException>(() => new Car(1, Sedan, CarVisitPlan.WashOnly, null));
+            Assert.Throws<ArgumentException>(() => new Car(1, Sedan, CarVisitPlan.WashThenPark, " "));
+            Assert.Throws<ArgumentOutOfRangeException>(() => new Car(1, Sedan, (CarVisitPlan)42, "wash"));
+            Assert.Throws<ArgumentOutOfRangeException>(() => new Car(-1, Sedan, CarVisitPlan.ParkOnly, null));
+            Assert.Throws<ArgumentNullException>(() => new Car(1, null, CarVisitPlan.ParkOnly, null));
+        }
+
+        [Test]
         public void NewCar_IsArrivingWithFullPatience()
         {
-            Assert.AreEqual(CarState.Arriving, _car.State);
-            Assert.AreEqual(Patience, _car.PatienceLeft);
-            Assert.AreEqual(1f, _car.Patience01);
-            Assert.AreEqual(Car.NoParkingSlot, _car.ParkingSlot);
-            Assert.IsNull(_car.TargetPointId);
-            Assert.IsNull(_car.NextPointId);
+            Car car = WashOnly();
+
+            Assert.AreEqual(CarState.Arriving, car.State);
+            Assert.AreEqual(CarVisitPlan.WashOnly, car.Plan);
+            Assert.IsTrue(car.WantsService);
+            Assert.AreEqual(Patience, car.PatienceLeft);
+            Assert.AreEqual(1f, car.Patience01);
+            Assert.AreEqual(Car.NoParkingSlot, car.ParkingSlot);
+            Assert.IsNull(car.TargetPointId);
         }
 
         [Test]
-        public void DirectRoute_QueueToPointToExit()
+        public void WashOnly_QueueToPointToExit()
         {
-            _car.EnterQueue();
-            _car.MarkArrived(0f);
-            Assert.IsTrue(_car.HasArrived);
+            Car car = WashOnly();
+            car.EnterQueue();
+            car.MarkArrived();
+            Assert.IsTrue(car.HasArrived);
 
-            _car.SendToPoint("wash_1");
-            Assert.AreEqual(CarState.ToPoint, _car.State);
-            Assert.IsFalse(_car.HasArrived);
-            Assert.AreEqual("wash_1", _car.TargetPointId);
+            car.SendToPoint(Wash);
+            Assert.AreEqual(CarState.ToPoint, car.State);
+            Assert.IsFalse(car.HasArrived);
+            Assert.AreEqual(Wash, car.TargetPointId);
 
-            _car.MarkArrived(1f);
-            Assert.AreEqual(CarState.AtPoint, _car.State);
+            car.MarkArrived();
+            Assert.AreEqual(CarState.AtPoint, car.State);
 
-            _car.Leave();
-            Assert.AreEqual(CarState.Leaving, _car.State);
-            Assert.IsNull(_car.TargetPointId);
+            car.Leave();
+            Assert.AreEqual(CarState.Leaving, car.State);
+            Assert.IsNull(car.TargetPointId);
         }
 
         [Test]
-        public void SendToParking_GoesFromQueueStraightToTheSlot()
+        public void Buffer_QueueToBufferToPoint()
         {
-            _car.EnterQueue();
+            Car car = WashOnly();
+            car.EnterQueue();
 
-            _car.SendToParking(2, 5f);
+            car.SendToBuffer(Wash);
+            Assert.AreEqual(CarState.ToBuffer, car.State);
+            Assert.AreEqual(Wash, car.TargetPointId);
 
-            Assert.AreEqual(CarState.ToParking, _car.State);
-            Assert.AreEqual(2, _car.ParkingSlot);
-            Assert.AreEqual(5f, _car.ParkingStayLeft);
-            Assert.IsFalse(_car.HasArrived);
+            car.MoveUpInBuffer();
+            Assert.AreEqual(CarState.ToBuffer, car.State, "Moving up while still driving in keeps the state.");
 
-            _car.MarkArrived(7f);
-            Assert.AreEqual(CarState.Parked, _car.State);
-            Assert.AreEqual(7f, _car.ParkedAtTime);
+            car.MarkArrived();
+            Assert.AreEqual(CarState.InBuffer, car.State);
+
+            car.MoveUpInBuffer();
+            Assert.AreEqual(CarState.InBuffer, car.State);
+            Assert.IsFalse(car.HasArrived);
+
+            car.MarkArrived();
+            car.SendToPoint(Wash);
+            Assert.AreEqual(CarState.ToPoint, car.State);
         }
 
         [Test]
-        public void ParkingRoute_ExitThenPoint()
+        public void ParkOnly_QueueToEntranceToParkingToExit()
         {
-            ParkWithStay(0f);
+            var car = new Car(2, Sedan, CarVisitPlan.ParkOnly, null);
+            car.EnterQueue();
 
-            _car.SendToParkingExit("wash_1");
-            Assert.AreEqual(CarState.ToParkingExit, _car.State);
-            Assert.AreEqual(Car.NoParkingSlot, _car.ParkingSlot);
-            Assert.AreEqual("wash_1", _car.NextPointId);
+            car.SendToEntrance(Entrance, 3, 5f);
+            Assert.AreEqual(CarState.ToEntrance, car.State);
+            Assert.AreEqual(Entrance, car.TargetPointId);
+            Assert.AreEqual(3, car.ParkingSlot);
+            Assert.AreEqual(5f, car.PlannedStay);
 
-            _car.MarkArrived(2f);
-            Assert.AreEqual(CarState.AtParkingExit, _car.State);
+            car.MarkArrived();
+            Assert.AreEqual(CarState.AtEntrance, car.State);
 
-            _car.ContinueFromParkingExit();
-            Assert.AreEqual(CarState.ToPoint, _car.State);
-            Assert.AreEqual("wash_1", _car.TargetPointId);
-            Assert.IsNull(_car.NextPointId);
-            Assert.IsFalse(_car.HasArrived);
+            car.SendToParking();
+            Assert.AreEqual(CarState.ToParking, car.State);
+            Assert.IsNull(car.TargetPointId);
+            Assert.AreEqual(5f, car.ParkingStayLeft);
+
+            car.MarkArrived();
+            Assert.AreEqual(CarState.Parked, car.State);
+            Assert.IsFalse(car.IsStayOver);
+
+            car.TickParkingStay(5f);
+            Assert.IsTrue(car.IsStayOver);
+
+            car.LeaveParking();
+            Assert.AreEqual(CarState.Leaving, car.State);
+            Assert.AreEqual(Car.NoParkingSlot, car.ParkingSlot);
         }
 
         [Test]
-        public void ParkingOnlyRoute_ExitThenLeave()
+        public void WashThenPark_PointToEntrance()
         {
-            var parkOnly = new Car(2, new CarType("sedan", 1, 1.0, Patience), null);
+            var car = new Car(3, Sedan, CarVisitPlan.WashThenPark, "wash");
+            car.EnterQueue();
+            car.SendToPoint(Wash);
+            car.MarkArrived();
+
+            car.SendToEntrance(Entrance, 0, 4f);
+
+            Assert.AreEqual(CarState.ToEntrance, car.State);
+            Assert.AreEqual(Entrance, car.TargetPointId);
+        }
+
+        [Test]
+        public void SendToEntrance_MustMatchThePlan()
+        {
+            Car washOnly = WashOnly();
+            washOnly.EnterQueue();
+            Assert.Throws<InvalidOperationException>(() => washOnly.SendToEntrance(Entrance, 0, 1f), "A service car does not park from the queue.");
+            washOnly.SendToPoint(Wash);
+            washOnly.MarkArrived();
+            Assert.Throws<InvalidOperationException>(() => washOnly.SendToEntrance(Entrance, 0, 1f), "Wash-only never parks.");
+
+            var parkOnly = new Car(2, Sedan, CarVisitPlan.ParkOnly, null);
             parkOnly.EnterQueue();
-            parkOnly.SendToParking(0, 0f);
-            parkOnly.MarkArrived(1f);
-
-            parkOnly.SendToParkingExit(null);
-            parkOnly.MarkArrived(2f);
-            parkOnly.ContinueFromParkingExit();
-
-            Assert.AreEqual(CarState.Leaving, parkOnly.State);
-            Assert.IsNull(parkOnly.TargetPointId);
-        }
-
-        [Test]
-        public void ParkingOnlyCar_HasNoServiceAndCannotGoToPoint()
-        {
-            var parkOnly = new Car(2, new CarType("sedan", 1, 1.0, Patience), null);
-            parkOnly.EnterQueue();
-
-            Assert.IsFalse(parkOnly.WantsService);
-            Assert.IsTrue(_car.WantsService);
-            Assert.Throws<InvalidOperationException>(() => parkOnly.SendToPoint("wash_1"));
-            Assert.Throws<ArgumentException>(() => new Car(3, new CarType("sedan", 1, 1.0, Patience), " "));
-
-            parkOnly.SendToParking(0, 0f);
-            parkOnly.MarkArrived(0f);
-            Assert.Throws<InvalidOperationException>(() => parkOnly.SendToParkingExit("wash_1"));
-        }
-
-        [Test]
-        public void SendToParkingExit_OnlyWhenTheStayIsOver()
-        {
-            ParkWithStay(5f);
-            Assert.IsFalse(_car.IsReadyToLeaveParking);
-            Assert.Throws<InvalidOperationException>(() => _car.SendToParkingExit("wash_1"));
-            Assert.Throws<InvalidOperationException>(() => _car.SendToParkingExit(null));
-
-            _car.TickParkingStay(5f);
-
-            Assert.IsTrue(_car.IsReadyToLeaveParking);
-            Assert.Throws<ArgumentException>(() => _car.SendToParkingExit(" "));
-            _car.SendToParkingExit("wash_1");
-            Assert.AreEqual(CarState.ToParkingExit, _car.State);
-        }
-
-        [Test]
-        public void ParkingStay_BlocksPatienceUntilOver()
-        {
-            ParkWithStay(5f);
-
-            _car.TickPatience(3f);
-            _car.TickParkingStay(3f);
-            Assert.AreEqual(Patience, _car.PatienceLeft, "No patience is spent during the stay.");
-            Assert.AreEqual(2f, _car.ParkingStayLeft, 0.0001f);
-
-            _car.TickParkingStay(3f);
-            Assert.AreEqual(0f, _car.ParkingStayLeft);
-            Assert.IsTrue(_car.IsReadyToLeaveParking);
-
-            _car.TickPatience(1f);
-            Assert.AreEqual(Patience - 1f, _car.PatienceLeft, 0.0001f, "A ready car waits and loses patience.");
+            Assert.Throws<InvalidOperationException>(() => parkOnly.SendToPoint(Wash));
+            Assert.Throws<InvalidOperationException>(() => parkOnly.SendToBuffer(Wash));
+            Assert.Throws<ArgumentOutOfRangeException>(() => parkOnly.SendToEntrance(Entrance, -1, 1f));
+            Assert.Throws<ArgumentOutOfRangeException>(() => parkOnly.SendToEntrance(Entrance, 0, float.NaN));
+            Assert.Throws<ArgumentException>(() => parkOnly.SendToEntrance(" ", 0, 1f));
+            Assert.AreEqual(CarState.InQueue, parkOnly.State);
         }
 
         [Test]
         public void ParkingStay_DoesNotRunWhileDrivingToTheSlot()
         {
-            _car.EnterQueue();
-            _car.SendToParking(0, 5f);
+            var car = new Car(2, Sedan, CarVisitPlan.ParkOnly, null);
+            car.EnterQueue();
+            car.SendToEntrance(Entrance, 0, 5f);
+            car.MarkArrived();
+            car.SendToParking();
 
-            _car.TickParkingStay(10f);
+            car.TickParkingStay(10f);
 
-            Assert.AreEqual(5f, _car.ParkingStayLeft);
-        }
-
-        [Test]
-        public void SendToParking_InvalidArguments_Throw()
-        {
-            _car.EnterQueue();
-
-            Assert.Throws<ArgumentOutOfRangeException>(() => _car.SendToParking(-1, 0f));
-            Assert.Throws<ArgumentOutOfRangeException>(() => _car.SendToParking(0, -1f));
-            Assert.Throws<ArgumentOutOfRangeException>(() => _car.SendToParking(0, float.NaN));
-            Assert.AreEqual(CarState.InQueue, _car.State);
+            Assert.AreEqual(5f, car.ParkingStayLeft);
         }
 
         [Test]
         public void MoveUpInQueue_ResetsArrival()
         {
-            _car.EnterQueue();
-            _car.MarkArrived(0f);
+            Car car = WashOnly();
+            car.EnterQueue();
+            car.MarkArrived();
 
-            _car.MoveUpInQueue();
+            car.MoveUpInQueue();
 
-            Assert.AreEqual(CarState.InQueue, _car.State);
-            Assert.IsFalse(_car.HasArrived);
+            Assert.AreEqual(CarState.InQueue, car.State);
+            Assert.IsFalse(car.HasArrived);
         }
 
         [Test]
         public void InvalidTransitions_Throw()
         {
-            Assert.Throws<InvalidOperationException>(() => _car.SendToParking(0, 0f));
-            Assert.Throws<InvalidOperationException>(() => _car.SendToPoint("wash_1"));
-            Assert.Throws<InvalidOperationException>(() => _car.Leave());
-            Assert.Throws<InvalidOperationException>(() => _car.SendToParkingExit(null));
-            Assert.Throws<InvalidOperationException>(() => _car.ContinueFromParkingExit());
-            Assert.Throws<InvalidOperationException>(() => _car.MoveUpInQueue());
+            Car car = WashOnly();
+            Assert.Throws<InvalidOperationException>(() => car.SendToPoint(Wash));
+            Assert.Throws<InvalidOperationException>(() => car.SendToBuffer(Wash));
+            Assert.Throws<InvalidOperationException>(() => car.Leave());
+            Assert.Throws<InvalidOperationException>(() => car.SendToParking());
+            Assert.Throws<InvalidOperationException>(() => car.LeaveParking());
+            Assert.Throws<InvalidOperationException>(() => car.MoveUpInQueue());
+            Assert.Throws<InvalidOperationException>(() => car.MoveUpInBuffer());
 
-            _car.EnterQueue();
-            Assert.Throws<InvalidOperationException>(() => _car.EnterQueue());
-            Assert.Throws<InvalidOperationException>(() => _car.ContinueFromParkingExit());
+            car.EnterQueue();
+            Assert.Throws<InvalidOperationException>(() => car.EnterQueue());
+            Assert.Throws<ArgumentException>(() => car.SendToPoint(" "));
 
-            _car.SendToParking(0, 0f);
-            _car.MarkArrived(0f);
-            Assert.Throws<InvalidOperationException>(() => _car.SendToPoint("wash_1"), "Parked cars go through the exit.");
-            _car.SendToParkingExit(null);
-            Assert.Throws<InvalidOperationException>(() => _car.ContinueFromParkingExit(), "Not at the exit yet.");
+            car.SendToBuffer(Wash);
+            Assert.Throws<InvalidOperationException>(() => car.SendToPoint(Wash), "Still driving into the buffer.");
         }
 
         [Test]
         public void Patience_DrainsOnlyWhileWaiting()
         {
-            _car.TickPatience(1f);
-            Assert.AreEqual(Patience, _car.PatienceLeft, "Arriving does not drain.");
+            Car car = WashOnly();
+            car.TickPatience(1f);
+            Assert.AreEqual(Patience, car.PatienceLeft, "Arriving does not drain.");
 
-            _car.EnterQueue();
-            _car.TickPatience(1f);
-            Assert.AreEqual(Patience - 1f, _car.PatienceLeft, 0.0001f);
+            car.EnterQueue();
+            car.TickPatience(1f);
+            Assert.AreEqual(Patience - 1f, car.PatienceLeft, 0.0001f);
 
-            _car.SendToPoint("wash_1");
-            _car.TickPatience(1f);
-            Assert.AreEqual(Patience - 1f, _car.PatienceLeft, 0.0001f, "Driving does not drain.");
+            car.SendToBuffer(Wash);
+            car.TickPatience(1f);
+            Assert.AreEqual(Patience - 1f, car.PatienceLeft, 0.0001f, "Driving does not drain.");
+
+            car.MarkArrived();
+            car.TickPatience(1f);
+            Assert.AreEqual(Patience - 2f, car.PatienceLeft, 0.0001f, "Waiting in the buffer drains.");
         }
 
         [Test]
-        public void Patience_DrainsAtParkingExitButNotOnTheWayThere()
+        public void Patience_DrainsAtTheEntranceButNotWhileParked()
         {
-            ParkWithStay(0f);
-            _car.SendToParkingExit(null);
+            var car = new Car(2, Sedan, CarVisitPlan.ParkOnly, null);
+            car.EnterQueue();
+            car.SendToEntrance(Entrance, 0, 5f);
+            car.MarkArrived();
 
-            _car.TickPatience(1f);
-            Assert.AreEqual(Patience, _car.PatienceLeft, 0.0001f, "Driving to the exit does not drain.");
+            car.TickPatience(1f);
+            Assert.AreEqual(Patience - 1f, car.PatienceLeft, 0.0001f);
 
-            _car.MarkArrived(1f);
-            _car.TickPatience(1f);
-            Assert.AreEqual(Patience - 1f, _car.PatienceLeft, 0.0001f);
+            car.SendToParking();
+            car.MarkArrived();
+            car.TickPatience(3f);
+            Assert.AreEqual(Patience - 1f, car.PatienceLeft, 0.0001f, "The paid stay costs no patience.");
         }
 
         [Test]
         public void Patience_NeverBelowZeroAndDepletedRaisedOnce()
         {
+            Car car = WashOnly();
             int depleted = 0;
-            _car.PatienceDepleted += car => depleted++;
-            _car.EnterQueue();
+            car.PatienceDepleted += c => depleted++;
+            car.EnterQueue();
 
-            _car.TickPatience(Patience * 2f);
-            _car.TickPatience(1f);
+            car.TickPatience(Patience * 2f);
+            car.TickPatience(1f);
 
-            Assert.AreEqual(0f, _car.PatienceLeft);
-            Assert.AreEqual(0f, _car.Patience01);
+            Assert.AreEqual(0f, car.PatienceLeft);
+            Assert.AreEqual(0f, car.Patience01);
             Assert.AreEqual(1, depleted);
         }
 
-        private void ParkWithStay(float stay)
-        {
-            _car.EnterQueue();
-            _car.SendToParking(1, stay);
-            _car.MarkArrived(1f);
-            Assert.AreEqual(CarState.Parked, _car.State);
-        }
+        private static Car WashOnly() => new Car(1, Sedan, CarVisitPlan.WashOnly, "wash");
     }
 }
