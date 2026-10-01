@@ -250,11 +250,13 @@ EditMode: `Wallet`, `PriceFormula`, `ServicePoint` (прогресс тольк�
 |---|---|---|---|---|---|
 | 01 | `feature/01-core` | Структура, asmdef, Core (контейнер, GameLoop, EventBus, Pause, Time/Random), Economy, Config-база — [промпт](Prompts/01-core.md) | 1 | M | ✔️ смержен |
 | 02 | `feature/02-player` | Input + Camera + Player click-to-move (whitebox сцена) — [промпт](Prompts/02-player.md) | 1 | M | ✔️ смержен |
-| 03 | `feature/03-service-loop` | Service Points + Queue + Parking + Traffic + Cars AI + пул + мини-HUD баланса — [промпт](Prompts/03-service-loop.md) | 1–2 | M | 🔨 промпт выдан |
+| 03 | `feature/03-service-loop` | Service Points + Queue + Parking + Traffic + Cars AI + пул + мини-HUD баланса — [промпт](Prompts/03-service-loop.md) | 1–2 | M | ✔️ смержен |
+| 03b | `feature/03b-traffic-routing` | Трафик v2: маршруты по точкам, зоны слияния, авто-ворота въезда, шлагбаум выезда с оплатой за время — [промпт](Prompts/03b-traffic-routing.md) | 2 | M | 🔨 промпт выдан |
+| R1 | `feature/r1-installers` | Рефакторинг: `GameplayEntryPoint` → инсталлеры по модулям | 2 | S | ⏳ |
 | 04 | `feature/04-supplies` | Warehouse / Supplies / Carry | 2 | M | ⏳ |
 | 05 | `feature/05-build` | Build (фикс. участки) | 2 | M | ⏳ |
 | 06 | `feature/06-staff` | Staff: работник точки, кладовщик | 2 | M | ⏳ |
-| 07 | `feature/07-progression` | Progression + Unlocks | 2 | M | ⏳ |
+| 07 | `feature/07-progression` | Progression (XP/уровень — **пишет пользователь** с подсказками архитектора) + Unlocks (кодер) | 2 | M | ⏳ |
 | 08 | `feature/08-save` | Save + Settings | 2 | M | ⏳ |
 | 09 | `feature/09-scenes-ui` | Scene Flow + Loading + MainMenu + Settings + HUD + панели/попапы | 3 | M | ⏳ |
 | 10 | `feature/10-onboarding` | Onboarding | 3 | M | ⏳ |
