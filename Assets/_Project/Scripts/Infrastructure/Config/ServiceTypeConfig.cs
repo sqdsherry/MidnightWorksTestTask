@@ -19,12 +19,16 @@ namespace AutoService.Infrastructure.Config
         private string _displayName = string.Empty;
 
         [SerializeField]
-        [Tooltip("Barrier = parking entrance; Service = a real service after which the car leaves.")]
+        [Tooltip("Barrier = parking exit (fee for the time parked); Service = a real service after which the car leaves.")]
         private PointKind _kind = PointKind.Service;
 
         [SerializeField, Min(0)]
         [Tooltip("Price in whole dollars before the car type multiplier.")]
         private long _basePrice = 10;
+
+        [SerializeField, Min(0f)]
+        [Tooltip("Extra dollars per second the car stayed (parking exit fee: (Base Price + this × seconds) × car multiplier). 0 = flat price.")]
+        private float _pricePerSecond;
 
         [SerializeField, Min(0f)]
         [Tooltip("Seconds of occupied work needed per car.")]
@@ -50,6 +54,9 @@ namespace AutoService.Infrastructure.Config
         /// <summary>Price in whole dollars before the car type multiplier.</summary>
         public long BasePrice => _basePrice;
 
+        /// <summary>Extra dollars per second of the car's stay.</summary>
+        public float PricePerSecond => _pricePerSecond;
+
         /// <summary>Seconds of occupied work needed per car.</summary>
         public float ServiceDuration => _serviceDuration;
 
@@ -63,6 +70,7 @@ namespace AutoService.Infrastructure.Config
         {
             _id = _id == null ? string.Empty : _id.Trim();
             _basePrice = _basePrice < 0 ? 0 : _basePrice;
+            _pricePerSecond = Mathf.Max(0f, _pricePerSecond);
             _serviceDuration = Mathf.Max(0f, _serviceDuration);
             _acceptDelay = Mathf.Max(0f, _acceptDelay);
             _clearDelay = Mathf.Max(0f, _clearDelay);

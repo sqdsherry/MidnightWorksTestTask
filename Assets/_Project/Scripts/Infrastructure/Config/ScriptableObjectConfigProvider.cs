@@ -83,6 +83,7 @@ namespace AutoService.Infrastructure.Config
                         asset.DisplayName,
                         asset.Kind,
                         new Money(asset.BasePrice),
+                        asset.PricePerSecond,
                         asset.ServiceDuration,
                         asset.AcceptDelay,
                         asset.ClearDelay);

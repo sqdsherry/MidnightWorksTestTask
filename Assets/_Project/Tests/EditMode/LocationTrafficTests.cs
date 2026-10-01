@@ -59,8 +59,8 @@ namespace AutoService.Tests.EditMode
             _config = new FakeConfigProvider();
             UseTraffic(parkOnlyChance: 0f, stayMin: ParkingStay, stayMax: ParkingStay);
 
-            var parking = new ServiceTypeSettings(ParkingType, "Parking", PointKind.Barrier, new Money(2), BarrierDuration, 0f, 0f);
-            var wash = new ServiceTypeSettings(WashType, "Wash", PointKind.Service, new Money(12), WashDuration, 0f, 0f);
+            var parking = new ServiceTypeSettings(ParkingType, "Parking", PointKind.Barrier, new Money(2), 0.0, BarrierDuration, 0f, 0f);
+            var wash = new ServiceTypeSettings(WashType, "Wash", PointKind.Service, new Money(12), 0.0, WashDuration, 0f, 0f);
             _config.ServiceTypeList.Add(parking);
             _config.ServiceTypeList.Add(wash);
             _config.CarTypeList.Add(new CarType("sedan", 1, 1.0, 60f));
