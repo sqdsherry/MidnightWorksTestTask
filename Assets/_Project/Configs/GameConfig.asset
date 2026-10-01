@@ -14,3 +14,14 @@ MonoBehaviour:
   m_EditorClassIdentifier: AutoService.Infrastructure::AutoService.Infrastructure.Config.GameConfig
   _economy:
     _startingMoney: 100
+  _serviceTypes:
+  - {fileID: 11400000, guid: ebb75d638506884498705552fc06f6c0, type: 2}
+  - {fileID: 11400000, guid: 8aa51d7740bedc1469cee2695c1f7f0e, type: 2}
+  _carTypes:
+  - {fileID: 11400000, guid: 9014d423e7fa9c64b9908cc10367ac6e, type: 2}
+  - {fileID: 11400000, guid: dae3a8a03329b954bb7898fa9652a919, type: 2}
+  - {fileID: 11400000, guid: ee690cff13c6b2e46a24431ddd28e406, type: 2}
+  _traffic:
+    _spawnInterval: 7
+    _spawnIntervalJitter: 2
+    _maxCarsAlive: 12
