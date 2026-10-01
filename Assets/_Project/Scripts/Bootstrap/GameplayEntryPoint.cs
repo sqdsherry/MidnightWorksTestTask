@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using AutoService.Domain.Economy;
 using AutoService.Domain.Points;
+using AutoService.Presentation.Building;
 using AutoService.Presentation.CameraControl;
 using AutoService.Presentation.Controls;
 using AutoService.Presentation.Hud;
@@ -9,6 +10,7 @@ using AutoService.Presentation.Interaction;
 using AutoService.Presentation.Player;
 using AutoService.Presentation.Points;
 using AutoService.Presentation.Traffic;
+using AutoService.Services.Building;
 using AutoService.Services.Config;
 using AutoService.Services.Core;
 using AutoService.Services.Economy;
@@ -84,6 +86,10 @@ namespace AutoService.Bootstrap
         [Tooltip("Temporary balance label (until the full HUD).")]
         private BalanceView _balanceView;
 
+        [SerializeField]
+        [Tooltip("Screen-space build panel shown next to a plot the character stands at.")]
+        private BuildPanelView _buildPanel;
+
         // Why: lifecycle lists are filled while registering, so every service created here is initialized
         // and ticked without each module having to remember to wire itself in.
         private readonly List<IInitializable> _initializables = new List<IInitializable>();
@@ -118,7 +124,8 @@ namespace AutoService.Bootstrap
 
             RegisterEconomy(config, eventBus);
             RegisterPlayer(_container.Resolve<IPauseService>());
-            RegisterServiceLoop(config, eventBus, _container.Resolve<IRandom>());
+            RegisterServiceLoop(config, eventBus, _container.Resolve<IRandom>(), out ServicePointService points, out LocationTraffic traffic);
+            RegisterBuilding(config, eventBus, points, traffic);
             RegisterHud();
 
             InitializeServices();
@@ -195,13 +202,21 @@ namespace AutoService.Bootstrap
         }
 
         /// <summary>Points, traffic and their presenters. Tick order: point service → traffic → car agents → point presenters.</summary>
-        private void RegisterServiceLoop(IConfigProvider config, IEventBus eventBus, IRandom random)
+        /// <param name="points">The point service, or null when the location cannot run.</param>
+        /// <param name="traffic">Traffic of location 1, or null when it was skipped.</param>
+        private void RegisterServiceLoop(
+            IConfigProvider config,
+            IEventBus eventBus,
+            IRandom random,
+            out ServicePointService points,
+            out LocationTraffic traffic)
         {
             var presenters = new List<ServicePointPresenter>();
-            ServicePointService points = RegisterPoints(config, eventBus, presenters);
+            traffic = null;
+            points = RegisterPoints(config, eventBus, presenters);
             if (points != null)
             {
-                RegisterTraffic(points, config, random, eventBus);
+                traffic = RegisterTraffic(points, config, random, eventBus);
             }
 
             // Why: presenters are tracked last so they render the state produced by this frame's simulation.
@@ -220,7 +235,7 @@ namespace AutoService.Bootstrap
                 return null;
             }
 
-            if (!_location1.Validate(out string problem))
+            if (!_location1.Validate(out string problem) || !_location1.ValidateBuildPlots(config, out problem))
             {
                 _logger.Error("[Gameplay] Service loop skipped: LocationLayout '" + _location1.name + "': " + problem + ".");
                 return null;
@@ -238,10 +253,14 @@ namespace AutoService.Bootstrap
                 return null;
             }
 
+            // Why: points that are still build plots join later, when built (BuildableBinder).
             ServicePointView[] servicePoints = _location1.ServicePoints;
             for (int i = 0; i < servicePoints.Length; i++)
             {
-                TryRegisterPoint(points, config, servicePoints[i], PointKind.Service, presenters);
+                if (_location1.IsBuiltAtStart(servicePoints[i]))
+                {
+                    TryRegisterPoint(points, config, servicePoints[i], PointKind.Service, presenters);
+                }
             }
 
             return points;
@@ -285,12 +304,13 @@ namespace AutoService.Bootstrap
             return true;
         }
 
-        private void RegisterTraffic(IServicePointService points, IConfigProvider config, IRandom random, IEventBus eventBus)
+        /// <returns>The traffic, or null when it was skipped.</returns>
+        private LocationTraffic RegisterTraffic(IServicePointService points, IConfigProvider config, IRandom random, IEventBus eventBus)
         {
             if (!HasReference(_carVisuals, nameof(_carVisuals)))
             {
                 _logger.Error("[Gameplay] Traffic skipped: assign the car visual catalog on " + name + ".");
-                return;
+                return null;
             }
 
             if (config.CarTypes.Count == 0)
@@ -303,7 +323,7 @@ namespace AutoService.Bootstrap
                 _location1.MainEntrance.PointId,
                 _location1.ServiceEntrance.PointId,
                 _location1.QueueSlotCount,
-                _location1.ParkingSlotCount,
+                _location1.InitialParkingCapacity(config),
                 _location1.ServiceBufferCapacity);
             var agents = new CarAgents(_location1, _carVisuals, _carPoolRoot);
 
@@ -316,7 +336,7 @@ namespace AutoService.Bootstrap
             {
                 agents.Dispose();
                 _logger.Error("[Gameplay] Traffic skipped: " + exception.Message);
-                return;
+                return null;
             }
 
             // Debug only: Scene view labels "#id plan state" above the cars.
@@ -325,6 +345,49 @@ namespace AutoService.Bootstrap
             // Why: tracked, not registered — module 11 adds a second location with its own traffic and agents.
             Track(traffic);
             Track(agents);
+            return traffic;
+        }
+
+        /// <summary>
+        /// Build plots of location 1: build service (A1: everything unlocked), the binder that turns built plots into
+        /// points/slots, and the build panel. Ticks after the point presenters.
+        /// </summary>
+        private void RegisterBuilding(IConfigProvider config, IEventBus eventBus, ServicePointService points, LocationTraffic traffic)
+        {
+            if (points == null || traffic == null)
+            {
+                _logger.Warning("[Gameplay] Building skipped: the service loop of location 1 is not running.");
+                return;
+            }
+
+            // TODO(07-progression): replace with the level-based gate.
+            var gate = new AlwaysUnlockedGate();
+            var build = new BuildService(_container.Resolve<IWalletService>(), gate, eventBus);
+            Register<IUnlockGate>(gate);
+            Register<IBuildService>(build);
+
+            // Plots were validated against the config together with the layout (ValidateBuildPlots).
+            BuildPlotView[] plots = _location1.BuildPlots;
+            for (int i = 0; i < plots.Length; i++)
+            {
+                if (config.TryGetBuildable(plots[i].PlotId, out BuildableSettings settings))
+                {
+                    build.Register(settings.PlotDefinition);
+                }
+            }
+
+            // TODO(08-save): build.RestoreBuilt(saved ids) — before or after the binder, it handles both.
+            Track(new BuildableBinder(build, config, points, traffic, _location1, _logger));
+
+            if (_buildPanel == null || _camera == null)
+            {
+                _logger.Warning("[Gameplay] " + nameof(_buildPanel) + " or " + nameof(_camera)
+                    + " is not assigned; build plots cannot be bought.");
+                return;
+            }
+
+            _container.TryResolve(out GameplayInput input);
+            Register(new BuildPanelPresenter(build, config, _container.Resolve<IWalletService>(), _buildPanel, _camera, plots, input));
         }
 
         private void RegisterHud()

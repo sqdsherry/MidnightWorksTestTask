@@ -22,6 +22,8 @@ namespace AutoService.Infrastructure.Config
         private readonly List<ServiceTypeSettings> _serviceTypes = new List<ServiceTypeSettings>();
         private readonly List<CarType> _carTypes = new List<CarType>();
         private readonly Dictionary<string, ServiceTypeSettings> _serviceTypesById = new Dictionary<string, ServiceTypeSettings>(StringComparer.Ordinal);
+        private readonly List<BuildableSettings> _buildables = new List<BuildableSettings>();
+        private readonly Dictionary<string, BuildableSettings> _buildablesById = new Dictionary<string, BuildableSettings>(StringComparer.Ordinal);
 
         /// <summary>Maps <paramref name="config"/> into settings.</summary>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="config"/> is null (e.g. not assigned in the inspector).</exception>
@@ -38,6 +40,7 @@ namespace AutoService.Infrastructure.Config
             MapServiceTypes(config);
             MapCarTypes(config);
             Traffic = MapTraffic(config);
+            MapBuildables(config);
         }
 
         /// <inheritdoc />
@@ -53,6 +56,9 @@ namespace AutoService.Infrastructure.Config
         public TrafficSettings Traffic { get; }
 
         /// <inheritdoc />
+        public IReadOnlyList<BuildableSettings> Buildables => _buildables;
+
+        /// <inheritdoc />
         public bool TryGetServiceType(string id, out ServiceTypeSettings settings)
         {
             if (id == null)
@@ -62,6 +68,18 @@ namespace AutoService.Infrastructure.Config
             }
 
             return _serviceTypesById.TryGetValue(id, out settings);
+        }
+
+        /// <inheritdoc />
+        public bool TryGetBuildable(string id, out BuildableSettings settings)
+        {
+            if (id == null)
+            {
+                settings = null;
+                return false;
+            }
+
+            return _buildablesById.TryGetValue(id, out settings);
         }
 
         private void MapServiceTypes(GameConfig config)
@@ -131,6 +149,45 @@ namespace AutoService.Infrastructure.Config
                 }
 
                 _carTypes.Add(carType);
+            }
+        }
+
+        private void MapBuildables(GameConfig config)
+        {
+            BuildableConfig[] assets = config.Buildables ?? Array.Empty<BuildableConfig>();
+            for (int i = 0; i < assets.Length; i++)
+            {
+                BuildableConfig asset = assets[i];
+                if (asset == null)
+                {
+                    throw Error(config, "Buildables element " + i + " is empty.");
+                }
+
+                BuildableSettings settings;
+                try
+                {
+                    settings = new BuildableSettings(
+                        asset.Id,
+                        asset.DisplayName,
+                        asset.Description,
+                        asset.Kind,
+                        asset.TargetId,
+                        new Money(asset.Cost),
+                        asset.RequiredLevel,
+                        asset.FlowBonus);
+                }
+                catch (ArgumentException exception)
+                {
+                    throw Error(config, "Buildable '" + asset.name + "' is invalid: " + exception.Message, exception);
+                }
+
+                if (_buildablesById.ContainsKey(settings.Id))
+                {
+                    throw Error(config, "Buildable '" + asset.name + "' has duplicate id '" + settings.Id + "'.");
+                }
+
+                _buildablesById.Add(settings.Id, settings);
+                _buildables.Add(settings);
             }
         }
 

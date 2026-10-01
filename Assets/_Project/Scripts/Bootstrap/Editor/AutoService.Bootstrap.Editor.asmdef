@@ -2,8 +2,12 @@
     "name": "AutoService.Bootstrap.Editor",
     "rootNamespace": "AutoService.Bootstrap.Editor",
     "references": [
+        "AutoService.Domain",
+        "AutoService.Infrastructure",
         "AutoService.Bootstrap",
-        "AutoService.Presentation"
+        "AutoService.Presentation",
+        "Unity.TextMeshPro",
+        "UnityEngine.UI"
     ],
     "includePlatforms": [
         "Editor"

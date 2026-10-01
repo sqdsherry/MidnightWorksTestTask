@@ -31,6 +31,8 @@ namespace AutoService.Tests.EditMode
         private const string ServiceId = "loc1_entrance_service";
         private const string WashId = "loc1_wash_1";
         private const string WashType = "wash";
+        private const string OilId = "loc1_oil";
+        private const string OilType = "oil";
         private const string ParkingType = "parking";
         private const float SpawnInterval = 1000f;
         private const float WashDuration = 6f;
@@ -555,6 +557,105 @@ namespace AutoService.Tests.EditMode
             _traffic.Dispose();
 
             Assert.AreEqual(0, _agents.SubscriberCount);
+        }
+
+        [Test]
+        public void AddServicePoint_CarsRequestTheNewService_AndItsBufferWorks()
+        {
+            CreateTraffic();
+            ServicePoint oil = RegisterOil();
+            _traffic.AddServicePoint(oil, 2);
+
+            int first = SpawnRequesting(1);
+            Tick(Step);
+            Assert.AreEqual(OilType, GetCar(first).RequestedServiceTypeId);
+            Assert.AreEqual(Destination.Point(OilId), Describe(first));
+
+            int second = SpawnRequesting(1);
+            Tick(Step);
+            Assert.AreEqual(Destination.Buffer(OilId, 0), Describe(second), "The new bay has its own buffer.");
+            Assert.AreEqual(1, _traffic.BufferCount(OilId));
+
+            int washer = SpawnRequesting(0);
+            Tick(Step);
+            Assert.AreEqual(Destination.Point(WashId), Describe(washer), "The old bay is not blocked by the new one.");
+        }
+
+        [Test]
+        public void AddServicePoint_RejectsBarriersForeignAndKnownPoints()
+        {
+            CreateTraffic();
+            ServicePoint foreign = _points.Register(
+                new ServiceTypeSettings(OilType, "Oil", PointKind.Service, new Money(25), 0.0, 9f, 0f, 0f)
+                    .CreatePointDefinition("loc2_oil", "loc2"));
+
+            Assert.Throws<ArgumentException>(() => _traffic.AddServicePoint(_main, 2));
+            Assert.Throws<ArgumentException>(() => _traffic.AddServicePoint(foreign, 2));
+            Assert.Throws<InvalidOperationException>(() => _traffic.AddServicePoint(_wash, 2));
+        }
+
+        [Test]
+        public void SetParkingCapacity_OpensTheNextSlot()
+        {
+            UseTraffic(1, 0, 0);
+            CreateTraffic(parkingCapacity: 2);
+            for (int slot = 0; slot < 2; slot++)
+            {
+                int parker = SpawnAtHead();
+                Tick(Step);
+                PayAtEntrance(parker, MainId);
+                Assert.AreEqual(Destination.ParkingSlot(slot), Describe(parker));
+            }
+
+            int third = SpawnAtHead();
+            Tick(Step);
+            Assert.AreEqual(Destination.QueueSlot(0), Describe(third), "The lot is full.");
+
+            _traffic.SetParkingCapacity(3);
+            Assert.AreEqual(3, _traffic.ParkingCapacity);
+            Tick(Step);
+            PayAtEntrance(third, MainId);
+
+            Assert.AreEqual(Destination.ParkingSlot(2), Describe(third));
+            Assert.Throws<ArgumentOutOfRangeException>(() => _traffic.SetParkingCapacity(2), "The lot never shrinks.");
+        }
+
+        [Test]
+        public void SetFlowMultiplier_DividesTheSpawnInterval()
+        {
+            CreateTraffic();
+            _traffic.SetFlowMultiplier(2.0);
+
+            Tick(Step);
+            Assert.AreEqual(1, _agents.Spawned.Count);
+
+            Tick(SpawnInterval / 2f - 1f);
+            Assert.AreEqual(1, _agents.Spawned.Count);
+
+            Tick(1f + Step);
+            Assert.AreEqual(2, _agents.Spawned.Count, "Twice the flow: the next car comes after half the interval.");
+            Assert.AreEqual(2.0, _traffic.FlowMultiplier);
+            Assert.Throws<ArgumentOutOfRangeException>(() => _traffic.SetFlowMultiplier(0.0));
+            Assert.Throws<ArgumentOutOfRangeException>(() => _traffic.SetFlowMultiplier(double.NaN));
+        }
+
+        private ServicePoint RegisterOil()
+        {
+            var oil = new ServiceTypeSettings(OilType, "Oil Change", PointKind.Service, new Money(25), 0.0, 9f, 0f, 0f);
+            _config.ServiceTypeList.Add(oil);
+            return _points.Register(oil.CreatePointDefinition(OilId, LocationId));
+        }
+
+        /// <summary>
+        /// Spawns a service-only car (default weights) that requests the location's service type number
+        /// <paramref name="serviceIndex"/> (in the order the points joined the flow) and lets it reach the head slot.
+        /// </summary>
+        private int SpawnRequesting(int serviceIndex)
+        {
+            _random.Ranges.Enqueue(0);
+            _random.Ranges.Enqueue(0);
+            _random.Ranges.Enqueue(serviceIndex);
+            return SpawnAtHead();
         }
 
         private void UseTraffic(int parkOnly, int washOnly, int washThenPark, float stayMin = ParkingStay, float stayMax = ParkingStay)

@@ -25,9 +25,12 @@ namespace AutoService.Services.Traffic
     /// (<see cref="PriceFormula.TimeBased"/>), paid when the order is accepted. The car then parks, stays (no patience spent)
     /// and drives out automatically — there is no exit barrier.</para>
     /// <para><b>Buffers.</b> Every service point has its own buffer (an <see cref="EntryQueue"/>) of
-    /// <see cref="LocationTrafficDefinition.ServiceBufferCapacity"/> slots on the driveway in front of it, so a head waiting
+    /// <see cref="LocationTrafficDefinition.ServiceBufferCapacity"/> slots (or the capacity given to
+    /// <see cref="AddServicePoint"/>) on the lane in front of it, so a head waiting
     /// for a busy bay leaves the entry queue and does not block parking-only cars behind it. The buffer head takes the point
     /// as soon as it is idle; the queue head only drives straight to a point whose buffer is empty, so nobody jumps the line.</para>
+    /// <para><b>Growth.</b> Built later (module A1): <see cref="AddServicePoint"/> adds a bay with its buffer and service type,
+    /// <see cref="SetParkingCapacity"/> opens more slots, <see cref="SetFlowMultiplier"/> makes cars come more often.</para>
     /// <para>Per tick, in this order: patience → parking stays (auto-exit) → buffer heads → queue head → spawn.</para>
     /// <para>Physical movement is delegated to <see cref="ICarAgents"/>; this class only reacts to its
     /// <see cref="ICarAgents.Arrived"/> events, so the whole flow is testable without Unity. How cars get somewhere
@@ -67,11 +70,13 @@ namespace AutoService.Services.Traffic
         private readonly List<ServicePoint> _locationPoints = new List<ServicePoint>();
 
         // Why: one buffer per service point, parallel lists iterated by index — no lookups by id in the tick.
+        // A point without a buffer has a null entry, so the indices always match.
         private readonly List<ServicePoint> _servicePoints = new List<ServicePoint>();
         private readonly List<EntryQueue> _buffers = new List<EntryQueue>();
 
         private int _nextCarId;
         private float _spawnTimer;
+        private double _flowMultiplier = 1.0;
         private bool _disposed;
 
         /// <summary>Creates the orchestrator and subscribes to the location's points, the queues and the agents.</summary>
@@ -124,11 +129,6 @@ namespace AutoService.Services.Traffic
             CollectLocationPoints();
 
             _queue.Shifted += OnQueueShifted;
-            for (int i = 0; i < _buffers.Count; i++)
-            {
-                _buffers[i].Shifted += OnBufferShifted;
-            }
-
             _agents.Arrived += OnCarArrived;
         }
 
@@ -141,6 +141,12 @@ namespace AutoService.Services.Traffic
         /// <summary>Number of free (unreserved) parking slots.</summary>
         public int ParkingFree => _parking.FreeCount;
 
+        /// <summary>Number of usable parking slots (layout slots 0..ParkingCapacity-1).</summary>
+        public int ParkingCapacity => _parking.Capacity;
+
+        /// <summary>Current car flow multiplier (1 = the configured spawn interval).</summary>
+        public double FlowMultiplier => _flowMultiplier;
+
         /// <summary>Number of cars currently present in the location.</summary>
         public int CarsAlive => _activeCars.Count;
 
@@ -151,7 +157,74 @@ namespace AutoService.Services.Traffic
         public int BufferCount(string pointId)
         {
             int index = IndexOfServicePoint(pointId);
-            return index >= 0 && index < _buffers.Count ? _buffers[index].Count : 0;
+            return index >= 0 && _buffers[index] != null ? _buffers[index].Count : 0;
+        }
+
+        /// <summary>
+        /// Adds a service point built after the start: cars start requesting its service type, it gets its own buffer
+        /// and its completions are handled like those of the starting points.
+        /// </summary>
+        /// <param name="point">The point, already registered in the point service.</param>
+        /// <param name="bufferCapacity">Buffer slots in front of the point (&gt;= 0; 0 = no buffer).</param>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="point"/> is null.</exception>
+        /// <exception cref="ArgumentException">
+        /// Thrown when the point is not a service, belongs to another location or the capacity is negative.
+        /// </exception>
+        /// <exception cref="InvalidOperationException">Thrown when the point is already part of the flow.</exception>
+        public void AddServicePoint(ServicePoint point, int bufferCapacity)
+        {
+            if (point == null)
+            {
+                throw new ArgumentNullException(nameof(point));
+            }
+
+            ServicePointDefinition pointDefinition = point.Definition;
+            if (pointDefinition.Kind != PointKind.Service)
+            {
+                throw new ArgumentException("Point '" + pointDefinition.Id + "' is not a service point.", nameof(point));
+            }
+
+            if (!string.Equals(pointDefinition.LocationId, _definition.LocationId, StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    "Point '" + pointDefinition.Id + "' belongs to location '" + pointDefinition.LocationId
+                    + "', not '" + _definition.LocationId + "'.",
+                    nameof(point));
+            }
+
+            if (bufferCapacity < 0)
+            {
+                throw new ArgumentException("Buffer capacity must be non-negative.", nameof(bufferCapacity));
+            }
+
+            if (_locationPoints.Contains(point))
+            {
+                throw new InvalidOperationException("Point '" + pointDefinition.Id + "' is already part of the flow.");
+            }
+
+            AddLocationPoint(point, bufferCapacity);
+        }
+
+        /// <summary>Opens more parking slots; existing reservations keep theirs.</summary>
+        /// <param name="capacity">New number of usable slots; the layout's slots 0..capacity-1 are used.</param>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when the capacity would shrink.</exception>
+        public void SetParkingCapacity(int capacity)
+        {
+            _parking.SetCapacity(capacity);
+        }
+
+        /// <summary>Scales the car flow: the spawn interval becomes the configured one divided by <paramref name="multiplier"/>.</summary>
+        /// <remarks>Applies from the next spawn on; the jitter stays as configured.</remarks>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown for a non-positive, infinite or NaN multiplier.</exception>
+        public void SetFlowMultiplier(double multiplier)
+        {
+            // Why: the negated comparison also rejects NaN.
+            if (!(multiplier > 0.0) || double.IsInfinity(multiplier))
+            {
+                throw new ArgumentOutOfRangeException(nameof(multiplier), multiplier, "Flow multiplier must be a finite positive number.");
+            }
+
+            _flowMultiplier = multiplier;
         }
 
         /// <inheritdoc />
@@ -182,7 +255,10 @@ namespace AutoService.Services.Traffic
             _queue.Shifted -= OnQueueShifted;
             for (int i = 0; i < _buffers.Count; i++)
             {
-                _buffers[i].Shifted -= OnBufferShifted;
+                if (_buffers[i] != null)
+                {
+                    _buffers[i].Shifted -= OnBufferShifted;
+                }
             }
 
             _agents.Arrived -= OnCarArrived;
@@ -215,38 +291,44 @@ namespace AutoService.Services.Traffic
             return entrance;
         }
 
-        // TODO(05-build): points built later must be added here (subscription, buffer, requested service types).
+        // Points built later join through AddServicePoint.
         private void CollectLocationPoints()
         {
             IReadOnlyList<ServicePoint> all = _points.All;
             for (int i = 0; i < all.Count; i++)
             {
                 ServicePoint point = all[i];
-                ServicePointDefinition pointDefinition = point.Definition;
-                if (!string.Equals(pointDefinition.LocationId, _definition.LocationId, StringComparison.Ordinal))
+                if (string.Equals(point.Definition.LocationId, _definition.LocationId, StringComparison.Ordinal))
                 {
-                    continue;
+                    AddLocationPoint(point, _definition.ServiceBufferCapacity);
                 }
+            }
+        }
 
-                _locationPoints.Add(point);
-                point.ServiceCompleted += OnServiceCompleted;
+        private void AddLocationPoint(ServicePoint point, int bufferCapacity)
+        {
+            ServicePointDefinition pointDefinition = point.Definition;
+            _locationPoints.Add(point);
+            point.ServiceCompleted += OnServiceCompleted;
 
-                // Why: a car may only request a service that exists here; barriers are a means, not a requested service.
-                if (pointDefinition.Kind != PointKind.Service)
-                {
-                    continue;
-                }
+            // Why: a car may only request a service that exists here; barriers are a means, not a requested service.
+            if (pointDefinition.Kind != PointKind.Service)
+            {
+                return;
+            }
 
-                _servicePoints.Add(point);
-                if (_definition.ServiceBufferCapacity > 0)
-                {
-                    _buffers.Add(new EntryQueue(_definition.ServiceBufferCapacity));
-                }
+            EntryQueue buffer = bufferCapacity > 0 ? new EntryQueue(bufferCapacity) : null;
+            if (buffer != null)
+            {
+                buffer.Shifted += OnBufferShifted;
+            }
 
-                if (!_serviceTypeIds.Contains(pointDefinition.ServiceTypeId))
-                {
-                    _serviceTypeIds.Add(pointDefinition.ServiceTypeId);
-                }
+            _servicePoints.Add(point);
+            _buffers.Add(buffer);
+
+            if (!_serviceTypeIds.Contains(pointDefinition.ServiceTypeId))
+            {
+                _serviceTypeIds.Add(pointDefinition.ServiceTypeId);
             }
         }
 
@@ -298,6 +380,11 @@ namespace AutoService.Services.Traffic
             for (int i = 0; i < _buffers.Count; i++)
             {
                 EntryQueue buffer = _buffers[i];
+                if (buffer == null)
+                {
+                    continue;
+                }
+
                 int headId = buffer.Head;
                 if (headId == EntryQueue.None)
                 {
@@ -364,7 +451,7 @@ namespace AutoService.Services.Traffic
                     continue;
                 }
 
-                EntryQueue buffer = i < _buffers.Count ? _buffers[i] : null;
+                EntryQueue buffer = _buffers[i];
                 bool bufferEmpty = buffer == null || buffer.Count == 0;
 
                 // Why: straight to the point only if nobody waits in its buffer — the buffer was there first.
@@ -472,7 +559,8 @@ namespace AutoService.Services.Traffic
         private float NextSpawnInterval()
         {
             float offset = _traffic.SpawnIntervalJitter * (_random.Value() * 2f - 1f);
-            return Math.Max(MinSpawnInterval, _traffic.SpawnInterval + offset);
+            float interval = (float)(_traffic.SpawnInterval / _flowMultiplier);
+            return Math.Max(MinSpawnInterval, interval + offset);
         }
 
         private CarVisitPlan PickPlan()
