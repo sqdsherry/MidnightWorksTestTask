@@ -224,6 +224,34 @@ namespace AutoService.Tests.EditMode
             Assert.Throws<InvalidOperationException>(() => _point.NotifyCarArrived(CarId));
         }
 
+        [Test]
+        public void CancelReservation_ReturnsToIdle()
+        {
+            int stateChanges = 0;
+            _point.TryReserve(CarId, new Money(5));
+            _point.StateChanged += point => stateChanges++;
+
+            _point.CancelReservation(CarId);
+
+            Assert.AreEqual(ServicePointState.Idle, _point.State);
+            Assert.AreEqual(ServicePoint.NoCar, _point.CarId);
+            Assert.AreEqual(Money.Zero, _point.CurrentPrice);
+            Assert.AreEqual(1, stateChanges);
+            Assert.IsTrue(_point.TryReserve(CarId + 1, new Money(5)));
+        }
+
+        [Test]
+        public void CancelReservation_ForeignCarOrAfterArrival_Throws()
+        {
+            Assert.Throws<InvalidOperationException>(() => _point.CancelReservation(CarId), "Nothing reserved.");
+
+            _point.TryReserve(CarId, new Money(5));
+            Assert.Throws<InvalidOperationException>(() => _point.CancelReservation(CarId + 1));
+
+            _point.NotifyCarArrived(CarId);
+            Assert.Throws<InvalidOperationException>(() => _point.CancelReservation(CarId), "The car is already there.");
+        }
+
         private void ArriveCar(Money price)
         {
             _point.TryReserve(CarId, price);

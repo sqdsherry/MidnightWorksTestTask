@@ -35,6 +35,7 @@ namespace AutoService.Tests.EditMode
             Assert.AreEqual(1f, _car.Patience01);
             Assert.AreEqual(Car.NoParkingSlot, _car.ParkingSlot);
             Assert.IsNull(_car.TargetPointId);
+            Assert.IsNull(_car.NextPointId);
         }
 
         [Test]
@@ -58,24 +59,56 @@ namespace AutoService.Tests.EditMode
         }
 
         [Test]
-        public void ParkingRoute_BarrierToParkingToPoint()
+        public void SendToParking_GoesFromQueueStraightToTheSlot()
         {
             _car.EnterQueue();
-            _car.SendToBarrier(2);
-            Assert.AreEqual(CarState.ToBarrier, _car.State);
+
+            _car.SendToParking(2, 5f);
+
+            Assert.AreEqual(CarState.ToParking, _car.State);
             Assert.AreEqual(2, _car.ParkingSlot);
+            Assert.AreEqual(5f, _car.ParkingStayLeft);
+            Assert.IsFalse(_car.HasArrived);
 
-            _car.MarkArrived(1f);
-            Assert.AreEqual(CarState.AtBarrier, _car.State);
-
-            _car.SendToParking(0f);
-            _car.MarkArrived(5f);
+            _car.MarkArrived(7f);
             Assert.AreEqual(CarState.Parked, _car.State);
-            Assert.AreEqual(5f, _car.ParkedAtTime);
+            Assert.AreEqual(7f, _car.ParkedAtTime);
+        }
 
-            _car.SendToPoint("wash_1");
-            Assert.AreEqual(CarState.ToPoint, _car.State);
+        [Test]
+        public void ParkingRoute_ExitThenPoint()
+        {
+            ParkWithStay(0f);
+
+            _car.SendToParkingExit("wash_1");
+            Assert.AreEqual(CarState.ToParkingExit, _car.State);
             Assert.AreEqual(Car.NoParkingSlot, _car.ParkingSlot);
+            Assert.AreEqual("wash_1", _car.NextPointId);
+
+            _car.MarkArrived(2f);
+            Assert.AreEqual(CarState.AtParkingExit, _car.State);
+
+            _car.ContinueFromParkingExit();
+            Assert.AreEqual(CarState.ToPoint, _car.State);
+            Assert.AreEqual("wash_1", _car.TargetPointId);
+            Assert.IsNull(_car.NextPointId);
+            Assert.IsFalse(_car.HasArrived);
+        }
+
+        [Test]
+        public void ParkingOnlyRoute_ExitThenLeave()
+        {
+            var parkOnly = new Car(2, new CarType("sedan", 1, 1.0, Patience), null);
+            parkOnly.EnterQueue();
+            parkOnly.SendToParking(0, 0f);
+            parkOnly.MarkArrived(1f);
+
+            parkOnly.SendToParkingExit(null);
+            parkOnly.MarkArrived(2f);
+            parkOnly.ContinueFromParkingExit();
+
+            Assert.AreEqual(CarState.Leaving, parkOnly.State);
+            Assert.IsNull(parkOnly.TargetPointId);
         }
 
         [Test]
@@ -88,19 +121,37 @@ namespace AutoService.Tests.EditMode
             Assert.IsTrue(_car.WantsService);
             Assert.Throws<InvalidOperationException>(() => parkOnly.SendToPoint("wash_1"));
             Assert.Throws<ArgumentException>(() => new Car(3, new CarType("sedan", 1, 1.0, Patience), " "));
+
+            parkOnly.SendToParking(0, 0f);
+            parkOnly.MarkArrived(0f);
+            Assert.Throws<InvalidOperationException>(() => parkOnly.SendToParkingExit("wash_1"));
         }
 
         [Test]
-        public void ParkingStay_BlocksDispatchAndPatienceUntilOver()
+        public void SendToParkingExit_OnlyWhenTheStayIsOver()
         {
             ParkWithStay(5f);
             Assert.IsFalse(_car.IsReadyToLeaveParking);
+            Assert.Throws<InvalidOperationException>(() => _car.SendToParkingExit("wash_1"));
+            Assert.Throws<InvalidOperationException>(() => _car.SendToParkingExit(null));
+
+            _car.TickParkingStay(5f);
+
+            Assert.IsTrue(_car.IsReadyToLeaveParking);
+            Assert.Throws<ArgumentException>(() => _car.SendToParkingExit(" "));
+            _car.SendToParkingExit("wash_1");
+            Assert.AreEqual(CarState.ToParkingExit, _car.State);
+        }
+
+        [Test]
+        public void ParkingStay_BlocksPatienceUntilOver()
+        {
+            ParkWithStay(5f);
 
             _car.TickPatience(3f);
             _car.TickParkingStay(3f);
             Assert.AreEqual(Patience, _car.PatienceLeft, "No patience is spent during the stay.");
             Assert.AreEqual(2f, _car.ParkingStayLeft, 0.0001f);
-            Assert.Throws<InvalidOperationException>(() => _car.SendToPoint("wash_1"));
 
             _car.TickParkingStay(3f);
             Assert.AreEqual(0f, _car.ParkingStayLeft);
@@ -108,17 +159,13 @@ namespace AutoService.Tests.EditMode
 
             _car.TickPatience(1f);
             Assert.AreEqual(Patience - 1f, _car.PatienceLeft, 0.0001f, "A ready car waits and loses patience.");
-            _car.SendToPoint("wash_1");
-            Assert.AreEqual(CarState.ToPoint, _car.State);
         }
 
         [Test]
         public void ParkingStay_DoesNotRunWhileDrivingToTheSlot()
         {
             _car.EnterQueue();
-            _car.SendToBarrier(0);
-            _car.MarkArrived(0f);
-            _car.SendToParking(5f);
+            _car.SendToParking(0, 5f);
 
             _car.TickParkingStay(10f);
 
@@ -126,26 +173,14 @@ namespace AutoService.Tests.EditMode
         }
 
         [Test]
-        public void LeaveParking_GoesToLeavingAndClearsSlot()
-        {
-            ParkWithStay(0f);
-
-            _car.LeaveParking();
-
-            Assert.AreEqual(CarState.Leaving, _car.State);
-            Assert.AreEqual(Car.NoParkingSlot, _car.ParkingSlot);
-            Assert.IsFalse(_car.HasArrived);
-            Assert.Throws<InvalidOperationException>(() => _car.LeaveParking());
-        }
-
-        [Test]
-        public void SendToParking_NegativeStay_Throws()
+        public void SendToParking_InvalidArguments_Throw()
         {
             _car.EnterQueue();
-            _car.SendToBarrier(0);
-            _car.MarkArrived(0f);
 
-            Assert.Throws<ArgumentOutOfRangeException>(() => _car.SendToParking(-1f));
+            Assert.Throws<ArgumentOutOfRangeException>(() => _car.SendToParking(-1, 0f));
+            Assert.Throws<ArgumentOutOfRangeException>(() => _car.SendToParking(0, -1f));
+            Assert.Throws<ArgumentOutOfRangeException>(() => _car.SendToParking(0, float.NaN));
+            Assert.AreEqual(CarState.InQueue, _car.State);
         }
 
         [Test]
@@ -163,15 +198,22 @@ namespace AutoService.Tests.EditMode
         [Test]
         public void InvalidTransitions_Throw()
         {
-            Assert.Throws<InvalidOperationException>(() => _car.SendToBarrier(0));
+            Assert.Throws<InvalidOperationException>(() => _car.SendToParking(0, 0f));
             Assert.Throws<InvalidOperationException>(() => _car.SendToPoint("wash_1"));
             Assert.Throws<InvalidOperationException>(() => _car.Leave());
-            Assert.Throws<InvalidOperationException>(() => _car.SendToParking(0f));
+            Assert.Throws<InvalidOperationException>(() => _car.SendToParkingExit(null));
+            Assert.Throws<InvalidOperationException>(() => _car.ContinueFromParkingExit());
             Assert.Throws<InvalidOperationException>(() => _car.MoveUpInQueue());
 
             _car.EnterQueue();
             Assert.Throws<InvalidOperationException>(() => _car.EnterQueue());
-            Assert.Throws<InvalidOperationException>(() => _car.SendToParking(0f));
+            Assert.Throws<InvalidOperationException>(() => _car.ContinueFromParkingExit());
+
+            _car.SendToParking(0, 0f);
+            _car.MarkArrived(0f);
+            Assert.Throws<InvalidOperationException>(() => _car.SendToPoint("wash_1"), "Parked cars go through the exit.");
+            _car.SendToParkingExit(null);
+            Assert.Throws<InvalidOperationException>(() => _car.ContinueFromParkingExit(), "Not at the exit yet.");
         }
 
         [Test]
@@ -187,6 +229,20 @@ namespace AutoService.Tests.EditMode
             _car.SendToPoint("wash_1");
             _car.TickPatience(1f);
             Assert.AreEqual(Patience - 1f, _car.PatienceLeft, 0.0001f, "Driving does not drain.");
+        }
+
+        [Test]
+        public void Patience_DrainsAtParkingExitButNotOnTheWayThere()
+        {
+            ParkWithStay(0f);
+            _car.SendToParkingExit(null);
+
+            _car.TickPatience(1f);
+            Assert.AreEqual(Patience, _car.PatienceLeft, 0.0001f, "Driving to the exit does not drain.");
+
+            _car.MarkArrived(1f);
+            _car.TickPatience(1f);
+            Assert.AreEqual(Patience - 1f, _car.PatienceLeft, 0.0001f);
         }
 
         [Test]
@@ -207,9 +263,7 @@ namespace AutoService.Tests.EditMode
         private void ParkWithStay(float stay)
         {
             _car.EnterQueue();
-            _car.SendToBarrier(1);
-            _car.MarkArrived(0f);
-            _car.SendToParking(stay);
+            _car.SendToParking(1, stay);
             _car.MarkArrived(1f);
             Assert.AreEqual(CarState.Parked, _car.State);
         }
