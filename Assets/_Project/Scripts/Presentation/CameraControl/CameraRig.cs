@@ -1,6 +1,7 @@
 using AutoService.Presentation.Controls;
 using AutoService.Presentation.Player;
 using UnityEngine;
+using UnityEngine.EventSystems;
 
 namespace AutoService.Presentation.CameraControl
 {
@@ -166,7 +167,7 @@ namespace AutoService.Presentation.CameraControl
             }
 
             float zoom = _input.Zoom;
-            if (Mathf.Abs(zoom) > InputDeadZone)
+            if (Mathf.Abs(zoom) > InputDeadZone && !IsPointerOverUi())
             {
                 // Why: only the sign is used — the wheel's magnitude per notch differs between platforms and settings.
                 _targetDistance = Mathf.Clamp(
@@ -230,6 +231,14 @@ namespace AutoService.Presentation.CameraControl
             }
 
             return direction;
+        }
+
+        // Why: the wheel over a scrollable panel must scroll the panel, not zoom the camera behind it.
+        // Explicit null check instead of `?.`: the null-conditional operator bypasses Unity's destroyed-object check.
+        private static bool IsPointerOverUi()
+        {
+            EventSystem eventSystem = EventSystem.current;
+            return eventSystem != null && eventSystem.IsPointerOverGameObject();
         }
 
         // Why: the pivot stays on its own ground height; only the character's XZ is followed.
