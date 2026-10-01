@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using AutoService.Domain.Traffic.Routing;
+using AutoService.Presentation.Traffic.Routing;
 using AutoService.Services.Core;
 using AutoService.Services.Traffic;
 using UnityEngine;
@@ -9,15 +11,18 @@ namespace AutoService.Presentation.Traffic
 {
     /// <summary>
     /// <see cref="ICarAgents"/> of one location: pooled <see cref="CarView"/>s (one <see cref="ObjectPool{T}"/> per car type)
-    /// driven by NavMesh, destinations resolved through the <see cref="LocationLayout"/>.
+    /// driven along the location's road graph, destinations resolved through the <see cref="LocationLayout"/>.
     /// </summary>
     /// <remarks>
+    /// <para><b>Routes.</b> <see cref="MoveTo"/> resolves the destination into a <see cref="RoadNode"/> and asks the
+    /// <see cref="RouteGraph"/> for the node chain from the car's current node; the car follows it node by node (NavMesh only
+    /// between neighbours), waiting in front of busy merge zones. The traffic logic only ever says "where", never "how".</para>
     /// <para><b>Arrivals</b> are collected into a buffer during the tick and raised after the pass over the cars, because
     /// handlers react with <see cref="MoveTo"/>/<see cref="Despawn"/> and would otherwise modify the collection being iterated.
     /// An arrival is dropped if, by the time it is raised, the car got a new target or was despawned.</para>
     /// <para><b>Failures never lose a car:</b> an unknown car type (no prefab) spawns an invisible "ghost" and an unresolvable
-    /// destination is reported as reached on the next tick. Both log an error, and the domain flow keeps moving instead of
-    /// stalling the queue behind the broken car.</para>
+    /// destination or a destination without a route is reported as reached on the next tick (the car is snapped there).
+    /// All of them log an error, and the domain flow keeps moving instead of stalling the queue behind the broken car.</para>
     /// <para>Steady state is allocation-free; instances are only created when a pool runs dry.</para>
     /// </remarks>
     public sealed class CarAgents : ICarAgents, ITickable, IDisposable
@@ -26,10 +31,16 @@ namespace AutoService.Presentation.Traffic
         private const int MaxPoolSize = 32;
 
         private readonly LocationLayout _layout;
+        private readonly RouteGraph _graph;
+        private readonly IReadOnlyList<TrafficZone> _zones;
         private readonly Transform _poolRoot;
         private readonly Dictionary<string, ObjectPool<CarView>> _pools = new Dictionary<string, ObjectPool<CarView>>(StringComparer.Ordinal);
         private readonly Dictionary<int, ActiveCar> _cars = new Dictionary<int, ActiveCar>();
         private readonly List<int> _carIds = new List<int>();
+
+        // Why: route buffers reused by every MoveTo — graph indices first, then the matching nodes handed to the view.
+        private readonly List<int> _pathIndices;
+        private readonly List<RoadNode> _pathNodes;
 
         // Why: two buffers swapped per tick — arrivals queued by handlers while raising go to the next tick's batch.
         private List<int> _pendingArrivals = new List<int>();
@@ -37,8 +48,8 @@ namespace AutoService.Presentation.Traffic
 
         private bool _disposed;
 
-        /// <summary>Creates one pool per catalog entry.</summary>
-        /// <param name="layout">Markup of the location (spawn point, slots, points).</param>
+        /// <summary>Builds the layout's road graph (once) and creates one pool per catalog entry.</summary>
+        /// <param name="layout">Markup of the location (road nodes, slots, points); should have passed <see cref="LocationLayout.Validate"/>.</param>
         /// <param name="catalog">Car type id → prefab.</param>
         /// <param name="poolRoot">Parent of the car instances; may be null (scene root).</param>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="layout"/> or <paramref name="catalog"/> is null.</exception>
@@ -55,7 +66,11 @@ namespace AutoService.Presentation.Traffic
             }
 
             _layout = layout;
+            _graph = layout.BuildGraph();
+            _zones = layout.Zones;
             _poolRoot = poolRoot;
+            _pathIndices = new List<int>(_graph.NodeCount);
+            _pathNodes = new List<RoadNode>(_graph.NodeCount);
 
             for (int i = 0; i < catalog.Count; i++)
             {
@@ -93,8 +108,7 @@ namespace AutoService.Presentation.Traffic
             if (carTypeId != null && _pools.TryGetValue(carTypeId, out ObjectPool<CarView> pool))
             {
                 view = pool.Get();
-                Transform spawn = _layout.SpawnPoint;
-                view.Place(spawn.position, spawn.rotation);
+                view.Place(carId, _layout.SpawnNode);
             }
             else
             {
@@ -122,15 +136,39 @@ namespace AutoService.Presentation.Traffic
                 return;
             }
 
-            if (!_layout.TryResolve(destination, out Transform target))
+            CarView view = car.View;
+            if (!_layout.TryResolveNode(destination, out RoadNode target))
             {
                 Debug.LogError("[CarAgents] Location '" + _layout.LocationId + "' cannot resolve " + destination + " for car " + carId + "; reporting it as reached.", _layout);
-                car.View.Halt();
+                view.Halt();
                 _pendingArrivals.Add(carId);
                 return;
             }
 
-            car.View.Drive(target);
+            RoadNode from = view.CurrentNode;
+            if (from == null || !_graph.TryGetPath(from.Index, target.Index, _pathIndices))
+            {
+                Debug.LogError("[CarAgents] Location '" + _layout.LocationId + "' has no route from '" + (from != null ? from.name : "nowhere")
+                    + "' to '" + target.name + "' (" + destination + ") for car " + carId + "; snapping it there.", _layout);
+                view.SnapTo(target);
+                _pendingArrivals.Add(carId);
+                return;
+            }
+
+            _pathNodes.Clear();
+            for (int i = 0; i < _pathIndices.Count; i++)
+            {
+                _pathNodes.Add(_layout.NodeAt(_pathIndices[i]));
+            }
+
+            // Why: already standing on the target (an empty route) — still drive "to" it, so the car re-aligns and the
+            // arrival is reported through the normal path.
+            if (_pathNodes.Count == 0)
+            {
+                _pathNodes.Add(target);
+            }
+
+            view.FollowPath(_pathNodes);
         }
 
         /// <inheritdoc />
@@ -145,6 +183,7 @@ namespace AutoService.Presentation.Traffic
             _carIds.Remove(carId);
             if (car.View != null)
             {
+                // Releasing resets the view, which also frees any merge zone the car still holds.
                 car.Pool.Release(car.View);
             }
         }
@@ -155,6 +194,13 @@ namespace AutoService.Presentation.Traffic
             if (_disposed)
             {
                 return;
+            }
+
+            // Why: gate arms are cosmetic and should finish moving even if the game gets paused mid-animation.
+            float unscaledDeltaTime = Time.unscaledDeltaTime;
+            for (int i = 0; i < _zones.Count; i++)
+            {
+                _zones[i].TickVisual(unscaledDeltaTime);
             }
 
             for (int i = 0; i < _carIds.Count; i++)
@@ -225,7 +271,7 @@ namespace AutoService.Presentation.Traffic
         private CarView CreateInstance(CarView prefab)
         {
             // Why: instantiated at the spawn point so the NavMeshAgent is created on the NavMesh (no "not close enough" warning).
-            Transform spawn = _layout.SpawnPoint;
+            Transform spawn = _layout.SpawnNode.transform;
             CarView instance = UnityEngine.Object.Instantiate(prefab, spawn.position, spawn.rotation, _poolRoot);
             instance.name = prefab.name;
             return instance;
