@@ -6,8 +6,8 @@ namespace AutoService.Services.Traffic
         /// <summary>A slot of the entry queue lane (<see cref="CarDestination.Index"/>).</summary>
         QueueSlot = 0,
 
-        /// <summary>The car spot of the location's parking barrier.</summary>
-        Barrier = 1,
+        /// <summary>The car spot of the location's parking exit barrier.</summary>
+        ParkingExit = 1,
 
         /// <summary>A parking slot (<see cref="CarDestination.Index"/>).</summary>
         ParkingSlot = 2,

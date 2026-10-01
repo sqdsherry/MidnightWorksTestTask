@@ -80,13 +80,19 @@ namespace AutoService.Domain.Traffic
         /// <summary>Id of the point the car is sent to or stands at, or null.</summary>
         public string TargetPointId { get; private set; }
 
-        /// <summary>Game time when the car parked.</summary>
+        /// <summary>
+        /// Id of the point a car heading for the parking exit continues to after paying, or null (it leaves).
+        /// Set by <see cref="SendToParkingExit"/>, consumed by <see cref="ContinueFromParkingExit"/>.
+        /// </summary>
+        public string NextPointId { get; private set; }
+
+        /// <summary>Game time when the car parked (the parking exit fee is charged for the time since then).</summary>
         public float ParkedAtTime { get; private set; }
 
         /// <summary>Seconds the car still wants to stay parked (set by <see cref="SendToParking"/>, drained while parked).</summary>
         public float ParkingStayLeft { get; private set; }
 
-        /// <summary>True when the car is parked and its stay is over: it may now go to a point or leave.</summary>
+        /// <summary>True when the car is parked and its stay is over: it may now drive to the parking exit.</summary>
         public bool IsReadyToLeaveParking => State == CarState.Parked && ParkingStayLeft <= 0f;
 
         /// <summary><see cref="CarState.Arriving"/> → <see cref="CarState.InQueue"/>; the car drives to its queue slot.</summary>
@@ -105,31 +111,28 @@ namespace AutoService.Domain.Traffic
             HasArrived = false;
         }
 
-        /// <summary><see cref="CarState.InQueue"/> → <see cref="CarState.ToBarrier"/> with a reserved parking slot.</summary>
-        /// <exception cref="ArgumentOutOfRangeException">Thrown for a negative slot.</exception>
-        public void SendToBarrier(int parkingSlot)
+        /// <summary>
+        /// <see cref="CarState.InQueue"/> → <see cref="CarState.ToParking"/>: the car drives through the automatic entry gate
+        /// straight to its reserved slot (the gate has no logic of its own).
+        /// </summary>
+        /// <param name="parkingSlot">Reserved slot index (&gt;= 0).</param>
+        /// <param name="parkingStay">Seconds the car will stay parked once there (&gt;= 0).</param>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown for a negative slot or a negative/NaN stay.</exception>
+        public void SendToParking(int parkingSlot, float parkingStay)
         {
             if (parkingSlot < 0)
             {
                 throw new ArgumentOutOfRangeException(nameof(parkingSlot), parkingSlot, "Parking slot must be non-negative.");
             }
 
-            Require(CarState.InQueue, nameof(SendToBarrier));
-            ParkingSlot = parkingSlot;
-            GoTo(CarState.ToBarrier);
-        }
-
-        /// <summary><see cref="CarState.AtBarrier"/> → <see cref="CarState.ToParking"/>; the car drives to <see cref="ParkingSlot"/>.</summary>
-        /// <param name="parkingStay">Seconds the car will stay parked once there (&gt;= 0).</param>
-        /// <exception cref="ArgumentOutOfRangeException">Thrown for a negative or NaN stay.</exception>
-        public void SendToParking(float parkingStay)
-        {
+            // Why: the negated comparison also rejects NaN.
             if (!(parkingStay >= 0f))
             {
                 throw new ArgumentOutOfRangeException(nameof(parkingStay), parkingStay, "Parking stay must be non-negative.");
             }
 
-            Require(CarState.AtBarrier, nameof(SendToParking));
+            Require(CarState.InQueue, nameof(SendToParking));
+            ParkingSlot = parkingSlot;
             ParkingStayLeft = parkingStay;
             GoTo(CarState.ToParking);
         }
@@ -146,26 +149,57 @@ namespace AutoService.Domain.Traffic
         }
 
         /// <summary>
-        /// <see cref="CarState.Parked"/> → <see cref="CarState.Leaving"/>: the car drives from its slot to the exit.
-        /// Clears <see cref="ParkingSlot"/>: the orchestrator releases the slot itself.
+        /// <see cref="CarState.Parked"/> (stay over) → <see cref="CarState.ToParkingExit"/>. Clears <see cref="ParkingSlot"/>
+        /// (the orchestrator releases the slot itself) and remembers where the car goes after paying.
         /// </summary>
-        /// <remarks>Does not require the stay to be over, so an impatient car can leave too (module 14).</remarks>
-        public void LeaveParking()
+        /// <param name="nextPointId">Reserved point to drive to after the exit, or null to leave the location.</param>
+        /// <exception cref="ArgumentException">Thrown for an empty (but non-null) point id.</exception>
+        /// <exception cref="InvalidOperationException">
+        /// Thrown when the car is not parked, its stay is not over, or a parking-only car is given a point.
+        /// </exception>
+        public void SendToParkingExit(string nextPointId)
         {
-            Require(CarState.Parked, nameof(LeaveParking));
+            if (nextPointId != null && nextPointId.Trim().Length == 0)
+            {
+                throw new ArgumentException("Next point id must be null (leave) or non-empty.", nameof(nextPointId));
+            }
+
+            if (!IsReadyToLeaveParking || (nextPointId != null && !WantsService))
+            {
+                throw InvalidTransition(nameof(SendToParkingExit));
+            }
+
+            NextPointId = nextPointId;
             ParkingSlot = NoParkingSlot;
             ParkingStayLeft = 0f;
-            GoTo(CarState.Leaving);
+            GoTo(CarState.ToParkingExit);
         }
 
         /// <summary>
-        /// <see cref="CarState.InQueue"/> or <see cref="CarState.Parked"/> (stay over) → <see cref="CarState.ToPoint"/>.
-        /// Clears <see cref="ParkingSlot"/>: the orchestrator releases the slot itself.
+        /// The parking fee is paid: <see cref="CarState.AtParkingExit"/> → <see cref="CarState.ToPoint"/>
+        /// (<see cref="TargetPointId"/> = <see cref="NextPointId"/>) or, without a next point, → <see cref="CarState.Leaving"/>.
+        /// </summary>
+        public void ContinueFromParkingExit()
+        {
+            Require(CarState.AtParkingExit, nameof(ContinueFromParkingExit));
+            string nextPointId = NextPointId;
+            NextPointId = null;
+            if (nextPointId == null)
+            {
+                GoTo(CarState.Leaving);
+                return;
+            }
+
+            TargetPointId = nextPointId;
+            GoTo(CarState.ToPoint);
+        }
+
+        /// <summary>
+        /// <see cref="CarState.InQueue"/> → <see cref="CarState.ToPoint"/>: the queue head drives straight to a free point.
+        /// Parked cars reach points through <see cref="SendToParkingExit"/> instead.
         /// </summary>
         /// <exception cref="ArgumentException">Thrown for an empty point id.</exception>
-        /// <exception cref="InvalidOperationException">
-        /// Thrown from other states, for a parking-only car, or for a parked car whose stay is not over.
-        /// </exception>
+        /// <exception cref="InvalidOperationException">Thrown from other states or for a parking-only car.</exception>
         public void SendToPoint(string pointId)
         {
             if (string.IsNullOrWhiteSpace(pointId))
@@ -173,14 +207,13 @@ namespace AutoService.Domain.Traffic
                 throw new ArgumentException("Point id must not be empty.", nameof(pointId));
             }
 
-            bool fromQueue = State == CarState.InQueue;
-            if (!WantsService || (!fromQueue && !IsReadyToLeaveParking))
+            if (!WantsService)
             {
                 throw InvalidTransition(nameof(SendToPoint));
             }
 
+            Require(CarState.InQueue, nameof(SendToPoint));
             TargetPointId = pointId;
-            ParkingSlot = NoParkingSlot;
             GoTo(CarState.ToPoint);
         }
 
@@ -194,7 +227,7 @@ namespace AutoService.Domain.Traffic
 
         /// <summary>
         /// The car reached its current destination: sets <see cref="HasArrived"/> and completes a drive
-        /// (<c>ToBarrier → AtBarrier</c>, <c>ToParking → Parked</c>, <c>ToPoint → AtPoint</c>). Other states only set the flag.
+        /// (<c>ToParking → Parked</c>, <c>ToParkingExit → AtParkingExit</c>, <c>ToPoint → AtPoint</c>). Other states only set the flag.
         /// </summary>
         /// <param name="time">Current game time, stored as <see cref="ParkedAtTime"/> when the car parks.</param>
         public void MarkArrived(float time)
@@ -202,12 +235,12 @@ namespace AutoService.Domain.Traffic
             HasArrived = true;
             switch (State)
             {
-                case CarState.ToBarrier:
-                    State = CarState.AtBarrier;
-                    break;
                 case CarState.ToParking:
                     State = CarState.Parked;
                     ParkedAtTime = time;
+                    break;
+                case CarState.ToParkingExit:
+                    State = CarState.AtParkingExit;
                     break;
                 case CarState.ToPoint:
                     State = CarState.AtPoint;
@@ -216,12 +249,12 @@ namespace AutoService.Domain.Traffic
         }
 
         /// <summary>
-        /// Drains patience while the car waits (<see cref="CarState.InQueue"/>, <see cref="CarState.AtBarrier"/>,
-        /// <see cref="CarState.Parked"/> after its stay, <see cref="CarState.AtPoint"/>); ignored otherwise. Never below zero.
+        /// Drains patience while the car waits (<see cref="CarState.InQueue"/>, <see cref="CarState.Parked"/> after its stay,
+        /// <see cref="CarState.AtParkingExit"/>, <see cref="CarState.AtPoint"/>); ignored otherwise. Never below zero.
         /// </summary>
         /// <remarks>
-        /// At a point patience must only drain until the service starts; the car cannot see the point,
-        /// so the orchestrator calls this for <see cref="CarState.AtPoint"/> only while the point awaits acceptance.
+        /// At the parking exit and at a point patience must only drain until the order is accepted; the car cannot see the
+        /// point, so the orchestrator calls this for those two states only while the point awaits acceptance.
         /// </remarks>
         public void TickPatience(float deltaTime)
         {
@@ -244,8 +277,8 @@ namespace AutoService.Domain.Traffic
         private bool IsWaiting()
         {
             return State == CarState.InQueue
-                || State == CarState.AtBarrier
                 || (State == CarState.Parked && ParkingStayLeft <= 0f)
+                || State == CarState.AtParkingExit
                 || State == CarState.AtPoint;
         }
 

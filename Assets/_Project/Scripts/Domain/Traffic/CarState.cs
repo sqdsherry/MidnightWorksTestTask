@@ -2,8 +2,8 @@ namespace AutoService.Domain.Traffic
 {
     /// <summary>
     /// Where a car is in the flow:
-    /// <c>Arriving → InQueue → (ToPoint | ToBarrier → AtBarrier → ToParking → Parked → ToPoint) → AtPoint → Leaving</c>;
-    /// a parking-only car goes <c>Parked → Leaving</c> once its stay is over.
+    /// <c>Arriving → InQueue → (ToPoint | ToParking → Parked → ToParkingExit → AtParkingExit → (ToPoint | Leaving)) → AtPoint → Leaving</c>.
+    /// The parking entrance is an automatic gate with no state of its own; every car leaving the lot pays at the parking exit.
     /// </summary>
     public enum CarState
     {
@@ -13,17 +13,17 @@ namespace AutoService.Domain.Traffic
         /// <summary>Standing (or moving up) in the entry queue lane.</summary>
         InQueue = 1,
 
-        /// <summary>Driving to the parking barrier.</summary>
-        ToBarrier = 2,
+        /// <summary>Driving through the automatic entry gate to its reserved parking slot.</summary>
+        ToParking = 2,
 
-        /// <summary>Waiting at the barrier for the parking order to be accepted.</summary>
-        AtBarrier = 3,
+        /// <summary>Parked: first stays for its parking time, then waits until it may drive to the parking exit.</summary>
+        Parked = 3,
 
-        /// <summary>Driving to its reserved parking slot.</summary>
-        ToParking = 4,
+        /// <summary>Driving from its slot to the parking exit barrier (the exit, and the point for a service car, are reserved).</summary>
+        ToParkingExit = 4,
 
-        /// <summary>Parked: first stays for its parking time, then waits for a free point of its service (or leaves).</summary>
-        Parked = 5,
+        /// <summary>Waiting at the parking exit barrier for the time-based fee to be taken.</summary>
+        AtParkingExit = 5,
 
         /// <summary>Driving to the reserved service point.</summary>
         ToPoint = 6,

@@ -7,20 +7,20 @@ namespace AutoService.Services.Traffic
     {
         /// <summary>Creates and validates the definition.</summary>
         /// <param name="locationId">Location id; must match <c>LocationId</c> of the location's points.</param>
-        /// <param name="barrierPointId">Id of the registered parking barrier point.</param>
+        /// <param name="parkingExitPointId">Id of the registered parking exit barrier point.</param>
         /// <param name="queueCapacity">Number of entry queue slots (&gt;= 1).</param>
         /// <param name="parkingCapacity">Number of parking slots (&gt;= 0).</param>
         /// <exception cref="ArgumentException">Thrown for empty ids or out-of-range capacities.</exception>
-        public LocationTrafficDefinition(string locationId, string barrierPointId, int queueCapacity, int parkingCapacity)
+        public LocationTrafficDefinition(string locationId, string parkingExitPointId, int queueCapacity, int parkingCapacity)
         {
             if (string.IsNullOrWhiteSpace(locationId))
             {
                 throw new ArgumentException("Location id must not be empty.", nameof(locationId));
             }
 
-            if (string.IsNullOrWhiteSpace(barrierPointId))
+            if (string.IsNullOrWhiteSpace(parkingExitPointId))
             {
-                throw new ArgumentException("Barrier point id must not be empty.", nameof(barrierPointId));
+                throw new ArgumentException("Parking exit point id must not be empty.", nameof(parkingExitPointId));
             }
 
             if (queueCapacity < 1)
@@ -34,7 +34,7 @@ namespace AutoService.Services.Traffic
             }
 
             LocationId = locationId;
-            BarrierPointId = barrierPointId;
+            ParkingExitPointId = parkingExitPointId;
             QueueCapacity = queueCapacity;
             ParkingCapacity = parkingCapacity;
         }
@@ -42,8 +42,8 @@ namespace AutoService.Services.Traffic
         /// <summary>Location id.</summary>
         public string LocationId { get; }
 
-        /// <summary>Id of the parking barrier point.</summary>
-        public string BarrierPointId { get; }
+        /// <summary>Id of the parking exit barrier point (kind <c>Barrier</c>).</summary>
+        public string ParkingExitPointId { get; }
 
         /// <summary>Number of entry queue slots.</summary>
         public int QueueCapacity { get; }

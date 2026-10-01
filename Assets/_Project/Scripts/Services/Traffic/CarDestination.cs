@@ -1,7 +1,7 @@
 namespace AutoService.Services.Traffic
 {
     /// <summary>
-    /// Engine-agnostic address of a place in a location. Presentation resolves it into a scene transform.
+    /// Engine-agnostic address of a place in a location. Presentation resolves it into a road node of the scene.
     /// </summary>
     public readonly struct CarDestination
     {
@@ -24,8 +24,8 @@ namespace AutoService.Services.Traffic
         /// <summary>Slot <paramref name="index"/> of the entry queue (0 = head at the fork).</summary>
         public static CarDestination QueueSlot(int index) => new CarDestination(CarDestinationKind.QueueSlot, index, null);
 
-        /// <summary>The parking barrier's car spot.</summary>
-        public static CarDestination Barrier() => new CarDestination(CarDestinationKind.Barrier, -1, null);
+        /// <summary>The parking exit barrier's car spot.</summary>
+        public static CarDestination ParkingExit() => new CarDestination(CarDestinationKind.ParkingExit, -1, null);
 
         /// <summary>Parking slot <paramref name="index"/>.</summary>
         public static CarDestination ParkingSlot(int index) => new CarDestination(CarDestinationKind.ParkingSlot, index, null);
