@@ -490,6 +490,34 @@ namespace AutoService.Tests.EditMode
         }
 
         [Test]
+        public void Price_UsesThePointPriceMultiplier_FixedAtTheReservation()
+        {
+            CreateTraffic();
+            _wash.ApplyModifiers(1f, 2.0);
+            int car = SendFirstCarToWash();
+
+            // Why: the price is fixed when the car is booked in, so an upgrade bought now only affects the next order.
+            _wash.ApplyModifiers(1f, 3.0);
+            ServeAtWash(car);
+
+            Assert.AreEqual(new Money(24), _wallet.Balance, "12 × sedan 1.0 × point 2.0.");
+        }
+
+        [Test]
+        public void ParkingFee_UsesTheEntrancePriceMultiplier()
+        {
+            UseTraffic(1, 0, 0);
+            CreateTraffic();
+            _main.ApplyModifiers(1f, 2.0);
+            int car = SpawnAtHead();
+
+            Tick(Step);
+            PayAtEntrance(car, MainId);
+
+            Assert.AreEqual(new Money(14), _wallet.Balance, "(2 + 1 $/s × 5 s) × 2.");
+        }
+
+        [Test]
         public void Patience_DrainsWhileAwaitingAcceptOnly()
         {
             CreateTraffic();
