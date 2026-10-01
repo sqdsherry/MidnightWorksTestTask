@@ -9,15 +9,19 @@ namespace AutoService.Services.Config
         /// <param name="spawnInterval">Average seconds between spawn attempts (&gt; 0).</param>
         /// <param name="spawnIntervalJitter">Random ± deviation of the interval in seconds (&gt;= 0).</param>
         /// <param name="maxCarsAlive">Upper bound of cars present in a location at once (&gt;= 1).</param>
-        /// <param name="parkOnlyChance">Chance 0..1 that a spawned car only wants to park (no service).</param>
+        /// <param name="parkOnlyWeight">Spawn weight of the "parking only" plan (&gt;= 0).</param>
+        /// <param name="serviceOnlyWeight">Spawn weight of the "service only" plan (&gt;= 0).</param>
+        /// <param name="serviceThenParkWeight">Spawn weight of the "service, then parking" plan (&gt;= 0).</param>
         /// <param name="parkingStayMin">Shortest parking stay in seconds (&gt;= 0).</param>
         /// <param name="parkingStayMax">Longest parking stay in seconds (&gt;= <paramref name="parkingStayMin"/>).</param>
-        /// <exception cref="ArgumentException">Thrown for out-of-range values.</exception>
+        /// <exception cref="ArgumentException">Thrown for out-of-range values or when all plan weights are zero.</exception>
         public TrafficSettings(
             float spawnInterval,
             float spawnIntervalJitter,
             int maxCarsAlive,
-            float parkOnlyChance,
+            int parkOnlyWeight,
+            int serviceOnlyWeight,
+            int serviceThenParkWeight,
             float parkingStayMin,
             float parkingStayMax)
         {
@@ -37,9 +41,18 @@ namespace AutoService.Services.Config
                 throw new ArgumentException("Max cars alive must be at least 1, got " + maxCarsAlive + ".", nameof(maxCarsAlive));
             }
 
-            if (!(parkOnlyChance >= 0f && parkOnlyChance <= 1f))
+            if (parkOnlyWeight < 0 || serviceOnlyWeight < 0 || serviceThenParkWeight < 0)
             {
-                throw new ArgumentException("Park-only chance must be within 0..1, got " + parkOnlyChance + ".", nameof(parkOnlyChance));
+                throw new ArgumentException(
+                    "Visit plan weights must be non-negative, got " + parkOnlyWeight + "/" + serviceOnlyWeight + "/" + serviceThenParkWeight + ".",
+                    nameof(parkOnlyWeight));
+            }
+
+            // Why: long sum, so absurdly large weights cannot overflow into a "valid" total.
+            long totalPlanWeight = (long)parkOnlyWeight + serviceOnlyWeight + serviceThenParkWeight;
+            if (totalPlanWeight <= 0 || totalPlanWeight > int.MaxValue)
+            {
+                throw new ArgumentException("Visit plan weights must sum to 1.." + int.MaxValue + ", got " + totalPlanWeight + ".", nameof(parkOnlyWeight));
             }
 
             if (!(parkingStayMin >= 0f))
@@ -57,7 +70,9 @@ namespace AutoService.Services.Config
             SpawnInterval = spawnInterval;
             SpawnIntervalJitter = spawnIntervalJitter;
             MaxCarsAlive = maxCarsAlive;
-            ParkOnlyChance = parkOnlyChance;
+            ParkOnlyWeight = parkOnlyWeight;
+            ServiceOnlyWeight = serviceOnlyWeight;
+            ServiceThenParkWeight = serviceThenParkWeight;
             ParkingStayMin = parkingStayMin;
             ParkingStayMax = parkingStayMax;
         }
@@ -71,10 +86,16 @@ namespace AutoService.Services.Config
         /// <summary>Upper bound of cars present in a location at once.</summary>
         public int MaxCarsAlive { get; }
 
-        /// <summary>Chance 0..1 that a spawned car only wants to park (no service).</summary>
-        public float ParkOnlyChance { get; }
+        /// <summary>Spawn weight of <c>CarVisitPlan.ParkOnly</c>.</summary>
+        public int ParkOnlyWeight { get; }
 
-        /// <summary>Shortest parking stay in seconds.</summary>
+        /// <summary>Spawn weight of <c>CarVisitPlan.WashOnly</c> (any service, then leave).</summary>
+        public int ServiceOnlyWeight { get; }
+
+        /// <summary>Spawn weight of <c>CarVisitPlan.WashThenPark</c> (any service, then park).</summary>
+        public int ServiceThenParkWeight { get; }
+
+        /// <summary>Shortest parking stay in seconds (rolled when the car is booked in at an entrance).</summary>
         public float ParkingStayMin { get; }
 
         /// <summary>Longest parking stay in seconds.</summary>

@@ -143,7 +143,9 @@ namespace AutoService.Infrastructure.Config
                     section.SpawnInterval,
                     section.SpawnIntervalJitter,
                     section.MaxCarsAlive,
-                    section.ParkOnlyChance,
+                    section.ParkOnlyWeight,
+                    section.ServiceOnlyWeight,
+                    section.ServiceThenParkWeight,
                     section.ParkingStayMin,
                     section.ParkingStayMax);
             }

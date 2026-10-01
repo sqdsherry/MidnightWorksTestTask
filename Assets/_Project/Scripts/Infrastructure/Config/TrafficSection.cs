@@ -21,12 +21,20 @@ namespace AutoService.Infrastructure.Config
         [Tooltip("Maximum number of cars present in a location at once.")]
         private int _maxCarsAlive = 12;
 
-        [SerializeField, Range(0f, 1f)]
-        [Tooltip("Chance that a spawned car only wants to park (pays the parking fee, stays, leaves without a service).")]
-        private float _parkOnlyChance = 0.4f;
+        [SerializeField, Min(0)]
+        [Tooltip("Spawn weight of the \"parking only\" plan: pays at the main entrance, parks, leaves.")]
+        private int _parkOnlyWeight = 35;
+
+        [SerializeField, Min(0)]
+        [Tooltip("Spawn weight of the \"service only\" plan: gets a service, leaves by the top road.")]
+        private int _serviceOnlyWeight = 35;
+
+        [SerializeField, Min(0)]
+        [Tooltip("Spawn weight of the \"service, then parking\" plan: gets a service, then parks through the service entrance.")]
+        private int _serviceThenParkWeight = 30;
 
         [SerializeField, Min(0f)]
-        [Tooltip("Shortest time a car stays parked before it goes to a service point or leaves, in seconds.")]
+        [Tooltip("Shortest parking stay, in seconds. The stay is rolled and paid for at the entrance barrier.")]
         private float _parkingStayMin = 6f;
 
         [SerializeField, Min(0f)]
@@ -42,8 +50,14 @@ namespace AutoService.Infrastructure.Config
         /// <summary>Maximum number of cars present in a location at once.</summary>
         public int MaxCarsAlive => _maxCarsAlive;
 
-        /// <summary>Chance 0..1 that a spawned car only wants to park.</summary>
-        public float ParkOnlyChance => _parkOnlyChance;
+        /// <summary>Spawn weight of the "parking only" plan.</summary>
+        public int ParkOnlyWeight => _parkOnlyWeight;
+
+        /// <summary>Spawn weight of the "service only" plan.</summary>
+        public int ServiceOnlyWeight => _serviceOnlyWeight;
+
+        /// <summary>Spawn weight of the "service, then parking" plan.</summary>
+        public int ServiceThenParkWeight => _serviceThenParkWeight;
 
         /// <summary>Shortest parking stay, in seconds.</summary>
         public float ParkingStayMin => _parkingStayMin;
@@ -56,6 +70,12 @@ namespace AutoService.Infrastructure.Config
         {
             // Why: [Min] cannot express "max >= min"; fixing it while editing beats a config exception at Play.
             _parkingStayMax = Mathf.Max(_parkingStayMin, _parkingStayMax);
+
+            // Why: all-zero weights would leave no plan to pick; fall back to parking only rather than fail at Play.
+            if (_parkOnlyWeight + _serviceOnlyWeight + _serviceThenParkWeight <= 0)
+            {
+                _parkOnlyWeight = 1;
+            }
         }
     }
 }
