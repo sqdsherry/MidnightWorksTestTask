@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using AutoService.Domain.Points;
 
@@ -8,6 +9,9 @@ namespace AutoService.Services.Points
     /// </summary>
     public interface IServicePointService
     {
+        /// <summary>Raised after a point was registered (at the start or when a bay gets built later).</summary>
+        event Action<ServicePoint> PointRegistered;
+
         /// <summary>All registered points, in registration order.</summary>
         IReadOnlyList<ServicePoint> All { get; }
 
