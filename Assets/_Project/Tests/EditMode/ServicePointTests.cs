@@ -22,7 +22,7 @@ namespace AutoService.Tests.EditMode
         public void SetUp()
         {
             var definition = new ServicePointDefinition(
-                "wash_1", "loc1", "wash", PointKind.Service, new Money(12), ServiceDuration, AcceptDelay, ClearDelay);
+                "wash_1", "loc1", "wash", PointKind.Service, new Money(12), 0.0, ServiceDuration, AcceptDelay, ClearDelay);
             _point = new ServicePoint(definition);
             _acceptedCount = 0;
             _completedCar = ServicePoint.NoCar;
@@ -38,9 +38,13 @@ namespace AutoService.Tests.EditMode
         public void Definition_RejectsEmptyIdAndNegativeDuration()
         {
             Assert.Throws<ArgumentException>(() =>
-                new ServicePointDefinition(" ", "loc1", "wash", PointKind.Service, Money.Zero, 1f, 0f, 0f));
+                new ServicePointDefinition(" ", "loc1", "wash", PointKind.Service, Money.Zero, 0.0, 1f, 0f, 0f));
             Assert.Throws<ArgumentException>(() =>
-                new ServicePointDefinition("p", "loc1", "wash", PointKind.Service, Money.Zero, -1f, 0f, 0f));
+                new ServicePointDefinition("p", "loc1", "wash", PointKind.Service, Money.Zero, 0.0, -1f, 0f, 0f));
+            Assert.Throws<ArgumentException>(() =>
+                new ServicePointDefinition("p", "loc1", "parking", PointKind.Barrier, Money.Zero, -0.5, 1f, 0f, 0f));
+            Assert.Throws<ArgumentException>(() =>
+                new ServicePointDefinition("p", "loc1", "parking", PointKind.Barrier, Money.Zero, double.NaN, 1f, 0f, 0f));
         }
 
         [Test]
@@ -146,7 +150,7 @@ namespace AutoService.Tests.EditMode
         public void ZeroDeltaTime_DoesNotAdvance()
         {
             var instant = new ServicePoint(new ServicePointDefinition(
-                "p", "loc1", "wash", PointKind.Service, new Money(1), 0f, 0f, 0f));
+                "p", "loc1", "wash", PointKind.Service, new Money(1), 0.0, 0f, 0f, 0f));
             instant.TryReserve(CarId, new Money(1));
             instant.NotifyCarArrived(CarId);
             instant.TryOccupy(OccupantKind.Player);
@@ -218,6 +222,34 @@ namespace AutoService.Tests.EditMode
         public void NotifyCarArrived_WithoutReservation_Throws()
         {
             Assert.Throws<InvalidOperationException>(() => _point.NotifyCarArrived(CarId));
+        }
+
+        [Test]
+        public void CancelReservation_ReturnsToIdle()
+        {
+            int stateChanges = 0;
+            _point.TryReserve(CarId, new Money(5));
+            _point.StateChanged += point => stateChanges++;
+
+            _point.CancelReservation(CarId);
+
+            Assert.AreEqual(ServicePointState.Idle, _point.State);
+            Assert.AreEqual(ServicePoint.NoCar, _point.CarId);
+            Assert.AreEqual(Money.Zero, _point.CurrentPrice);
+            Assert.AreEqual(1, stateChanges);
+            Assert.IsTrue(_point.TryReserve(CarId + 1, new Money(5)));
+        }
+
+        [Test]
+        public void CancelReservation_ForeignCarOrAfterArrival_Throws()
+        {
+            Assert.Throws<InvalidOperationException>(() => _point.CancelReservation(CarId), "Nothing reserved.");
+
+            _point.TryReserve(CarId, new Money(5));
+            Assert.Throws<InvalidOperationException>(() => _point.CancelReservation(CarId + 1));
+
+            _point.NotifyCarArrived(CarId);
+            Assert.Throws<InvalidOperationException>(() => _point.CancelReservation(CarId), "The car is already there.");
         }
 
         private void ArriveCar(Money price)

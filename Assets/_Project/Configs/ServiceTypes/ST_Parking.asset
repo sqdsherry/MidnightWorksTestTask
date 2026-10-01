@@ -16,6 +16,7 @@ MonoBehaviour:
   _displayName: Parking
   _kind: 0
   _basePrice: 2
+  _pricePerSecond: 0.5
   _serviceDuration: 1
   _acceptDelay: 0.4
   _clearDelay: 1.5

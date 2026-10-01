@@ -14,16 +14,18 @@ namespace AutoService.Domain.Points
         /// <param name="serviceTypeId">Id of the service the point provides (from config).</param>
         /// <param name="kind">Barrier or real service.</param>
         /// <param name="basePrice">Price before the car type multiplier.</param>
+        /// <param name="pricePerSecond">Extra dollars per second of the car's stay (time-based fee of the parking entrances; 0 = flat price).</param>
         /// <param name="serviceDuration">Seconds of occupied work needed to finish the service.</param>
         /// <param name="acceptDelay">Seconds the work spot must be occupied before the order is accepted.</param>
         /// <param name="clearDelay">Seconds the point stays unavailable after a car has been served.</param>
-        /// <exception cref="ArgumentException">Thrown for empty ids or negative/NaN durations.</exception>
+        /// <exception cref="ArgumentException">Thrown for empty ids, a negative/NaN price per second or negative/NaN durations.</exception>
         public ServicePointDefinition(
             string id,
             string locationId,
             string serviceTypeId,
             PointKind kind,
             Money basePrice,
+            double pricePerSecond,
             float serviceDuration,
             float acceptDelay,
             float clearDelay)
@@ -31,6 +33,7 @@ namespace AutoService.Domain.Points
             RequireId(id, nameof(id));
             RequireId(locationId, nameof(locationId));
             RequireId(serviceTypeId, nameof(serviceTypeId));
+            RequirePricePerSecond(pricePerSecond, nameof(pricePerSecond));
             RequireDuration(serviceDuration, nameof(serviceDuration));
             RequireDuration(acceptDelay, nameof(acceptDelay));
             RequireDuration(clearDelay, nameof(clearDelay));
@@ -40,6 +43,7 @@ namespace AutoService.Domain.Points
             ServiceTypeId = serviceTypeId;
             Kind = kind;
             BasePrice = basePrice;
+            PricePerSecond = pricePerSecond;
             ServiceDuration = serviceDuration;
             AcceptDelay = acceptDelay;
             ClearDelay = clearDelay;
@@ -60,6 +64,9 @@ namespace AutoService.Domain.Points
         /// <summary>Price before the car type multiplier.</summary>
         public Money BasePrice { get; }
 
+        /// <summary>Extra dollars per second of the car's stay; only the parking entrances use it (see <c>PriceFormula.TimeBased</c>).</summary>
+        public double PricePerSecond { get; }
+
         /// <summary>Seconds of occupied work needed to finish the service (0 = instant).</summary>
         public float ServiceDuration { get; }
 
@@ -74,6 +81,15 @@ namespace AutoService.Domain.Points
             if (string.IsNullOrWhiteSpace(value))
             {
                 throw new ArgumentException("Id must not be empty.", parameterName);
+            }
+        }
+
+        private static void RequirePricePerSecond(double value, string parameterName)
+        {
+            // Why: the negated comparison also rejects NaN.
+            if (!(value >= 0.0))
+            {
+                throw new ArgumentException("Price per second must be non-negative, got " + value + ".", parameterName);
             }
         }
 

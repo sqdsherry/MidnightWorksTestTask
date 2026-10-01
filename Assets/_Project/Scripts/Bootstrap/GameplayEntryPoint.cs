@@ -68,7 +68,7 @@ namespace AutoService.Bootstrap
 
         [Header("Location")]
         [SerializeField]
-        [Tooltip("Markup of location 1: points, queue and parking slots, spawn/exit.")]
+        [Tooltip("Markup of location 1: points, road graph, queue and parking slots, spawn/exit.")]
         private LocationLayout _location1;
 
         [SerializeField]
@@ -229,9 +229,12 @@ namespace AutoService.Bootstrap
             var points = new ServicePointService(_container.Resolve<IWalletService>(), eventBus);
             Register<IServicePointService>(points);
 
-            if (!TryRegisterPoint(points, config, _location1.Barrier, PointKind.Barrier, presenters))
+            // Why: every parking visit pays at one of the two entrances, so both must be Barrier-kind points; without them
+            // the traffic cannot run (the kind is checked inside TryRegisterPoint). Non-short-circuit `|` reports both.
+            if (!TryRegisterPoint(points, config, _location1.MainEntrance, PointKind.Barrier, presenters)
+                | !TryRegisterPoint(points, config, _location1.ServiceEntrance, PointKind.Barrier, presenters))
             {
-                _logger.Error("[Gameplay] Traffic skipped: location '" + _location1.LocationId + "' has no valid barrier.");
+                _logger.Error("[Gameplay] Traffic skipped: location '" + _location1.LocationId + "' needs two valid parking entrances.");
                 return null;
             }
 
@@ -296,7 +299,12 @@ namespace AutoService.Bootstrap
             }
 
             var definition = new LocationTrafficDefinition(
-                _location1.LocationId, _location1.Barrier.PointId, _location1.QueueSlotCount, _location1.ParkingSlotCount);
+                _location1.LocationId,
+                _location1.MainEntrance.PointId,
+                _location1.ServiceEntrance.PointId,
+                _location1.QueueSlotCount,
+                _location1.ParkingSlotCount,
+                _location1.ServiceBufferCapacity);
             var agents = new CarAgents(_location1, _carVisuals, _carPoolRoot);
 
             LocationTraffic traffic;
@@ -310,6 +318,9 @@ namespace AutoService.Bootstrap
                 _logger.Error("[Gameplay] Traffic skipped: " + exception.Message);
                 return;
             }
+
+            // Debug only: Scene view labels "#id plan state" above the cars.
+            agents.SetDebugTraffic(traffic);
 
             // Why: tracked, not registered — module 11 adds a second location with its own traffic and agents.
             Track(traffic);

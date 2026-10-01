@@ -129,7 +129,25 @@ namespace AutoService.Domain.Points
             return true;
         }
 
-        /// <summary>The reserved car has arrived on the spot: <see cref="ServicePointState.Reserved"/> → <see cref="ServicePointState.AwaitingAccept"/>.</summary>
+        /// <summary>
+        /// Undoes <see cref="TryReserve"/> before the car has arrived: <see cref="ServicePointState.Reserved"/> → <see cref="ServicePointState.Idle"/>.
+        /// Used to roll back a multi-point reservation when a later part of it fails.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">Thrown when the point is not reserved for <paramref name="carId"/>.</exception>
+        public void CancelReservation(int carId)
+        {
+            if (State != ServicePointState.Reserved || CarId != carId)
+            {
+                throw new InvalidOperationException(
+                    "Point '" + Definition.Id + "' is " + State + " for car " + CarId + "; car " + carId + " cannot cancel.");
+            }
+
+            CarId = NoCar;
+            CurrentPrice = Money.Zero;
+            SetState(ServicePointState.Idle);
+        }
+
+        /// <summary>The reserved car has arrived on the spot:<see cref="ServicePointState.Reserved"/> → <see cref="ServicePointState.AwaitingAccept"/>.</summary>
         /// <exception cref="InvalidOperationException">Thrown when the point is not reserved for <paramref name="carId"/>.</exception>
         public void NotifyCarArrived(int carId)
         {

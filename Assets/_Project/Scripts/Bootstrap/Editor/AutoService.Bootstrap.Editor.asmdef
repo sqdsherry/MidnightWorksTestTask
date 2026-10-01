@@ -2,7 +2,8 @@
     "name": "AutoService.Bootstrap.Editor",
     "rootNamespace": "AutoService.Bootstrap.Editor",
     "references": [
-        "AutoService.Bootstrap"
+        "AutoService.Bootstrap",
+        "AutoService.Presentation"
     ],
     "includePlatforms": [
         "Editor"

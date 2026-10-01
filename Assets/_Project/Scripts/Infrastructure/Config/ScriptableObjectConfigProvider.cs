@@ -83,6 +83,7 @@ namespace AutoService.Infrastructure.Config
                         asset.DisplayName,
                         asset.Kind,
                         new Money(asset.BasePrice),
+                        asset.PricePerSecond,
                         asset.ServiceDuration,
                         asset.AcceptDelay,
                         asset.ClearDelay);
@@ -142,7 +143,9 @@ namespace AutoService.Infrastructure.Config
                     section.SpawnInterval,
                     section.SpawnIntervalJitter,
                     section.MaxCarsAlive,
-                    section.ParkOnlyChance,
+                    section.ParkOnlyWeight,
+                    section.ServiceOnlyWeight,
+                    section.ServiceThenParkWeight,
                     section.ParkingStayMin,
                     section.ParkingStayMax);
             }
