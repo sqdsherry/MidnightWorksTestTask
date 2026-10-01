@@ -2,6 +2,8 @@ using AutoService.Domain.Points;
 using AutoService.Presentation.Interaction;
 using AutoService.Presentation.Traffic.Routing;
 using AutoService.Services.Points;
+using AutoService.Services.Staff;
+using AutoService.Services.Supplies;
 using UnityEngine;
 
 namespace AutoService.Presentation.Points
@@ -14,6 +16,9 @@ namespace AutoService.Presentation.Points
     /// The view holds no game state: <see cref="BeginInteraction"/>/<see cref="EndInteraction"/> forward to
     /// <see cref="IServicePointService"/>, which owns the <see cref="ServicePoint"/> entity.
     /// Components live on the parent object; colliders may sit on children (the pointer raycast resolves the parent).
+    /// <para>With staff and supplies (<see cref="ConstructStaffSupplies"/>): a click first hands over the box the player
+    /// carries (if it fits), then takes the work spot. Once a worker is hired the point is only clickable to deliver a box,
+    /// and the player then walks to the point's supply drop (its blue pad) instead of the worker's spot.</para>
     /// </remarks>
     public sealed class ServicePointView : MonoBehaviour, IInteractable
     {
@@ -49,6 +54,10 @@ namespace AutoService.Presentation.Points
         private ServicePointHud _hud;
 
         private IServicePointService _service;
+        private ISupplyService _supplies;
+        private IPlayerCarry _carry;
+        private IStaffService _staff;
+        private Transform _supplyDrop;
 
         /// <summary>Unique point id.</summary>
         public string PointId => _pointId;
@@ -65,6 +74,9 @@ namespace AutoService.Presentation.Points
         /// <summary>World-space indicators, or null.</summary>
         public ServicePointHud Hud => _hud;
 
+        /// <summary>The work spot of the player / worker (where a hired worker walks to).</summary>
+        public Transform WorkSpot => _approachPoint != null ? _approachPoint : transform;
+
         /// <inheritdoc />
         public Vector3 ApproachPosition => ApproachTransform.position;
 
@@ -72,18 +84,39 @@ namespace AutoService.Presentation.Points
         public Quaternion ApproachRotation => ApproachTransform.rotation;
 
         /// <inheritdoc />
-        /// <remarks>Not interactable before <see cref="Construct"/>, for unregistered ids and while a worker holds the spot.</remarks>
+        /// <remarks>
+        /// Not interactable before <see cref="Construct"/> and for unregistered ids. Once a worker is hired (from the moment
+        /// of hiring) only while the player carries a box that fits — the asymmetry of GDD 2026-09-30: the player never
+        /// helps a worker, but still brings it supplies.
+        /// </remarks>
         public bool IsInteractable =>
             _service != null
             && _service.TryGet(_pointId, out ServicePoint point)
-            && point.Occupant != OccupantKind.Worker;
+            && (_staff != null ? !_staff.HasWorker(_pointId) || CanDeliverCarriedBox : point.Occupant != OccupantKind.Worker);
 
-        private Transform ApproachTransform => _approachPoint != null ? _approachPoint : transform;
+        // Why: with a worker on the spot the player hands the box over from the side, never walking into the worker.
+        private Transform ApproachTransform =>
+            _supplyDrop != null && _staff != null && _staff.HasWorker(_pointId) ? _supplyDrop : WorkSpot;
+
+        private bool CanDeliverCarriedBox => _carry != null && _carry.HasBox && _supplies.CanDeliver(_carry.Box, _pointId);
 
         /// <summary>Injects the point registry. Called by the scene entry point after the point was registered.</summary>
         public void Construct(IServicePointService service)
         {
             _service = service;
+        }
+
+        /// <summary>Injects the staff and supply services. Called once the A2 modules are installed (also for bays built later).</summary>
+        /// <param name="supplies">Deliveries.</param>
+        /// <param name="carry">The player's hands.</param>
+        /// <param name="staff">Who works here.</param>
+        /// <param name="supplyDrop">Where the player stands to hand over a box once a worker is hired; may be null (the work spot).</param>
+        public void ConstructStaffSupplies(ISupplyService supplies, IPlayerCarry carry, IStaffService staff, Transform supplyDrop)
+        {
+            _supplies = supplies;
+            _carry = supplies != null ? carry : null;
+            _staff = staff;
+            _supplyDrop = supplyDrop;
         }
 
         /// <inheritdoc />
@@ -98,7 +131,13 @@ namespace AutoService.Presentation.Points
         /// <inheritdoc />
         public void BeginInteraction()
         {
-            // Why: the result is ignored on purpose — if a worker took the spot meanwhile, the player just stands next to it.
+            // Why: a box of another consumable (or one that does not fit) stays in the hands; the player still works here.
+            if (CanDeliverCarriedBox && _supplies.TryDeliver(_carry.Box, _pointId, true))
+            {
+                _carry.Drop();
+            }
+
+            // Why: the result is ignored on purpose — if a worker holds the spot, the player just stands next to it.
             _service?.TryOccupy(_pointId, OccupantKind.Player);
         }
 
