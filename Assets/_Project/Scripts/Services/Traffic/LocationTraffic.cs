@@ -413,7 +413,7 @@ namespace AutoService.Services.Traffic
             ServicePointDefinition pointDefinition = point.Definition;
             if (pointDefinition.Kind == PointKind.Barrier)
             {
-                car.SendToParking();
+                car.SendToParking(0f);
                 _agents.MoveTo(carId, CarDestination.ParkingSlot(car.ParkingSlot));
             }
             else

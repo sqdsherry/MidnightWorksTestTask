@@ -2,7 +2,8 @@ namespace AutoService.Domain.Traffic
 {
     /// <summary>
     /// Where a car is in the flow:
-    /// <c>Arriving → InQueue → (ToPoint | ToBarrier → AtBarrier → ToParking → Parked → ToPoint) → AtPoint → Leaving</c>.
+    /// <c>Arriving → InQueue → (ToPoint | ToBarrier → AtBarrier → ToParking → Parked → ToPoint) → AtPoint → Leaving</c>;
+    /// a parking-only car goes <c>Parked → Leaving</c> once its stay is over.
     /// </summary>
     public enum CarState
     {
@@ -21,7 +22,7 @@ namespace AutoService.Domain.Traffic
         /// <summary>Driving to its reserved parking slot.</summary>
         ToParking = 4,
 
-        /// <summary>Parked, waiting for a free point of its service.</summary>
+        /// <summary>Parked: first stays for its parking time, then waits for a free point of its service (or leaves).</summary>
         Parked = 5,
 
         /// <summary>Driving to the reserved service point.</summary>

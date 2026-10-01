@@ -68,7 +68,7 @@ namespace AutoService.Tests.EditMode
             _car.MarkArrived(1f);
             Assert.AreEqual(CarState.AtBarrier, _car.State);
 
-            _car.SendToParking();
+            _car.SendToParking(0f);
             _car.MarkArrived(5f);
             Assert.AreEqual(CarState.Parked, _car.State);
             Assert.AreEqual(5f, _car.ParkedAtTime);
@@ -96,12 +96,12 @@ namespace AutoService.Tests.EditMode
             Assert.Throws<InvalidOperationException>(() => _car.SendToBarrier(0));
             Assert.Throws<InvalidOperationException>(() => _car.SendToPoint("wash_1"));
             Assert.Throws<InvalidOperationException>(() => _car.Leave());
-            Assert.Throws<InvalidOperationException>(() => _car.SendToParking());
+            Assert.Throws<InvalidOperationException>(() => _car.SendToParking(0f));
             Assert.Throws<InvalidOperationException>(() => _car.MoveUpInQueue());
 
             _car.EnterQueue();
             Assert.Throws<InvalidOperationException>(() => _car.EnterQueue());
-            Assert.Throws<InvalidOperationException>(() => _car.SendToParking());
+            Assert.Throws<InvalidOperationException>(() => _car.SendToParking(0f));
         }
 
         [Test]
