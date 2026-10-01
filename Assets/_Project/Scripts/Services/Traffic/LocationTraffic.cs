@@ -16,8 +16,14 @@ namespace AutoService.Services.Traffic
     /// barrier into the parking lot, dispatches parked cars to freed points and sends served cars to the exit.
     /// </summary>
     /// <remarks>
-    /// <para>Per tick, in this order: patience → parked dispatch → queue head → spawn. Parked cars are dispatched before
-    /// the head so that a car which has been waiting in the lot always wins a freed point (GDD §3).</para>
+    /// <para><b>Plan.</b> Every car gets a plan on spawn: a service (random among the location's service points), or, with
+    /// <see cref="TrafficSettings.ParkOnlyChance"/>, parking only. A parking-only car always goes through the barrier and
+    /// leaves after its stay; parking is a service of its own (it pays the parking fee).</para>
+    /// <para><b>Parking stay.</b> Every parked car first stays a random time from the configured range. During the stay it is
+    /// not dispatched and loses no patience. Afterwards a parking-only car leaves; a service car becomes "ready" and waits
+    /// for a free point.</para>
+    /// <para>Per tick, in this order: patience → parking stays → ready-parked dispatch → queue head → spawn. Ready parked
+    /// cars are dispatched before the head so that a car which has been waiting in the lot wins a freed point (GDD §3).</para>
     /// <para>Physical movement is delegated to <see cref="ICarAgents"/>; this class only reacts to its
     /// <see cref="ICarAgents.Arrived"/> events, so the whole flow is testable without Unity.</para>
     /// <para>Single publisher of <see cref="ServiceCompletedEvent"/> (it is the one who knows the car type) and of
@@ -46,9 +52,12 @@ namespace AutoService.Services.Traffic
         private readonly Dictionary<int, Car> _cars;
         private readonly List<Car> _activeCars;
 
-        // Why: cars are appended when they park, and game time only grows, so this list is already sorted by
-        // ParkedAtTime — FIFO dispatch without sorting (and without allocations).
-        private readonly List<int> _parkedOrder;
+        // Parked cars whose stay is still running.
+        private readonly List<int> _stayingCars;
+
+        // Why: service cars are appended the moment their stay ends, so this list is already sorted by readiness time —
+        // FIFO dispatch without sorting (and without allocations).
+        private readonly List<int> _readyParkedCars;
 
         private readonly List<string> _serviceTypeIds = new List<string>();
         private readonly List<ServicePoint> _locationPoints = new List<ServicePoint>();
@@ -99,7 +108,8 @@ namespace AutoService.Services.Traffic
             int maxCars = _traffic.MaxCarsAlive;
             _cars = new Dictionary<int, Car>(maxCars);
             _activeCars = new List<Car>(maxCars);
-            _parkedOrder = new List<int>(definition.ParkingCapacity);
+            _stayingCars = new List<int>(definition.ParkingCapacity);
+            _readyParkedCars = new List<int>(definition.ParkingCapacity);
 
             CollectLocationPoints();
 
@@ -133,6 +143,7 @@ namespace AutoService.Services.Traffic
 
             _time += deltaTime;
             TickPatience(deltaTime);
+            TickParkingStays(deltaTime);
             DispatchParkedCars();
             DispatchQueueHead();
             TickSpawn(deltaTime);
@@ -218,16 +229,42 @@ namespace AutoService.Services.Traffic
                     continue;
                 }
 
-                // The car itself ignores states in which it is not waiting (driving, leaving).
+                // The car itself ignores states in which it is not waiting (driving, leaving, parking stay).
                 car.TickPatience(deltaTime);
+            }
+        }
+
+        private void TickParkingStays(float deltaTime)
+        {
+            for (int i = 0; i < _stayingCars.Count;)
+            {
+                Car car = _cars[_stayingCars[i]];
+                car.TickParkingStay(deltaTime);
+                if (!car.IsReadyToLeaveParking)
+                {
+                    i++;
+                    continue;
+                }
+
+                _stayingCars.RemoveAt(i);
+                if (car.WantsService)
+                {
+                    _readyParkedCars.Add(car.Id);
+                    continue;
+                }
+
+                // Parking-only: the stay was the whole visit.
+                _parking.Release(car.ParkingSlot);
+                car.LeaveParking();
+                _agents.MoveTo(car.Id, CarDestination.Exit());
             }
         }
 
         private void DispatchParkedCars()
         {
-            for (int i = 0; i < _parkedOrder.Count;)
+            for (int i = 0; i < _readyParkedCars.Count;)
             {
-                Car car = _cars[_parkedOrder[i]];
+                Car car = _cars[_readyParkedCars[i]];
                 ServicePoint point = _points.FindAvailable(_definition.LocationId, car.RequestedServiceTypeId);
                 if (point == null || !point.TryReserve(car.Id, PriceFor(point, car)))
                 {
@@ -236,7 +273,7 @@ namespace AutoService.Services.Traffic
                 }
 
                 _parking.Release(car.ParkingSlot);
-                _parkedOrder.RemoveAt(i);
+                _readyParkedCars.RemoveAt(i);
                 SendToPoint(car, point);
             }
         }
@@ -256,16 +293,21 @@ namespace AutoService.Services.Traffic
                 return;
             }
 
-            string serviceTypeId = head.RequestedServiceTypeId;
-            ServicePoint point = _points.FindAvailable(_definition.LocationId, serviceTypeId);
-
-            // Why: parked cars are dispatched earlier in the same tick, so normally none of them can still be waiting for an
-            // available point; the explicit check keeps the priority rule true regardless of the call order.
-            if (point != null && !IsParkedCarWaitingFor(serviceTypeId) && point.TryReserve(head.Id, PriceFor(point, head)))
+            // Why: a parking-only car never takes a point; if the barrier or the lot is busy it simply waits at the head.
+            if (head.WantsService)
             {
-                _queue.RemoveHead();
-                SendToPoint(head, point);
-                return;
+                string serviceTypeId = head.RequestedServiceTypeId;
+                ServicePoint point = _points.FindAvailable(_definition.LocationId, serviceTypeId);
+
+                // Why: ready parked cars are dispatched earlier in the same tick, so normally none of them can still be
+                // waiting for an available point; the explicit check keeps the priority rule true regardless of call order.
+                // Cars still in their parking stay do not block the head: they do not want the point yet.
+                if (point != null && !IsReadyParkedCarWaitingFor(serviceTypeId) && point.TryReserve(head.Id, PriceFor(point, head)))
+                {
+                    _queue.RemoveHead();
+                    SendToPoint(head, point);
+                    return;
+                }
             }
 
             // Why: both the barrier and a parking slot are reserved up front, so a car sent to the barrier can never end up
@@ -297,13 +339,13 @@ namespace AutoService.Services.Traffic
 
         private void TrySpawn()
         {
-            if (_queue.IsFull || _activeCars.Count >= _traffic.MaxCarsAlive || _serviceTypeIds.Count == 0 || _totalSpawnWeight <= 0)
+            if (_queue.IsFull || _activeCars.Count >= _traffic.MaxCarsAlive || _totalSpawnWeight <= 0)
             {
                 return;
             }
 
             CarType carType = PickCarType();
-            string serviceTypeId = _serviceTypeIds[_random.Range(0, _serviceTypeIds.Count)];
+            string serviceTypeId = PickPlan();
             int carId = _nextCarId++;
 
             // Why: the only allocation of the flow — once per spawned car, every few seconds; never per frame.
@@ -324,6 +366,26 @@ namespace AutoService.Services.Traffic
             return Math.Max(MinSpawnInterval, _traffic.SpawnInterval + offset);
         }
 
+        /// <returns>The requested service type id, or null for a parking-only car.</returns>
+        private string PickPlan()
+        {
+            // Why: without service points the location still earns from parking, so cars keep coming as parking-only.
+            if (_serviceTypeIds.Count == 0)
+            {
+                return null;
+            }
+
+            // Why: the roll is skipped for 0 and 1, so the outcome (and the random sequence) is exact at the extremes.
+            float chance = _traffic.ParkOnlyChance;
+            bool parkOnly = chance >= 1f || (chance > 0f && _random.Value() < chance);
+            return parkOnly ? null : _serviceTypeIds[_random.Range(0, _serviceTypeIds.Count)];
+        }
+
+        private float NextParkingStay()
+        {
+            return _traffic.ParkingStayMin + (_traffic.ParkingStayMax - _traffic.ParkingStayMin) * _random.Value();
+        }
+
         private CarType PickCarType()
         {
             int roll = _random.Range(0, _totalSpawnWeight);
@@ -340,11 +402,11 @@ namespace AutoService.Services.Traffic
             return _carTypes[_carTypes.Count - 1];
         }
 
-        private bool IsParkedCarWaitingFor(string serviceTypeId)
+        private bool IsReadyParkedCarWaitingFor(string serviceTypeId)
         {
-            for (int i = 0; i < _parkedOrder.Count; i++)
+            for (int i = 0; i < _readyParkedCars.Count; i++)
             {
-                if (string.Equals(_cars[_parkedOrder[i]].RequestedServiceTypeId, serviceTypeId, StringComparison.Ordinal))
+                if (string.Equals(_cars[_readyParkedCars[i]].RequestedServiceTypeId, serviceTypeId, StringComparison.Ordinal))
                 {
                     return true;
                 }
@@ -388,7 +450,7 @@ namespace AutoService.Services.Traffic
                     _barrier.NotifyCarArrived(carId);
                     break;
                 case CarState.Parked:
-                    _parkedOrder.Add(carId);
+                    _stayingCars.Add(carId);
                     break;
                 case CarState.AtPoint:
                     if (_points.TryGet(car.TargetPointId, out ServicePoint point))
@@ -413,7 +475,7 @@ namespace AutoService.Services.Traffic
             ServicePointDefinition pointDefinition = point.Definition;
             if (pointDefinition.Kind == PointKind.Barrier)
             {
-                car.SendToParking(0f);
+                car.SendToParking(NextParkingStay());
                 _agents.MoveTo(carId, CarDestination.ParkingSlot(car.ParkingSlot));
             }
             else

@@ -18,7 +18,7 @@ namespace AutoService.Services.Traffic
         /// <summary>Type id of the car.</summary>
         public string CarTypeId { get; }
 
-        /// <summary>Id of the service the car wants.</summary>
+        /// <summary>Id of the service the car wants, or null for a parking-only car.</summary>
         public string ServiceTypeId { get; }
 
         /// <summary>Location the car spawned in.</summary>
