@@ -17,6 +17,8 @@ MonoBehaviour:
   _serviceTypes:
   - {fileID: 11400000, guid: ebb75d638506884498705552fc06f6c0, type: 2}
   - {fileID: 11400000, guid: 8aa51d7740bedc1469cee2695c1f7f0e, type: 2}
+  - {fileID: 11400000, guid: 23646fbad8c5b2542b7274ebc83e7234, type: 2}
+  - {fileID: 11400000, guid: 24eee0b17de7f9b4b9e57eeeee9a5781, type: 2}
   _carTypes:
   - {fileID: 11400000, guid: 9014d423e7fa9c64b9908cc10367ac6e, type: 2}
   - {fileID: 11400000, guid: dae3a8a03329b954bb7898fa9652a919, type: 2}
@@ -25,3 +27,14 @@ MonoBehaviour:
     _spawnInterval: 7
     _spawnIntervalJitter: 2
     _maxCarsAlive: 12
+    _parkOnlyWeight: 35
+    _serviceOnlyWeight: 35
+    _serviceThenParkWeight: 30
+    _parkingStayMin: 6
+    _parkingStayMax: 15
+  _buildables:
+  - {fileID: 11400000, guid: f64487a40e1e823449c7089522e40de5, type: 2}
+  - {fileID: 11400000, guid: 065374553529f9245b6612f9a5378d24, type: 2}
+  - {fileID: 11400000, guid: e0eaddf47ee0b1e4b9bac9e8c8caa7d4, type: 2}
+  - {fileID: 11400000, guid: 33946f25266d1a94fb2438d25f350434, type: 2}
+  - {fileID: 11400000, guid: 5c1452170990a3b41bfadf69c6c2e538, type: 2}
