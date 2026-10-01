@@ -130,8 +130,8 @@ Docs/                  GDD.md, TDD.md
 
 ### 4.6 Player Character
 - Домен: `PlayerState` FSM (`Idle/Moving/Working/Repairing`) + `CarriedBox?`.
-- Services: `PlayerCommandService` — `MoveTo(pos)`, `Interact(IInteractableTarget)`; решает, что значит клик по цели (работать / пополнить / взять ящик / ремонт).
-- Presentation: `PlayerView` (`NavMeshAgent` humanoid), при достижении `WorkSpot` → домен занимает точку.
+- Presentation (модуль 02): `GameplayInput`, `PointerRaycaster`, `IInteractable` (`ApproachPosition/Rotation`, `BeginInteraction/EndInteraction`), `PlayerView` + `PlayerMotor : ITickable` (FSM движения), `PlayerInputPresenter`, `CameraRig`.
+- Модуль 03+: точки/склад реализуют `IInteractable`; `BeginInteraction` → Services по **id точки** (`occupy(pointId, Occupant.Player)` / взять ящик / ремонт). Services не видит Unity-типов.
 
 ### 4.7 Staff
 - `Worker` — привязан к точке, FSM `Spawn → GoToSpot → Working (→ Repairing slowly)`.
@@ -229,8 +229,9 @@ EditMode: `Wallet`, `PriceFormula`, `ServicePoint` (прогресс тольк�
 2. На каждый пункт roadmap — ветка `feature/<NN>-<name>` (напр. `feature/01-core`).
 3. Кодер коммитит в ветку → открывается **PR в main**.
 4. Ревью: архитектор читает diff (`git fetch` + `git diff main...origin/feature/<NN>-<name>`; `gh` CLI не установлен), сверяет с TDD и правилами §0, пишет замечания; пользователь проверяет в Editor.
-5. Правки → в ту же ветку. **Пользователь докоммичивает в ветку `.meta`, сцены, SO-ассеты и префабы**, созданные в Editor (кодер `.meta` не создаёт). После апрува — **squash merge** в main, ветку удалить.
-6. Архитектор обновляет статус в roadmap и, если что-то поменялось, TDD/GDD.
+5. Правки → в ту же ветку. **Пользователь докоммичивает в ветку `.meta`, сцены, SO-ассеты и префабы**, созданные в Editor (кодер `.meta` не создаёт). После апрува архитектор делает **merge-коммит** (`--no-ff`) в main локально и пушит (GitHub закрывает PR сам), ветку удалить.
+6. **Каждый модуль — новая сессия кодера** (свежий контекст; правила подтягиваются из `CLAUDE.md`).
+7. Архитектор обновляет статус в roadmap и, если что-то поменялось, TDD/GDD.
 
 **Формат каждого промпта кодеру:**
 1. Контекст и цель модуля (+ ссылка на разделы GDD/TDD).
@@ -247,8 +248,8 @@ EditMode: `Wallet`, `PriceFormula`, `ServicePoint` (прогресс тольк�
 
 | # | Ветка | Модуль | День | Приоритет | Статус |
 |---|---|---|---|---|---|
-| 01 | `feature/01-core` | Структура, asmdef, Core (контейнер, GameLoop, EventBus, Pause, Time/Random), Economy, Config-база — [промпт](Prompts/01-core.md) | 1 | M | 🔨 промпт выдан |
-| 02 | `feature/02-player` | Input + Camera + Player click-to-move (whitebox сцена) | 1 | M | ⏳ |
+| 01 | `feature/01-core` | Структура, asmdef, Core (контейнер, GameLoop, EventBus, Pause, Time/Random), Economy, Config-база — [промпт](Prompts/01-core.md) | 1 | M | ✔️ смержен |
+| 02 | `feature/02-player` | Input + Camera + Player click-to-move (whitebox сцена) — [промпт](Prompts/02-player.md) | 1 | M | 🔨 промпт выдан |
 | 03 | `feature/03-service-loop` | Service Points + Parking + Dispatcher + Cars AI + Spawner + пул | 1 | M | ⏳ |
 | 04 | `feature/04-supplies` | Warehouse / Supplies / Carry | 2 | M | ⏳ |
 | 05 | `feature/05-build` | Build (фикс. участки) | 2 | M | ⏳ |

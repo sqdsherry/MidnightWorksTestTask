@@ -38,14 +38,15 @@ Bootstrap ──► все (Composition Root)
 - Пауза — `IPauseService` (счётчик, `timeScale`); UI-анимации на unscaled time.
 
 ## Ловушки имён
-- Не называть namespace/папки `Application`, `Time`, `Random`, `Debug`, `Physics`, `Object` — они перекрывают типы `UnityEngine` внутри `AutoService.*` (поэтому слой называется `Services`, папки — `Timing`, `Randomness`).
+- Не называть namespace/папки `Application`, `Time`, `Random`, `Debug`, `Physics`, `Object`, `Camera`, `Input`, `PlayerInput` — они перекрывают типы `UnityEngine` / Input System внутри `AutoService.*` (поэтому: слой `Services`, папки `Timing`, `Randomness`, `CameraControl`, `Controls`).
 - `System.Random` vs `UnityEngine.Random` — в Infrastructure писать явно.
 
 ## Unity и git
 - **Кодер не создаёт `.meta`, сцены, `.asset`, префабы** — их создаёт Unity/пользователь. В каждом PR — раздел **Editor setup** с шагами для пользователя.
 - Пользователь докоммичивает в ту же ветку сгенерированные `.meta`, сцены, SO, префабы — **до мержа** (иначе ломаются ссылки на скрипты у проверяющего).
 - Удалять/переименовывать ассеты лучше через окно Project в Unity (открытая сцена может пересохраниться обратно).
-- Ветки: `feature/NN-name` от `main` → PR в `main` → ревью → squash merge. Прямых коммитов в `main` нет (кроме Docs).
+- Ветки: `feature/NN-name` от `main` → PR в `main` → ревью → merge-коммит (`--no-ff`, делает архитектор локально; GitHub сам закрывает PR). Прямых коммитов в `main` нет (кроме Docs).
+- Мерж при открытом Unity — без `git checkout` туда-обратно (иначе Unity переимпортирует исчезнувшие на секунду файлы): merge-коммит через `git commit-tree <feature>^{tree} -p main -p <feature>` + `update-ref`, когда `main` — предок ветки.
 - **Одна рабочая папка на всех:** пока открыта feature-ветка, архитектор не коммитит Docs (коммит уйдёт в чужую ветку).
 - Логи Unity (Console, компиляция): `%LOCALAPPDATA%\Unity\Editor\Editor.log`. Шум `ExecutionEngineException: String conversion error` от `QuickInstaller` — из-за кириллицы в пути проекта, на игру не влияет.
 - Не коммитить `Library/`, `Temp/`, `Logs/`, `UserSettings/`, `*.csproj`, `*.sln`.
