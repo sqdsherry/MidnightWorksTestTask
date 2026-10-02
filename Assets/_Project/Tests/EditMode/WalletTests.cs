@@ -93,6 +93,24 @@ namespace AutoService.Tests.EditMode
             Assert.IsFalse(_wallet.CanAfford(new Money(101)));
         }
 
+        [Test]
+        public void Restore_SetsBalanceAndRaisesEvent()
+        {
+            _wallet.Restore(new Money(12345));
+
+            Assert.AreEqual(new Money(12345), _wallet.Balance);
+            Assert.AreEqual(1, _eventCount);
+            Assert.AreEqual(new Money(12345), _lastEventBalance);
+        }
+
+        [Test]
+        public void Restore_SameBalance_DoesNotRaiseEvent()
+        {
+            _wallet.Restore(new Money(100));
+
+            Assert.AreEqual(0, _eventCount);
+        }
+
         private void OnBalanceChanged(Money balance)
         {
             _eventCount++;

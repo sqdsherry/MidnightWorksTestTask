@@ -67,5 +67,22 @@ namespace AutoService.Domain.Economy
                 BalanceChanged?.Invoke(Balance);
             }
         }
+
+        /// <summary>
+        /// Sets the balance to a saved value and raises <see cref="BalanceChanged"/> if it differs from the current one.
+        /// </summary>
+        /// <remarks>Why it exists: only the save module may set the balance directly; gameplay goes through
+        /// <see cref="TrySpend"/> and <see cref="Add"/>.</remarks>
+        /// <param name="balance">The saved balance.</param>
+        public void Restore(Money balance)
+        {
+            if (balance == Balance)
+            {
+                return;
+            }
+
+            Balance = balance;
+            BalanceChanged?.Invoke(Balance);
+        }
     }
 }
