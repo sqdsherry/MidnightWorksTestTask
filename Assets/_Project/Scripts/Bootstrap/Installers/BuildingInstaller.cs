@@ -66,7 +66,7 @@ namespace AutoService.Bootstrap.Installers
                 return;
             }
 
-            context.Register(new BuildPanelPresenter(build, config, wallet, scene.BuildPanel, scene.Camera, plots, _player.Input));
+            context.Register(new BuildPanelPresenter(build, config, wallet, scene.BuildPanel, scene.Camera, plots, _player.Escape));
         }
     }
 }

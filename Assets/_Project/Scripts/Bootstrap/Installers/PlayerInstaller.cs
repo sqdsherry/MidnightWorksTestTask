@@ -6,11 +6,17 @@ using AutoService.Services.Core;
 
 namespace AutoService.Bootstrap.Installers
 {
-    /// <summary>Input, pointer raycasts, the character's movement FSM and the camera rig.</summary>
+    /// <summary>Input, the scene's Esc router, pointer raycasts, the character's movement FSM and the camera rig.</summary>
     internal sealed class PlayerInstaller : IGameplayInstaller
     {
-        /// <summary>Gameplay input (Esc for panels), or null when the player module was skipped.</summary>
+        /// <summary>Gameplay input, or null when the player module was skipped.</summary>
         public GameplayInput Input { get; private set; }
+
+        /// <summary>
+        /// The scene's Esc router (open panels register in it, the pause menu takes the rest), or null when the player
+        /// module was skipped. Also registered in the container for the HUD.
+        /// </summary>
+        public EscapeRouter Escape { get; private set; }
 
         /// <inheritdoc />
         // Why: a scene with missing references should still run the rest of the game and say exactly what is missing,
@@ -61,6 +67,11 @@ namespace AutoService.Bootstrap.Installers
             context.Register(input, TickPhase.Input);
             input.Enable();
             Input = input;
+
+            var escape = new EscapeRouter();
+            context.Register(escape);
+            context.Register(new EscapeInputBinding(input, escape));
+            Escape = escape;
 
             var raycaster = new PointerRaycaster(scene.Camera, scene.InteractableMask, scene.GroundMask, scene.OccluderMask);
             context.Register(new PlayerMotor(scene.Player), TickPhase.Input);

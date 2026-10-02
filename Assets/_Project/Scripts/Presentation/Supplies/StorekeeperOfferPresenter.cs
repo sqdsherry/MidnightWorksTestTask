@@ -21,11 +21,11 @@ namespace AutoService.Presentation.Supplies
     /// Hires through <see cref="IStaffService.TryHireStorekeeper"/>; the panel stays open and moves on to the next one.
     /// </summary>
     /// <remarks>
-    /// Same flow as the build panel: closes when the character leaves, on Close / Esc. The texts are formatted on opening
+    /// Same flow as the build panel: closes when the character leaves, on Close / Esc (through the <see cref="EscapeRouter"/>). The texts are formatted on opening
     /// and after a hire (the count and the price change); a balance or gate change only switches the button between its
     /// cached labels. Per frame: the pad's dwell and the panel position.
     /// </remarks>
-    public sealed class StorekeeperOfferPresenter : ITickable, IDisposable
+    public sealed class StorekeeperOfferPresenter : ITickable, IEscapeHandler, IDisposable
     {
         private readonly IStaffService _staff;
         private readonly IWalletService _wallet;
@@ -34,7 +34,7 @@ namespace AutoService.Presentation.Supplies
         private readonly OfferPanelView _view;
         private readonly Camera _camera;
         private readonly ManagePadView _pad;
-        private readonly GameplayInput _input;
+        private readonly EscapeRouter _escape;
         private readonly string _locationId;
 
         private string _hireLabel;
@@ -51,7 +51,7 @@ namespace AutoService.Presentation.Supplies
         /// <param name="view">The scene's storekeeper offer panel.</param>
         /// <param name="camera">Gameplay camera, to place the panel next to the pad.</param>
         /// <param name="pad">The warehouse pad (its Target Id is the location id).</param>
-        /// <param name="input">Gameplay input for Esc; may be null.</param>
+        /// <param name="escape">The scene's Esc router; may be null (no Esc then).</param>
         /// <exception cref="ArgumentNullException">Thrown when a required dependency is null.</exception>
         public StorekeeperOfferPresenter(
             IStaffService staff,
@@ -61,7 +61,7 @@ namespace AutoService.Presentation.Supplies
             OfferPanelView view,
             Camera camera,
             ManagePadView pad,
-            GameplayInput input)
+            EscapeRouter escape)
         {
             _staff = staff ?? throw new ArgumentNullException(nameof(staff));
             _wallet = wallet ?? throw new ArgumentNullException(nameof(wallet));
@@ -70,7 +70,7 @@ namespace AutoService.Presentation.Supplies
             _view = view != null ? view : throw new ArgumentNullException(nameof(view));
             _camera = camera != null ? camera : throw new ArgumentNullException(nameof(camera));
             _pad = pad != null ? pad : throw new ArgumentNullException(nameof(pad));
-            _input = input;
+            _escape = escape;
             _locationId = pad.TargetId;
 
             _pad.DwellCompleted += OnDwellCompleted;
@@ -80,12 +80,20 @@ namespace AutoService.Presentation.Supplies
             _staff.Hired += OnHired;
             _wallet.BalanceChanged += OnBalanceChanged;
             _gate.Changed += Refresh;
-            if (_input != null)
-            {
-                _input.CancelPressed += Close;
-            }
 
             _view.Hide();
+        }
+
+        /// <inheritdoc />
+        public bool TryHandleEscape()
+        {
+            if (!_open)
+            {
+                return false;
+            }
+
+            Close();
+            return true;
         }
 
         /// <inheritdoc />
@@ -122,10 +130,7 @@ namespace AutoService.Presentation.Supplies
             _staff.Hired -= OnHired;
             _wallet.BalanceChanged -= OnBalanceChanged;
             _gate.Changed -= Refresh;
-            if (_input != null)
-            {
-                _input.CancelPressed -= Close;
-            }
+            _escape?.Remove(this);
 
             _open = false;
         }
@@ -139,6 +144,7 @@ namespace AutoService.Presentation.Supplies
             }
 
             _open = true;
+            _escape?.Push(this);
             ShowOffer(availability);
             _view.Follow(_camera, _pad.PanelAnchor.position);
         }
@@ -216,6 +222,7 @@ namespace AutoService.Presentation.Supplies
             }
 
             _open = false;
+            _escape?.Remove(this);
             if (_view != null)
             {
                 _view.Hide();

@@ -111,13 +111,13 @@ namespace AutoService.Bootstrap.Installers
             if (context.HasReference(scene.PointPanel, "_pointPanel"))
             {
                 context.Register(new PointPanelPresenter(
-                    points, upgrades, staff, wallet, gate, config, income, scene.PointPanel, scene.Camera, layout.ManagePads, _player.Input));
+                    points, upgrades, staff, wallet, gate, config, income, scene.PointPanel, scene.Camera, layout.ManagePads, _player.Escape));
             }
 
             if (context.HasReference(scene.StorekeeperPanel, "_storekeeperPanel"))
             {
                 context.Register(new StorekeeperOfferPresenter(
-                    staff, wallet, gate, config, scene.StorekeeperPanel, scene.Camera, layout.WarehousePad, _player.Input));
+                    staff, wallet, gate, config, scene.StorekeeperPanel, scene.Camera, layout.WarehousePad, _player.Escape));
             }
         }
     }
