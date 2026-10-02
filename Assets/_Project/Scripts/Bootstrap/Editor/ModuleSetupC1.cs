@@ -1,15 +1,18 @@
+using System;
 using System.Collections.Generic;
 using AutoService.Presentation.Hud;
 using AutoService.Presentation.Loading;
 using AutoService.Presentation.Menu;
 using AutoService.Presentation.Pause;
 using AutoService.Presentation.Settings;
+using AutoService.Presentation.Ui;
 using AutoService.Services.Scenes;
 using TMPro;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.UI;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
@@ -24,9 +27,13 @@ namespace AutoService.Bootstrap.Editor
     /// and the Build Profile scene list (Boot, MainMenu, Gameplay).
     /// </summary>
     /// <remarks>
-    /// Safe to re-run: UI objects it created carry <see cref="Presentation.Building.WhiteboxGenerated"/> and are
-    /// replaced; objects with the same name made by hand are kept and reported. The settings prefab is rebuilt in place
-    /// (its GUID, and so every instance, is kept). Editor-only, so scene searches are fine here (CLAUDE.md rule 3).
+    /// <para><b>Safe to re-run.</b> Nothing is rebuilt: objects this tool made (marked with
+    /// <see cref="Presentation.Building.WhiteboxGenerated"/>) and the settings prefab are reused — only missing children and
+    /// components are added and the references are assigned again. Labels, colors and layout already in place are kept.
+    /// Same-named objects made by hand are not touched and are reported.</para>
+    /// <para>Why no Undo: the tool opens scenes with <c>OpenScene</c>/<c>NewScene</c>, which clears the undo stack, and saves
+    /// each scene right away — undo records would be thrown away anyway. Use git to revert a run.</para>
+    /// <para>Editor-only, so scene searches are fine here (CLAUDE.md rule 3).</para>
     /// </remarks>
     internal static class ModuleSetupC1
     {
@@ -41,6 +48,7 @@ namespace AutoService.Bootstrap.Editor
         private const string UiPrefabsFolder = PrefabsFolder + "/UI";
         private const string SettingsPrefabPath = UiPrefabsFolder + "/SettingsPanel.prefab";
         private const string MaterialsFolder = "Assets/_Project/Materials";
+        private const string InputActionsName = "GameControls";
 
         private const string GameTitle = "AUTO SERVICE TYCOON";
         private const string EntryPointName = "[EntryPoint]";
@@ -56,16 +64,20 @@ namespace AutoService.Bootstrap.Editor
         private const string ScreenHudName = "ScreenHud";
         private const string PauseButtonName = "PauseButton";
         private const string PauseMenuName = "PauseMenu";
+        private const string PanelName = "Panel";
+        private const string TitleName = "Title";
 
         private const int LoadingSortingOrder = 100;
         private static readonly Color LoadingBackground = new Color32(0x14, 0x18, 0x20, 0xFF);
+        private static readonly Vector2 SettingsPanelSize = new Vector2(760f, 640f);
+        private static readonly Vector2 DropdownSize = new Vector2(400f, 48f);
 
         [MenuItem("AutoService/Setup/Run C1 Setup")]
         private static void Run()
         {
-            if (EditorApplication.isPlaying)
+            if (EditorApplication.isPlayingOrWillChangePlaymode || EditorApplication.isCompiling)
             {
-                Debug.LogError(Tag + "Stop Play Mode first.");
+                Debug.LogError(Tag + "Wait until Play Mode is stopped and scripts have finished compiling.");
                 return;
             }
 
@@ -75,24 +87,21 @@ namespace AutoService.Bootstrap.Editor
                 return;
             }
 
-            string originalScene = SceneManager.GetActiveScene().path;
+            SetupUi.WarnIfNoTmpFont(Tag);
+            SceneSetup[] originalSetup = EditorSceneManager.GetSceneManagerSetup();
             var problems = new List<string>();
 
             EnsureFolder(PrefabsFolder, "UI");
-            SettingsView settingsPrefab = BuildSettingsPrefab();
+            SettingsView settingsPrefab = SetupSettingsPrefab(problems);
             SetupMainMenuScene(settingsPrefab, problems);
             SetupBootScene(problems);
             SetupGameplayScene(settingsPrefab, problems);
             SetupBuildScenes();
             AssetDatabase.SaveAssets();
-
-            if (!string.IsNullOrEmpty(originalScene) && AssetDatabase.LoadAssetAtPath<SceneAsset>(originalScene) != null)
-            {
-                EditorSceneManager.OpenScene(originalScene, OpenSceneMode.Single);
-            }
+            RestoreScenes(originalSetup);
 
             const string summary = "settings prefab, MainMenu scene, Boot loading screen + game loop, Gameplay pause + settings, "
-                + "Build Profile scenes (Boot, MainMenu, Gameplay)";
+                + "Build Profile scenes (Boot, MainMenu, Gameplay); scenes were saved, use git to revert";
             if (problems.Count == 0)
             {
                 Debug.Log(Tag + "Done: " + summary + ". Press Play.");
@@ -103,52 +112,33 @@ namespace AutoService.Bootstrap.Editor
             }
         }
 
+        // Why: an untitled scene cannot be restored (it has no path); Boot is where Play starts anyway.
+        private static void RestoreScenes(SceneSetup[] setup)
+        {
+            bool restorable = setup.Length > 0 && Array.TrueForAll(setup, scene => !string.IsNullOrEmpty(scene.path));
+            if (restorable)
+            {
+                EditorSceneManager.RestoreSceneManagerSetup(setup);
+            }
+            else if (AssetDatabase.LoadAssetAtPath<SceneAsset>(BootScenePath) != null)
+            {
+                EditorSceneManager.OpenScene(BootScenePath, OpenSceneMode.Single);
+            }
+        }
+
         // ── Settings prefab ──────────────────────────────────────────────────────────────────────────────────────────
 
-        /// <summary>Builds <c>Prefabs/UI/SettingsPanel.prefab</c> (prompt 09a §4.3, §4.5); an existing one is overwritten in place.</summary>
-        private static SettingsView BuildSettingsPrefab()
+        /// <summary>
+        /// Creates <c>Prefabs/UI/SettingsPanel.prefab</c> (prompt 09a §4.3, §4.5), or completes the existing one in place:
+        /// only missing parts are added, so edits made to the prefab survive and its object ids stay the same.
+        /// </summary>
+        private static SettingsView SetupSettingsPrefab(List<string> problems)
         {
-            var root = new GameObject(SettingsPanelName, typeof(RectTransform));
+            bool exists = AssetDatabase.LoadAssetAtPath<GameObject>(SettingsPrefabPath) != null;
+            GameObject root = exists ? PrefabUtility.LoadPrefabContents(SettingsPrefabPath) : CreateSettingsRoot();
             try
             {
-                root.layer = 5;
-                var rect = (RectTransform)root.transform;
-                SetupUi.Stretch(rect);
-                root.AddComponent<Image>().color = SetupUi.DimColor;
-                SetupUi.MarkGenerated(root);
-                var view = root.AddComponent<SettingsView>();
-
-                RectTransform panel = SetupUi.CreatePanel("Panel", rect, new Vector2(760f, 640f), Vector2.zero);
-                TMP_Text title = SetupUi.CreateText(panel, "Title", "Settings", SetupUi.TitleFont, true, TextAlignmentOptions.Center);
-                SetupUi.TopBand(title.rectTransform, -28f, 64f, 40f);
-
-                RectTransform music = CreateSettingsRow(panel, "Music", "Music", -120f);
-                Slider musicSlider = CreateVolumeSlider(music, out TMP_Text musicValue);
-                RectTransform sfx = CreateSettingsRow(panel, "Sfx", "SFX", -192f);
-                Slider sfxSlider = CreateVolumeSlider(sfx, out TMP_Text sfxValue);
-                RectTransform quality = CreateSettingsRow(panel, "Quality", "Quality", -264f);
-                TMP_Dropdown qualityDropdown = SetupUi.CreateDropdown(quality, "QualityDropdown");
-                PlaceControl((RectTransform)qualityDropdown.transform, new Vector2(400f, 48f));
-                RectTransform fullscreen = CreateSettingsRow(panel, "Fullscreen", "Fullscreen", -336f);
-                Toggle fullscreenToggle = SetupUi.CreateToggle(fullscreen, "FullscreenToggle");
-                PlaceControl((RectTransform)fullscreenToggle.transform, new Vector2(44f, 44f));
-                RectTransform resolution = CreateSettingsRow(panel, "Resolution", "Resolution", -408f);
-                TMP_Dropdown resolutionDropdown = SetupUi.CreateDropdown(resolution, "ResolutionDropdown");
-                PlaceControl((RectTransform)resolutionDropdown.transform, new Vector2(400f, 48f));
-
-                Button back = SetupUi.CreateButton(panel, "BackButton", "Back", SetupUi.PrimaryColor, SetupUi.ButtonSize);
-                SetupUi.Place((RectTransform)back.transform, new Vector2(0.5f, 0f), new Vector2(0f, 40f), SetupUi.ButtonSize, new Vector2(0.5f, 0f));
-
-                var serialized = new SerializedObject(view);
-                serialized.FindProperty("_musicSlider").objectReferenceValue = musicSlider;
-                serialized.FindProperty("_musicValue").objectReferenceValue = musicValue;
-                serialized.FindProperty("_sfxSlider").objectReferenceValue = sfxSlider;
-                serialized.FindProperty("_sfxValue").objectReferenceValue = sfxValue;
-                serialized.FindProperty("_qualityDropdown").objectReferenceValue = qualityDropdown;
-                serialized.FindProperty("_fullscreenToggle").objectReferenceValue = fullscreenToggle;
-                serialized.FindProperty("_resolutionDropdown").objectReferenceValue = resolutionDropdown;
-                serialized.FindProperty("_backButton").objectReferenceValue = back;
-                serialized.ApplyModifiedPropertiesWithoutUndo();
+                CompleteSettings(root, problems);
 
                 // Why: SaveAsPrefabAsset overwrites an existing prefab in place, so its GUID (and every instance) is kept.
                 GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, SettingsPrefabPath);
@@ -156,17 +146,89 @@ namespace AutoService.Bootstrap.Editor
             }
             finally
             {
-                Object.DestroyImmediate(root);
+                if (exists)
+                {
+                    PrefabUtility.UnloadPrefabContents(root);
+                }
+                else
+                {
+                    Object.DestroyImmediate(root);
+                }
             }
         }
 
-        /// <summary>A row of the settings panel: the label on the left, the control is added on the right.</summary>
-        private static RectTransform CreateSettingsRow(RectTransform panel, string name, string label, float top)
+        private static GameObject CreateSettingsRoot()
         {
-            RectTransform row = SetupUi.CreateRect(name + "Row", panel);
-            SetupUi.TopBand(row, top, 56f, 48f);
-            TMP_Text text = SetupUi.CreateText(row, "Label", label, SetupUi.TextFont, false, TextAlignmentOptions.Left);
-            SetupUi.Place(text.rectTransform, new Vector2(0f, 0.5f), Vector2.zero, new Vector2(240f, 56f), new Vector2(0f, 0.5f));
+            var root = new GameObject(SettingsPanelName, typeof(RectTransform));
+            root.layer = 5;
+            SetupUi.Stretch((RectTransform)root.transform);
+            root.AddComponent<Image>().color = SetupUi.DimColor;
+            SetupUi.MarkGenerated(root);
+            return root;
+        }
+
+        private static void CompleteSettings(GameObject root, List<string> problems)
+        {
+            var view = SetupUi.GetOrAdd<SettingsView>(root);
+            RectTransform panel = SetupUi.EnsureChild(root.transform, PanelName, problems,
+                parent => SetupUi.CreatePanel(PanelName, parent, SettingsPanelSize, Vector2.zero));
+            if (panel == null)
+            {
+                return;
+            }
+
+            EnsureTitle(panel, "Settings", -28f, 40f, problems);
+
+            RectTransform music = EnsureSettingsRow(panel, "Music", "Music", -120f, problems);
+            Slider musicSlider = EnsureVolumeSlider(music, problems, out TMP_Text musicValue);
+            RectTransform sfx = EnsureSettingsRow(panel, "Sfx", "SFX", -192f, problems);
+            Slider sfxSlider = EnsureVolumeSlider(sfx, problems, out TMP_Text sfxValue);
+            RectTransform quality = EnsureSettingsRow(panel, "Quality", "Quality", -264f, problems);
+            TMP_Dropdown qualityDropdown = EnsureDropdown(quality, "QualityDropdown", problems);
+            RectTransform fullscreen = EnsureSettingsRow(panel, "Fullscreen", "Fullscreen", -336f, problems);
+            Toggle fullscreenToggle = fullscreen == null ? null : SetupUi.EnsureChild(fullscreen, "FullscreenToggle", problems, parent =>
+            {
+                Toggle toggle = SetupUi.CreateToggle(parent, "FullscreenToggle");
+                PlaceControl((RectTransform)toggle.transform, new Vector2(44f, 44f));
+                return toggle;
+            });
+            RectTransform resolution = EnsureSettingsRow(panel, "Resolution", "Resolution", -408f, problems);
+            TMP_Dropdown resolutionDropdown = EnsureDropdown(resolution, "ResolutionDropdown", problems);
+
+            Button back = SetupUi.EnsureChild(panel, "BackButton", problems, parent =>
+            {
+                Button button = SetupUi.CreateButton(parent, "BackButton", "Back", SetupUi.PrimaryColor, SetupUi.ButtonSize);
+                SetupUi.Place((RectTransform)button.transform, new Vector2(0.5f, 0f), new Vector2(0f, 40f), SetupUi.ButtonSize, new Vector2(0.5f, 0f));
+                return button;
+            });
+
+            var serialized = new SerializedObject(view);
+            serialized.FindProperty("_musicSlider").objectReferenceValue = musicSlider;
+            serialized.FindProperty("_musicValue").objectReferenceValue = musicValue;
+            serialized.FindProperty("_sfxSlider").objectReferenceValue = sfxSlider;
+            serialized.FindProperty("_sfxValue").objectReferenceValue = sfxValue;
+            serialized.FindProperty("_qualityDropdown").objectReferenceValue = qualityDropdown;
+            serialized.FindProperty("_fullscreenToggle").objectReferenceValue = fullscreenToggle;
+            serialized.FindProperty("_resolutionDropdown").objectReferenceValue = resolutionDropdown;
+            serialized.FindProperty("_backButton").objectReferenceValue = back;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        /// <summary>A row of the settings panel: the label on the left, the control is added on the right.</summary>
+        private static RectTransform EnsureSettingsRow(RectTransform panel, string name, string label, float top, List<string> problems)
+        {
+            RectTransform row = SetupUi.EnsureRect(panel, name + "Row", problems, rect => SetupUi.TopBand(rect, top, 56f, 48f));
+            if (row == null)
+            {
+                return null;
+            }
+
+            SetupUi.EnsureChild(row, "Label", problems, parent =>
+            {
+                TMP_Text text = SetupUi.CreateText(parent, "Label", label, SetupUi.TextFont, false, TextAlignmentOptions.Left);
+                SetupUi.Place(text.rectTransform, new Vector2(0f, 0.5f), Vector2.zero, new Vector2(240f, 56f), new Vector2(0f, 0.5f));
+                return text;
+            });
             return row;
         }
 
@@ -176,34 +238,85 @@ namespace AutoService.Bootstrap.Editor
             SetupUi.Place(control, new Vector2(0f, 0.5f), new Vector2(260f, 0f), size, new Vector2(0f, 0.5f));
         }
 
-        private static Slider CreateVolumeSlider(RectTransform row, out TMP_Text value)
+        private static Slider EnsureVolumeSlider(RectTransform row, List<string> problems, out TMP_Text value)
         {
-            Slider slider = SetupUi.CreateSlider(row, "Slider");
-            PlaceControl((RectTransform)slider.transform, new Vector2(300f, 28f));
-            value = SetupUi.CreateText(row, "Value", "100%", SetupUi.TextFont, true, TextAlignmentOptions.Right);
-            SetupUi.Place(value.rectTransform, new Vector2(1f, 0.5f), Vector2.zero, new Vector2(90f, 56f), new Vector2(1f, 0.5f));
-            return slider;
-        }
-
-        private static SettingsView InstantiateSettings(SettingsView prefab, Transform canvas, List<string> problems, string sceneName)
-        {
-            if (prefab == null)
+            value = null;
+            if (row == null)
             {
-                problems.Add("the settings prefab could not be saved (" + sceneName + " has no settings)");
                 return null;
             }
 
-            if (!ClearGenerated(canvas, SettingsPanelName, problems, sceneName))
+            Slider slider = SetupUi.EnsureChild(row, "Slider", problems, parent =>
             {
-                Transform kept = canvas.Find(SettingsPanelName);
-                return kept != null ? kept.GetComponent<SettingsView>() : null;
+                Slider created = SetupUi.CreateSlider(parent, "Slider");
+                PlaceControl((RectTransform)created.transform, new Vector2(300f, 28f));
+                return created;
+            });
+            if (slider != null)
+            {
+                // Why: added to older panels too — the volume is saved when the slider is released.
+                SetupUi.GetOrAdd<SliderCommit>(slider.gameObject);
+            }
+
+            value = SetupUi.EnsureChild(row, "Value", problems, parent =>
+            {
+                TMP_Text text = SetupUi.CreateText(parent, "Value", "100%", SetupUi.TextFont, true, TextAlignmentOptions.Right);
+                SetupUi.Place(text.rectTransform, new Vector2(1f, 0.5f), Vector2.zero, new Vector2(90f, 56f), new Vector2(1f, 0.5f));
+                return text;
+            });
+            return slider;
+        }
+
+        private static TMP_Dropdown EnsureDropdown(RectTransform row, string name, List<string> problems)
+        {
+            if (row == null)
+            {
+                return null;
+            }
+
+            return SetupUi.EnsureChild(row, name, problems, parent =>
+            {
+                TMP_Dropdown dropdown = SetupUi.CreateDropdown(parent, name);
+                PlaceControl((RectTransform)dropdown.transform, DropdownSize);
+                return dropdown;
+            });
+        }
+
+        private static void EnsureTitle(RectTransform panel, string text, float top, float inset, List<string> problems)
+        {
+            SetupUi.EnsureChild(panel, TitleName, problems, parent =>
+            {
+                TMP_Text title = SetupUi.CreateText(parent, TitleName, text, SetupUi.TitleFont, true, TextAlignmentOptions.Center);
+                SetupUi.TopBand(title.rectTransform, top, 64f, inset);
+                return title;
+            });
+        }
+
+        /// <summary>Uses the settings instance already under <paramref name="canvas"/>, or adds one of the prefab.</summary>
+        private static SettingsView EnsureSettingsInstance(SettingsView prefab, Transform canvas, List<string> problems, string sceneName)
+        {
+            Transform existing = canvas.Find(SettingsPanelName);
+            if (existing != null)
+            {
+                if (existing.TryGetComponent(out SettingsView found))
+                {
+                    return found;
+                }
+
+                problems.Add(sceneName + ": '" + SettingsPanelName + "' has no SettingsView and was left as is");
+                return null;
+            }
+
+            if (prefab == null)
+            {
+                problems.Add(sceneName + ": no settings panel (the settings prefab could not be saved)");
+                return null;
             }
 
             var instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab.gameObject, canvas);
             instance.name = SettingsPanelName;
             instance.transform.SetAsLastSibling();
             instance.SetActive(false);
-            Undo.RegisterCreatedObjectUndo(instance, "Create settings panel");
             return instance.GetComponent<SettingsView>();
         }
 
@@ -221,59 +334,84 @@ namespace AutoService.Bootstrap.Editor
             EnsureBackdrop(scene);
             EnsureEventSystem(scene);
             GameObject entryObject = FindRoot(scene, EntryPointName) ?? CreateRoot(scene, EntryPointName);
-            MainMenuEntryPoint entryPoint = entryObject.TryGetComponent(out MainMenuEntryPoint found)
-                ? found
-                : Undo.AddComponent<MainMenuEntryPoint>(entryObject);
+            var entryPoint = SetupUi.GetOrAdd<MainMenuEntryPoint>(entryObject);
+            var entry = new SerializedObject(entryPoint);
 
-            MainMenuView menu = null;
-            ConfirmDialogView dialog = null;
-            SettingsView settings = null;
-            GameObject existingCanvas = FindRoot(scene, MenuCanvasName);
-            if (existingCanvas != null && !SetupUi.IsGenerated(existingCanvas))
+            GameObject canvasObject = FindRoot(scene, MenuCanvasName);
+            if (canvasObject != null && !SetupUi.IsGenerated(canvasObject))
             {
                 problems.Add("MainMenu: '" + MenuCanvasName + "' was not made by this tool and was left as is (menu references not changed)");
             }
             else
             {
-                if (existingCanvas != null)
+                if (canvasObject == null)
                 {
-                    Undo.DestroyObjectImmediate(existingCanvas);
+                    Canvas canvas = SetupUi.CreateCanvas(MenuCanvasName, null, 0);
+                    canvasObject = canvas.gameObject;
+                    SceneManager.MoveGameObjectToScene(canvasObject, scene);
+                    SetupUi.MarkGenerated(canvasObject);
                 }
 
-                Canvas canvas = SetupUi.CreateCanvas(MenuCanvasName, null, 0);
-                SceneManager.MoveGameObjectToScene(canvas.gameObject, scene);
-                SetupUi.MarkGenerated(canvas.gameObject);
-                menu = BuildMainMenu(canvas.transform);
-                dialog = BuildConfirmDialog(canvas.transform);
-                settings = InstantiateSettings(settingsPrefab, canvas.transform, problems, "MainMenu");
-                Undo.RegisterCreatedObjectUndo(canvas.gameObject, "Create menu canvas");
+                Transform canvasTransform = canvasObject.transform;
+                entry.FindProperty("_menu").objectReferenceValue = EnsureMainMenu(canvasTransform, problems);
+                entry.FindProperty("_confirmDialog").objectReferenceValue = EnsureConfirmDialog(canvasTransform, problems);
+                entry.FindProperty("_settings").objectReferenceValue = EnsureSettingsInstance(settingsPrefab, canvasTransform, problems, "MainMenu");
             }
 
-            if (menu != null)
+            SerializedProperty input = entry.FindProperty("_inputActions");
+            if (input.objectReferenceValue == null)
             {
-                var serialized = new SerializedObject(entryPoint);
-                serialized.FindProperty("_menu").objectReferenceValue = menu;
-                serialized.FindProperty("_confirmDialog").objectReferenceValue = dialog;
-                serialized.FindProperty("_settings").objectReferenceValue = settings;
-                serialized.ApplyModifiedProperties();
+                input.objectReferenceValue = FindInputActions(problems);
             }
 
+            entry.ApplyModifiedPropertiesWithoutUndo();
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, MainMenuScenePath);
         }
 
-        private static MainMenuView BuildMainMenu(Transform canvas)
+        private static InputActionAsset FindInputActions(List<string> problems)
         {
-            RectTransform root = SetupUi.CreateRect(MainMenuName, canvas);
-            SetupUi.Stretch(root);
-            var view = root.gameObject.AddComponent<MainMenuView>();
+            string[] guids = AssetDatabase.FindAssets(InputActionsName + " t:" + nameof(InputActionAsset));
+            for (int i = 0; i < guids.Length; i++)
+            {
+                var asset = AssetDatabase.LoadAssetAtPath<InputActionAsset>(AssetDatabase.GUIDToAssetPath(guids[i]));
+                if (asset != null && asset.name == InputActionsName)
+                {
+                    return asset;
+                }
+            }
 
-            TMP_Text title = SetupUi.CreateText(root, "Title", GameTitle, 96f, true, TextAlignmentOptions.Center);
-            SetupUi.Place(title.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -140f), new Vector2(1400f, 120f), new Vector2(0.5f, 1f));
+            problems.Add("MainMenu: input actions '" + InputActionsName + "' not found (Esc will not work in the menu)");
+            return null;
+        }
+
+        private static MainMenuView EnsureMainMenu(Transform canvas, List<string> problems)
+        {
+            MainMenuView view = SetupUi.EnsureChild(canvas, MainMenuName, problems, parent =>
+            {
+                RectTransform root = SetupUi.CreateRect(MainMenuName, parent);
+                SetupUi.Stretch(root);
+                return root.gameObject.AddComponent<MainMenuView>();
+            });
+            if (view == null)
+            {
+                return null;
+            }
+
+            Transform root = view.transform;
+            SetupUi.EnsureChild(root, TitleName, problems, parent =>
+            {
+                TMP_Text title = SetupUi.CreateText(parent, TitleName, GameTitle, 96f, true, TextAlignmentOptions.Center);
+                SetupUi.Place(title.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -140f), new Vector2(1400f, 120f), new Vector2(0.5f, 1f));
+                return title;
+            });
 
             float columnHeight = 4f * SetupUi.ButtonSize.y + 3f * SetupUi.ButtonSpacing;
-            RectTransform panel = SetupUi.CreatePanel("Panel", root, new Vector2(SetupUi.ButtonSize.x + 64f, columnHeight + 64f), new Vector2(0f, -80f));
-            Button[] buttons = SetupUi.CreateButtonColumn(panel, Vector2.zero, "Continue", "New Game", "Settings", "Quit");
+            RectTransform panel = SetupUi.EnsureChild(root, PanelName, problems,
+                parent => SetupUi.CreatePanel(PanelName, parent, new Vector2(SetupUi.ButtonSize.x + 64f, columnHeight + 64f), new Vector2(0f, -80f)));
+            Button[] buttons = panel != null
+                ? SetupUi.EnsureButtonColumn(panel, Vector2.zero, problems, "Continue", "New Game", "Settings", "Quit")
+                : new Button[4];
 
             var serialized = new SerializedObject(view);
             serialized.FindProperty("_continueButton").objectReferenceValue = buttons[0];
@@ -284,34 +422,58 @@ namespace AutoService.Bootstrap.Editor
             return view;
         }
 
-        private static ConfirmDialogView BuildConfirmDialog(Transform canvas)
+        private static ConfirmDialogView EnsureConfirmDialog(Transform canvas, List<string> problems)
         {
-            RectTransform root = SetupUi.CreateDimmedRoot(ConfirmDialogName, canvas);
-            var view = root.gameObject.AddComponent<ConfirmDialogView>();
+            ConfirmDialogView view = SetupUi.EnsureChild(canvas, ConfirmDialogName, problems, parent =>
+            {
+                RectTransform root = SetupUi.CreateDimmedRoot(ConfirmDialogName, parent);
+                root.gameObject.SetActive(false);
+                return root.gameObject.AddComponent<ConfirmDialogView>();
+            });
+            if (view == null)
+            {
+                return null;
+            }
 
-            RectTransform panel = SetupUi.CreatePanel("Panel", root, new Vector2(760f, 320f), Vector2.zero);
-            TMP_Text message = SetupUi.CreateText(panel, "Message", "Are you sure?", 32f, false, TextAlignmentOptions.Center, wrap: true);
-            SetupUi.TopBand(message.rectTransform, -40f, 140f, 48f);
+            RectTransform panel = SetupUi.EnsureChild(view.transform, PanelName, problems,
+                parent => SetupUi.CreatePanel(PanelName, parent, new Vector2(760f, 320f), Vector2.zero));
+            if (panel == null)
+            {
+                return view;
+            }
+
+            TMP_Text message = SetupUi.EnsureChild(panel, "Message", problems, parent =>
+            {
+                TMP_Text text = SetupUi.CreateText(parent, "Message", "Are you sure?", 32f, false, TextAlignmentOptions.Center, wrap: true);
+                SetupUi.TopBand(text.rectTransform, -40f, 140f, 48f);
+                return text;
+            });
 
             var buttonSize = new Vector2(260f, SetupUi.ButtonSize.y);
-            Button yes = SetupUi.CreateButton(panel, "YesButton", "Yes", SetupUi.PrimaryColor, buttonSize);
-            SetupUi.Place((RectTransform)yes.transform, new Vector2(0.5f, 0f), new Vector2(-145f, 40f), buttonSize, new Vector2(0.5f, 0f));
-            Button no = SetupUi.CreateButton(panel, "NoButton", "No", SetupUi.SecondaryColor, buttonSize);
-            SetupUi.Place((RectTransform)no.transform, new Vector2(0.5f, 0f), new Vector2(145f, 40f), buttonSize, new Vector2(0.5f, 0f));
+            Button yes = SetupUi.EnsureChild(panel, "YesButton", problems, parent =>
+            {
+                Button button = SetupUi.CreateButton(parent, "YesButton", "Yes", SetupUi.PrimaryColor, buttonSize);
+                SetupUi.Place((RectTransform)button.transform, new Vector2(0.5f, 0f), new Vector2(-145f, 40f), buttonSize, new Vector2(0.5f, 0f));
+                return button;
+            });
+            Button no = SetupUi.EnsureChild(panel, "NoButton", problems, parent =>
+            {
+                Button button = SetupUi.CreateButton(parent, "NoButton", "No", SetupUi.SecondaryColor, buttonSize);
+                SetupUi.Place((RectTransform)button.transform, new Vector2(0.5f, 0f), new Vector2(145f, 40f), buttonSize, new Vector2(0.5f, 0f));
+                return button;
+            });
 
             var serialized = new SerializedObject(view);
             serialized.FindProperty("_message").objectReferenceValue = message;
             serialized.FindProperty("_yesButton").objectReferenceValue = yes;
             serialized.FindProperty("_noButton").objectReferenceValue = no;
             serialized.ApplyModifiedPropertiesWithoutUndo();
-
-            root.gameObject.SetActive(false);
             return view;
         }
 
         private static void EnsureCamera(Scene scene)
         {
-            if (FindRoot(scene, CameraName) != null)
+            if (FindInScene<Camera>(scene) != null)
             {
                 return;
             }
@@ -326,7 +488,7 @@ namespace AutoService.Bootstrap.Editor
 
         private static void EnsureLight(Scene scene)
         {
-            if (FindRoot(scene, LightName) != null)
+            if (FindInScene<Light>(scene) != null)
             {
                 return;
             }
@@ -377,13 +539,9 @@ namespace AutoService.Bootstrap.Editor
 
         private static void EnsureEventSystem(Scene scene)
         {
-            GameObject[] roots = scene.GetRootGameObjects();
-            for (int i = 0; i < roots.Length; i++)
+            if (FindInScene<EventSystem>(scene) != null)
             {
-                if (roots[i].GetComponentInChildren<EventSystem>(true) != null)
-                {
-                    return;
-                }
+                return;
             }
 
             GameObject eventSystem = CreateRoot(scene, EventSystemName);
@@ -410,74 +568,95 @@ namespace AutoService.Bootstrap.Editor
                 return;
             }
 
-            GameLoop loop = entryPoint.TryGetComponent(out GameLoop existingLoop)
-                ? existingLoop
-                : Undo.AddComponent<GameLoop>(entryPoint.gameObject);
-
-            LoadingScreenView loadingScreen = null;
-            if (ClearGenerated(entryPoint.transform, LoadingScreenName, problems, "Boot"))
-            {
-                loadingScreen = BuildLoadingScreen(entryPoint.transform);
-            }
-            else
-            {
-                Transform kept = entryPoint.transform.Find(LoadingScreenName);
-                loadingScreen = kept != null ? kept.GetComponent<LoadingScreenView>() : null;
-            }
+            GameLoop loop = SetupUi.GetOrAdd<GameLoop>(entryPoint.gameObject);
+            LoadingScreenView loadingScreen = EnsureLoadingScreen(entryPoint.transform, problems);
 
             var serialized = new SerializedObject(entryPoint);
             serialized.FindProperty("_loadingScreen").objectReferenceValue = loadingScreen;
             serialized.FindProperty("_gameLoop").objectReferenceValue = loop;
-            serialized.FindProperty("_firstScene").intValue = (int)GameScene.MainMenu;
+            serialized.FindProperty("_firstScene").enumValueIndex =
+                Array.IndexOf(Enum.GetNames(typeof(GameScene)), nameof(GameScene.MainMenu));
             serialized.FindProperty("_mainMenuSceneName").stringValue = MainMenuSceneName;
             serialized.FindProperty("_gameplaySceneName").stringValue = GameplaySceneName;
-            serialized.ApplyModifiedProperties();
+            serialized.ApplyModifiedPropertiesWithoutUndo();
 
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene);
         }
 
         /// <summary>The persistent loading screen: own canvas above everything, backdrop, title, bar and tip.</summary>
-        private static LoadingScreenView BuildLoadingScreen(Transform parent)
+        private static LoadingScreenView EnsureLoadingScreen(Transform parent, List<string> problems)
         {
-            Canvas canvas = SetupUi.CreateCanvas(LoadingScreenName, parent, LoadingSortingOrder);
-            GameObject root = canvas.gameObject;
-            SetupUi.MarkGenerated(root);
-            var group = root.AddComponent<CanvasGroup>();
-            var view = root.AddComponent<LoadingScreenView>();
-            var rect = (RectTransform)root.transform;
+            Transform existing = parent.Find(LoadingScreenName);
+            if (existing != null && !SetupUi.IsGenerated(existing.gameObject))
+            {
+                problems.Add("Boot: '" + LoadingScreenName + "' was not made by this tool and was left as is");
+                return existing.GetComponent<LoadingScreenView>();
+            }
 
-            RectTransform background = SetupUi.CreateRect("Background", rect);
-            SetupUi.Stretch(background);
-            background.gameObject.AddComponent<Image>().color = LoadingBackground;
+            GameObject root;
+            if (existing != null)
+            {
+                root = existing.gameObject;
+            }
+            else
+            {
+                root = SetupUi.CreateCanvas(LoadingScreenName, parent, LoadingSortingOrder).gameObject;
+                SetupUi.MarkGenerated(root);
+            }
 
-            TMP_Text title = SetupUi.CreateText(rect, "Title", GameTitle, 96f, true, TextAlignmentOptions.Center);
-            SetupUi.Place(title.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, 140f), new Vector2(1400f, 120f), new Vector2(0.5f, 0.5f));
+            var canvas = SetupUi.GetOrAdd<Canvas>(root);
+            var group = SetupUi.GetOrAdd<CanvasGroup>(root);
+            var view = SetupUi.GetOrAdd<LoadingScreenView>(root);
+            Transform rect = root.transform;
 
-            RectTransform bar = SetupUi.CreateRect("ProgressBar", rect);
-            SetupUi.Place(bar, new Vector2(0.5f, 0.5f), new Vector2(0f, -40f), new Vector2(900f, 28f), new Vector2(0.5f, 0.5f));
-            SetupUi.AddImage(bar, SetupUi.SecondaryColor);
-            RectTransform fill = SetupUi.CreateRect("Fill", bar);
-            SetupUi.Stretch(fill);
-            var fillImage = fill.gameObject.AddComponent<Image>();
-            fillImage.color = SetupUi.PrimaryColor;
-            fillImage.type = Image.Type.Filled;
-            fillImage.fillMethod = Image.FillMethod.Horizontal;
-            fillImage.fillOrigin = (int)Image.OriginHorizontal.Left;
-            fillImage.fillAmount = 0f;
+            SetupUi.EnsureChild(rect, "Background", problems, p =>
+            {
+                RectTransform background = SetupUi.CreateRect("Background", p);
+                SetupUi.Stretch(background);
+                var image = background.gameObject.AddComponent<Image>();
+                image.color = LoadingBackground;
+                return image;
+            });
+            SetupUi.EnsureChild(rect, TitleName, problems, p =>
+            {
+                TMP_Text title = SetupUi.CreateText(p, TitleName, GameTitle, 96f, true, TextAlignmentOptions.Center);
+                SetupUi.Place(title.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, 140f), new Vector2(1400f, 120f), new Vector2(0.5f, 0.5f));
+                return title;
+            });
 
-            TMP_Text tip = SetupUi.CreateText(rect, "Tip", "Tip", 30f, false, TextAlignmentOptions.Center, wrap: true);
-            SetupUi.Place(tip.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, -130f), new Vector2(1200f, 100f), new Vector2(0.5f, 0.5f));
-            tip.fontStyle = FontStyles.Italic;
+            RectTransform bar = SetupUi.EnsureRect(rect, "ProgressBar", problems, created =>
+            {
+                SetupUi.Place(created, new Vector2(0.5f, 0.5f), new Vector2(0f, -40f), new Vector2(900f, 28f), new Vector2(0.5f, 0.5f));
+                SetupUi.AddImage(created, SetupUi.SecondaryColor);
+            });
+            Image fill = bar == null ? null : SetupUi.EnsureChild(bar, "Fill", problems, p =>
+            {
+                RectTransform fillRect = SetupUi.CreateRect("Fill", p);
+                SetupUi.Stretch(fillRect);
+                var image = fillRect.gameObject.AddComponent<Image>();
+                image.color = SetupUi.PrimaryColor;
+                image.type = Image.Type.Filled;
+                image.fillMethod = Image.FillMethod.Horizontal;
+                image.fillOrigin = (int)Image.OriginHorizontal.Left;
+                image.fillAmount = 0f;
+                return image;
+            });
+
+            TMP_Text tip = SetupUi.EnsureChild(rect, "Tip", problems, p =>
+            {
+                TMP_Text text = SetupUi.CreateText(p, "Tip", "Tip", 30f, false, TextAlignmentOptions.Center, wrap: true);
+                SetupUi.Place(text.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, -130f), new Vector2(1200f, 100f), new Vector2(0.5f, 0.5f));
+                text.fontStyle = FontStyles.Italic;
+                return text;
+            });
 
             var serialized = new SerializedObject(view);
             serialized.FindProperty("_canvas").objectReferenceValue = canvas;
             serialized.FindProperty("_group").objectReferenceValue = group;
-            serialized.FindProperty("_progressFill").objectReferenceValue = fillImage;
+            serialized.FindProperty("_progressFill").objectReferenceValue = fill;
             serialized.FindProperty("_tipLabel").objectReferenceValue = tip;
             serialized.ApplyModifiedPropertiesWithoutUndo();
-
-            Undo.RegisterCreatedObjectUndo(root, "Create loading screen");
             return view;
         }
 
@@ -507,18 +686,10 @@ namespace AutoService.Bootstrap.Editor
                 return;
             }
 
-            PauseButtonView pauseButton = ClearGenerated(hud, PauseButtonName, problems, "Gameplay")
-                ? BuildPauseButton(hud)
-                : FindComponent<PauseButtonView>(hud, PauseButtonName);
-            PauseMenuView pauseMenu = ClearGenerated(hud, PauseMenuName, problems, "Gameplay")
-                ? BuildPauseMenu(hud)
-                : FindComponent<PauseMenuView>(hud, PauseMenuName);
-            SettingsView settings = InstantiateSettings(settingsPrefab, hud, problems, "Gameplay");
-
-            entry.FindProperty("_pauseButton").objectReferenceValue = pauseButton;
-            entry.FindProperty("_pauseMenu").objectReferenceValue = pauseMenu;
-            entry.FindProperty("_settingsPanel").objectReferenceValue = settings;
-            entry.ApplyModifiedProperties();
+            entry.FindProperty("_pauseButton").objectReferenceValue = EnsurePauseButton(hud, problems);
+            entry.FindProperty("_pauseMenu").objectReferenceValue = EnsurePauseMenu(hud, problems);
+            entry.FindProperty("_settingsPanel").objectReferenceValue = EnsureSettingsInstance(settingsPrefab, hud, problems, "Gameplay");
+            entry.ApplyModifiedPropertiesWithoutUndo();
 
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene);
@@ -540,48 +711,82 @@ namespace AutoService.Bootstrap.Editor
         }
 
         // Top left, per the brief: pause on the left, money on the right.
-        private static PauseButtonView BuildPauseButton(Transform hud)
+        private static PauseButtonView EnsurePauseButton(Transform hud, List<string> problems)
         {
-            var size = new Vector2(72f, 72f);
-            Button button = SetupUi.CreateButton(hud, PauseButtonName, "II", SetupUi.SecondaryColor, size);
-            SetupUi.Place((RectTransform)button.transform, new Vector2(0f, 1f), new Vector2(24f, -24f), size, new Vector2(0f, 1f));
-            SetupUi.MarkGenerated(button.gameObject);
-            var view = button.gameObject.AddComponent<PauseButtonView>();
+            Transform existing = hud.Find(PauseButtonName);
+            if (existing != null && !SetupUi.IsGenerated(existing.gameObject))
+            {
+                problems.Add("Gameplay: '" + PauseButtonName + "' was not made by this tool and was left as is");
+                return existing.GetComponent<PauseButtonView>();
+            }
+
+            Button button;
+            if (existing != null)
+            {
+                button = SetupUi.GetOrAdd<Button>(existing.gameObject);
+            }
+            else
+            {
+                var size = new Vector2(72f, 72f);
+                button = SetupUi.CreateButton(hud, PauseButtonName, "II", SetupUi.SecondaryColor, size);
+                SetupUi.Place((RectTransform)button.transform, new Vector2(0f, 1f), new Vector2(24f, -24f), size, new Vector2(0f, 1f));
+                SetupUi.MarkGenerated(button.gameObject);
+            }
+
+            SetupUi.GetOrAdd<ButtonJuice>(button.gameObject);
+            var view = SetupUi.GetOrAdd<PauseButtonView>(button.gameObject);
             var serialized = new SerializedObject(view);
             serialized.FindProperty("_button").objectReferenceValue = button;
             serialized.ApplyModifiedPropertiesWithoutUndo();
-            Undo.RegisterCreatedObjectUndo(button.gameObject, "Create pause button");
             return view;
         }
 
-        private static PauseMenuView BuildPauseMenu(Transform hud)
+        private static PauseMenuView EnsurePauseMenu(Transform hud, List<string> problems)
         {
-            RectTransform root = SetupUi.CreateDimmedRoot(PauseMenuName, hud);
-            SetupUi.MarkGenerated(root.gameObject);
-            var view = root.gameObject.AddComponent<PauseMenuView>();
+            Transform existing = hud.Find(PauseMenuName);
+            if (existing != null && !SetupUi.IsGenerated(existing.gameObject))
+            {
+                problems.Add("Gameplay: '" + PauseMenuName + "' was not made by this tool and was left as is");
+                return existing.GetComponent<PauseMenuView>();
+            }
 
+            GameObject root;
+            if (existing != null)
+            {
+                root = existing.gameObject;
+            }
+            else
+            {
+                RectTransform created = SetupUi.CreateDimmedRoot(PauseMenuName, hud);
+                SetupUi.MarkGenerated(created.gameObject);
+                created.SetAsLastSibling();
+                created.gameObject.SetActive(false);
+                root = created.gameObject;
+            }
+
+            var view = SetupUi.GetOrAdd<PauseMenuView>(root);
             float columnHeight = 4f * SetupUi.ButtonSize.y + 3f * SetupUi.ButtonSpacing;
             const float titleHeight = 64f;
             const float padding = 32f;
             var panelSize = new Vector2(SetupUi.ButtonSize.x + 2f * padding, padding + titleHeight + padding + columnHeight + padding);
-            RectTransform panel = SetupUi.CreatePanel("Panel", root, panelSize, Vector2.zero);
-            TMP_Text title = SetupUi.CreateText(panel, "Title", "Paused", SetupUi.TitleFont, true, TextAlignmentOptions.Center);
-            SetupUi.TopBand(title.rectTransform, -padding, titleHeight, padding);
+            RectTransform panel = SetupUi.EnsureChild(root.transform, PanelName, problems,
+                parent => SetupUi.CreatePanel(PanelName, parent, panelSize, Vector2.zero));
 
-            float columnCenter = panelSize.y * 0.5f - padding - titleHeight - padding - columnHeight * 0.5f;
-            Button[] buttons = SetupUi.CreateButtonColumn(panel, new Vector2(0f, columnCenter), "Resume", "Settings", "Main Menu", "Quit");
+            Button[] buttons = new Button[4];
+            if (panel != null)
+            {
+                EnsureTitle(panel, "Paused", -padding, padding, problems);
+                float columnCenter = panelSize.y * 0.5f - padding - titleHeight - padding - columnHeight * 0.5f;
+                buttons = SetupUi.EnsureButtonColumn(panel, new Vector2(0f, columnCenter), problems, "Resume", "Settings", "Main Menu", "Quit");
+            }
 
             var serialized = new SerializedObject(view);
-            serialized.FindProperty("_panel").objectReferenceValue = panel.gameObject;
+            serialized.FindProperty("_panel").objectReferenceValue = panel != null ? panel.gameObject : null;
             serialized.FindProperty("_resumeButton").objectReferenceValue = buttons[0];
             serialized.FindProperty("_settingsButton").objectReferenceValue = buttons[1];
             serialized.FindProperty("_mainMenuButton").objectReferenceValue = buttons[2];
             serialized.FindProperty("_quitButton").objectReferenceValue = buttons[3];
             serialized.ApplyModifiedPropertiesWithoutUndo();
-
-            root.SetAsLastSibling();
-            root.gameObject.SetActive(false);
-            Undo.RegisterCreatedObjectUndo(root.gameObject, "Create pause menu");
             return view;
         }
 
@@ -603,7 +808,7 @@ namespace AutoService.Bootstrap.Editor
             EditorBuildSettingsScene[] current = EditorBuildSettings.scenes;
             for (int i = 0; i < current.Length; i++)
             {
-                if (System.Array.IndexOf(ordered, current[i].path) < 0)
+                if (Array.IndexOf(ordered, current[i].path) < 0)
                 {
                     scenes.Add(current[i]);
                 }
@@ -613,34 +818,6 @@ namespace AutoService.Bootstrap.Editor
         }
 
         // ── Helpers ──────────────────────────────────────────────────────────────────────────────────────────────────
-
-        /// <summary>
-        /// Removes the child <paramref name="name"/> of <paramref name="parent"/> if this tool created it.
-        /// </summary>
-        /// <returns>True when the name is free now (create it); false when a hand-made object of that name was kept.</returns>
-        private static bool ClearGenerated(Transform parent, string name, List<string> problems, string sceneName)
-        {
-            Transform existing = parent.Find(name);
-            if (existing == null)
-            {
-                return true;
-            }
-
-            if (!SetupUi.IsGenerated(existing.gameObject))
-            {
-                problems.Add(sceneName + ": '" + name + "' was not made by this tool and was left as is");
-                return false;
-            }
-
-            Undo.DestroyObjectImmediate(existing.gameObject);
-            return true;
-        }
-
-        private static T FindComponent<T>(Transform parent, string name) where T : Component
-        {
-            Transform child = parent.Find(name);
-            return child != null ? child.GetComponent<T>() : null;
-        }
 
         private static T FindInScene<T>(Scene scene) where T : Component
         {
@@ -675,7 +852,6 @@ namespace AutoService.Bootstrap.Editor
         {
             var root = new GameObject(name);
             SceneManager.MoveGameObjectToScene(root, scene);
-            Undo.RegisterCreatedObjectUndo(root, "Create " + name);
             return root;
         }
 

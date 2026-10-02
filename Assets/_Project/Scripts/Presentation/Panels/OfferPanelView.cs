@@ -113,6 +113,9 @@ namespace AutoService.Presentation.Panels
         /// <summary>Requirement text when locked; {0} = level.</summary>
         public string RequirementFormat => _requirementFormat;
 
+        /// <summary>True while the panel is on screen (false while closed or while its object is behind the camera).</summary>
+        public bool IsVisible => Anchor != null ? Anchor.IsVisible : gameObject.activeInHierarchy;
+
         // Why: resolved once, on first use — the presenter may hide the panel before this object ever ran Awake, and a
         // missing component must not be searched for again every frame.
         private ScreenAnchoredPanel Anchor

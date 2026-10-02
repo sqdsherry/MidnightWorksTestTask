@@ -7,7 +7,7 @@ namespace AutoService.Presentation.Loading
 {
     /// <summary>
     /// Shows the <see cref="LoadingScreenView"/> with a random tip for every scene load, moves its bar while loading and
-    /// hides it when the new scene is ready.
+    /// hides it when the new scene is ready (or the load failed).
     /// </summary>
     /// <remarks>Ticked by the project's game loop; per frame it only writes the progress into the bar (no allocations).</remarks>
     public sealed class LoadingScreenPresenter : ITickable, IDisposable
@@ -30,6 +30,7 @@ namespace AutoService.Presentation.Loading
 
             _loader.LoadStarted += OnLoadStarted;
             _loader.LoadCompleted += OnLoadCompleted;
+            _loader.LoadFailed += OnLoadFailed;
         }
 
         /// <inheritdoc />
@@ -52,6 +53,7 @@ namespace AutoService.Presentation.Loading
             _disposed = true;
             _loader.LoadStarted -= OnLoadStarted;
             _loader.LoadCompleted -= OnLoadCompleted;
+            _loader.LoadFailed -= OnLoadFailed;
         }
 
         private void OnLoadStarted(GameScene scene)
@@ -64,6 +66,9 @@ namespace AutoService.Presentation.Loading
             _view.SetProgress(1f);
             _view.Hide();
         }
+
+        // Why: hidden on failure too — otherwise the screen blocks every click forever and the game looks frozen.
+        private void OnLoadFailed(GameScene scene) => _view.Hide();
 
         private string PickTip()
         {

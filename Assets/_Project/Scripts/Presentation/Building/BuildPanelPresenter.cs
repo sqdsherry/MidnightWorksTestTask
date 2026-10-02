@@ -89,7 +89,9 @@ namespace AutoService.Presentation.Building
         /// <inheritdoc />
         public bool TryHandleEscape()
         {
-            if (_openPlot == null)
+            // Why: a panel hidden because its object is behind the camera stays open but invisible; Esc must not be
+            // swallowed by something the player cannot see — it goes on to the pause menu.
+            if (_openPlot == null || !_view.IsVisible)
             {
                 return false;
             }

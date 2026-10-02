@@ -120,7 +120,9 @@ namespace AutoService.Presentation.Points.Panel
         /// <inheritdoc />
         public bool TryHandleEscape()
         {
-            if (_openPad == null)
+            // Why: a panel hidden because its object is behind the camera stays open but invisible; Esc must not be
+            // swallowed by something the player cannot see — it goes on to the pause menu.
+            if (_openPad == null || !_view.IsVisible)
             {
                 return false;
             }

@@ -11,8 +11,11 @@ namespace AutoService.Presentation.Settings
     /// <see cref="ISettingsService.Current"/> on opening and applies every change at once.
     /// </summary>
     /// <remarks>
+    /// Volumes are previewed while a slider is dragged and saved when it is released (or the screen closes), so dragging
+    /// does not write to disk every frame. Every other control saves on change.
+    /// <para>
     /// The quality and resolution lists are built on every opening (not in a tick): the monitor or the window may have
-    /// changed since the last time.
+    /// changed since the last time.</para>
     /// </remarks>
     public sealed class SettingsPresenter : IDisposable
     {
@@ -20,6 +23,7 @@ namespace AutoService.Presentation.Settings
         private readonly SettingsView _view;
         private readonly List<Vector2Int> _resolutions = new List<Vector2Int>();
         private readonly List<string> _options = new List<string>();
+        private bool _volumeUnsaved;
         private bool _disposed;
 
         /// <summary>Creates the presenter, subscribes to the view and hides it.</summary>
@@ -33,6 +37,7 @@ namespace AutoService.Presentation.Settings
 
             _view.MusicChanged += OnMusicChanged;
             _view.SfxChanged += OnSfxChanged;
+            _view.VolumeReleased += CommitVolume;
             _view.QualityChanged += OnQualityChanged;
             _view.FullscreenChanged += OnFullscreenChanged;
             _view.ResolutionChanged += OnResolutionChanged;
@@ -67,6 +72,7 @@ namespace AutoService.Presentation.Settings
             }
 
             IsOpen = false;
+            CommitVolume();
             if (_view != null)
             {
                 _view.Hide();
@@ -90,12 +96,14 @@ namespace AutoService.Presentation.Settings
             {
                 _view.MusicChanged -= OnMusicChanged;
                 _view.SfxChanged -= OnSfxChanged;
+                _view.VolumeReleased -= CommitVolume;
                 _view.QualityChanged -= OnQualityChanged;
                 _view.FullscreenChanged -= OnFullscreenChanged;
                 _view.ResolutionChanged -= OnResolutionChanged;
                 _view.BackClicked -= Close;
             }
 
+            CommitVolume();
             IsOpen = false;
         }
 
@@ -154,9 +162,29 @@ namespace AutoService.Presentation.Settings
             return byWidth != 0 ? byWidth : b.y.CompareTo(a.y);
         }
 
-        private void OnMusicChanged(float value) => _settings.Set(_settings.Current.WithMusicVolume(value));
+        private void OnMusicChanged(float value)
+        {
+            _volumeUnsaved = true;
+            _settings.Preview(_settings.Current.WithMusicVolume(value));
+        }
 
-        private void OnSfxChanged(float value) => _settings.Set(_settings.Current.WithSfxVolume(value));
+        private void OnSfxChanged(float value)
+        {
+            _volumeUnsaved = true;
+            _settings.Preview(_settings.Current.WithSfxVolume(value));
+        }
+
+        // Why: also on closing — a slider moved with the keyboard or released outside the screen has no pointer-up.
+        private void CommitVolume()
+        {
+            if (!_volumeUnsaved)
+            {
+                return;
+            }
+
+            _volumeUnsaved = false;
+            _settings.Set(_settings.Current);
+        }
 
         private void OnQualityChanged(int index) => _settings.Set(_settings.Current.WithQualityLevel(index));
 

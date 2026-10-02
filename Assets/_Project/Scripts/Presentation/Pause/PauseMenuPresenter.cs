@@ -173,11 +173,8 @@ namespace AutoService.Presentation.Pause
             }
         }
 
-        private void OnMainMenuClicked()
-        {
-            Close();
-            _model.ToMainMenu();
-        }
+        // The model releases the pause itself; the menu stays on screen until the loading screen covers the scene.
+        private void OnMainMenuClicked() => _model.ToMainMenu();
 
         // TODO(08b-save): save before quitting.
         private static void OnQuitClicked() => GameQuitter.Quit();

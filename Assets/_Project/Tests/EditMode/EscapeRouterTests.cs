@@ -52,6 +52,19 @@ namespace AutoService.Tests.EditMode
         }
 
         [Test]
+        public void OnlyHandlerDeclines_EscapeReachesPause()
+        {
+            // An open panel whose object is behind the camera declines Esc.
+            var hiddenPanel = new FakeHandler(handles: false);
+            _router.Push(hiddenPanel);
+
+            _router.HandleEscape();
+
+            Assert.AreEqual(1, hiddenPanel.Calls);
+            Assert.AreEqual(1, _unhandled);
+        }
+
+        [Test]
         public void TopHandler_GoesFirst()
         {
             var bottom = new FakeHandler(handles: true);

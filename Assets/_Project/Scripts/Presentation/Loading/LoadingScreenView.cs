@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using AutoService.Services.Scenes;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -13,8 +14,9 @@ namespace AutoService.Presentation.Loading
     /// <remarks>
     /// Fades in and out through a <see cref="CanvasGroup"/> on unscaled time (a paused game must not freeze it). While
     /// hidden only the canvas is disabled — this object stays active so the fade coroutine can run.
+    /// <para>As the <see cref="ILoadingCurtain"/> it tells the scene loader when the fade-in has finished.</para>
     /// </remarks>
-    public sealed class LoadingScreenView : MonoBehaviour
+    public sealed class LoadingScreenView : MonoBehaviour, ILoadingCurtain
     {
         [SerializeField]
         [Tooltip("Own canvas of the loading screen (sorting order above every scene UI).")]
@@ -52,6 +54,9 @@ namespace AutoService.Presentation.Loading
 
         /// <summary>Tips to pick from; never null.</summary>
         public IReadOnlyList<string> Tips => _tips ?? System.Array.Empty<string>();
+
+        /// <inheritdoc />
+        public bool IsOpaque => (_canvas == null || _canvas.enabled) && (_group == null || _group.alpha >= 1f);
 
         private void Awake()
         {

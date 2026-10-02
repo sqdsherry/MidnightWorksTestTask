@@ -1,4 +1,5 @@
 using System;
+using AutoService.Presentation.Controls;
 using AutoService.Presentation.Menu;
 using AutoService.Presentation.Settings;
 using AutoService.Services.Core;
@@ -7,11 +8,12 @@ using AutoService.Services.Save;
 using AutoService.Services.Scenes;
 using AutoService.Services.Settings;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 namespace AutoService.Bootstrap
 {
     /// <summary>
-    /// Composition Root of the <c>MainMenu</c> scene: the menu, its New Game confirmation and the settings screen.
+    /// Composition Root of the <c>MainMenu</c> scene: the menu, its New Game confirmation, the settings screen and Esc.
     /// </summary>
     /// <remarks>Nothing here ticks, so the scene has no game loop.</remarks>
     public sealed class MainMenuEntryPoint : MonoBehaviour, ISceneEntryPoint
@@ -27,6 +29,10 @@ namespace AutoService.Bootstrap
         [SerializeField]
         [Tooltip("Settings screen (Prefabs/UI/SettingsPanel).")]
         private SettingsView _settings;
+
+        [SerializeField]
+        [Tooltip("GameControls asset; only its Esc (Gameplay/Cancel) is used here. Optional: no Esc without it.")]
+        private InputActionAsset _inputActions;
 
         private ServiceContainer _container;
 
@@ -55,13 +61,42 @@ namespace AutoService.Bootstrap
                 return;
             }
 
+            EscapeRouter escape = CreateEscape(logger);
             var model = new MainMenuModel(_container.Resolve<ISaveService>(), _container.Resolve<ISceneLoader>());
             var settings = new SettingsPresenter(_container.Resolve<ISettingsService>(), _settings);
 
             // Registered so the container disposes them on unload (menu presenter first, reverse order).
             _container.Register(model);
             _container.Register(settings);
-            _container.Register(new MainMenuPresenter(model, _menu, _confirmDialog, settings));
+            _container.Register(new MainMenuPresenter(model, _menu, _confirmDialog, settings, escape));
+        }
+
+        // Why: the gameplay input wrapper is reused for its Cancel action rather than adding a second wrapper for one key;
+        // the other gameplay actions have no listeners in this scene.
+        private EscapeRouter CreateEscape(IGameLogger logger)
+        {
+            if (_inputActions == null)
+            {
+                logger.Warning("[MainMenu] _inputActions is not assigned on " + name + "; Esc does nothing in the menu.");
+                return null;
+            }
+
+            GameplayInput input;
+            try
+            {
+                input = new GameplayInput(_inputActions);
+            }
+            catch (InvalidOperationException exception)
+            {
+                logger.Error("[MainMenu] Esc disabled: " + exception.Message);
+                return null;
+            }
+
+            var escape = new EscapeRouter();
+            _container.Register(input);
+            _container.Register(new EscapeInputBinding(input, escape));
+            input.Enable();
+            return escape;
         }
 
         private void OnDestroy()

@@ -9,8 +9,9 @@ namespace AutoService.Infrastructure.Scenes
 {
     /// <summary>
     /// <see cref="ISceneLoader"/> on <see cref="SceneManager.LoadSceneAsync(string, LoadSceneMode)"/> and
-    /// <see cref="Awaitable"/>. Once the new scene is loaded it is handed to the composition root (the
-    /// <c>sceneLoaded</c> callback enters it), then the loading screen is kept for at least <see cref="MinScreenSeconds"/>.
+    /// <see cref="Awaitable"/>. The new scene is activated only once the loading curtain covers the screen, then handed to
+    /// the composition root (the <c>sceneLoaded</c> callback enters it), and the loading screen is kept for at least
+    /// <see cref="MinScreenSeconds"/>.
     /// </summary>
     /// <remarks>
     /// Timing is unscaled (real time), so a paused game cannot freeze the loading screen. Disposing cancels a running load
@@ -22,6 +23,10 @@ namespace AutoService.Infrastructure.Scenes
         /// <remarks>Why: a small scene loads in a couple of frames; without a minimum the loading screen only flickers.</remarks>
         public const float MinScreenSeconds = 0.6f;
 
+        /// <summary>Longest wait for the curtain to cover the screen, in real seconds.</summary>
+        /// <remarks>Why: a broken curtain (disabled object, zero alpha forever) must delay a load, never stall it.</remarks>
+        public const float MaxCurtainWaitSeconds = 1f;
+
         // Why: Unity reports 0.9 once the scene is loaded and only waits for activation; the rest is not real work.
         private const float LoadedProgress = 0.9f;
 
@@ -29,8 +34,10 @@ namespace AutoService.Infrastructure.Scenes
         private readonly string _gameplaySceneName;
         private readonly IPauseService _pause;
         private readonly IGameLogger _logger;
+        private readonly ILoadingCurtain _curtain;
         private readonly Action<Scene> _sceneLoaded;
         private readonly CancellationTokenSource _lifetime = new CancellationTokenSource();
+        private AsyncOperation _operation;
         private bool _disposed;
 
         /// <summary>Creates the loader.</summary>
@@ -38,14 +45,16 @@ namespace AutoService.Infrastructure.Scenes
         /// <param name="gameplaySceneName">Name of the gameplay scene in the Build Profile scene list.</param>
         /// <param name="pause">Reset around every load, so no pause leaks into the next scene.</param>
         /// <param name="logger">Receives load errors.</param>
-        /// <param name="sceneLoaded">Called with the new scene once it is loaded, while the loading screen is still up.</param>
+        /// <param name="curtain">Covers the switch; may be null (scenes then switch as soon as they are loaded).</param>
+        /// <param name="sceneLoaded">Called with the new scene once it is active, while the loading screen is still up.</param>
         /// <exception cref="ArgumentException">Thrown when a scene name is null or empty.</exception>
-        /// <exception cref="ArgumentNullException">Thrown when another argument is null.</exception>
+        /// <exception cref="ArgumentNullException">Thrown when another required argument is null.</exception>
         public UnitySceneLoader(
             string mainMenuSceneName,
             string gameplaySceneName,
             IPauseService pause,
             IGameLogger logger,
+            ILoadingCurtain curtain,
             Action<Scene> sceneLoaded)
         {
             if (string.IsNullOrEmpty(mainMenuSceneName))
@@ -62,6 +71,7 @@ namespace AutoService.Infrastructure.Scenes
             _gameplaySceneName = gameplaySceneName;
             _pause = pause ?? throw new ArgumentNullException(nameof(pause));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _curtain = curtain;
             _sceneLoaded = sceneLoaded ?? throw new ArgumentNullException(nameof(sceneLoaded));
         }
 
@@ -70,6 +80,9 @@ namespace AutoService.Infrastructure.Scenes
 
         /// <inheritdoc />
         public event Action<GameScene> LoadCompleted;
+
+        /// <inheritdoc />
+        public event Action<GameScene> LoadFailed;
 
         /// <inheritdoc />
         public bool IsLoading { get; private set; }
@@ -89,10 +102,6 @@ namespace AutoService.Infrastructure.Scenes
             string sceneName = GetSceneName(scene);
             IsLoading = true;
             Progress = 0f;
-
-            // Why: the old scene's pause requests die with it; the time scale is back to 1 while it unloads.
-            _pause.ResetAll();
-            LoadStarted?.Invoke(scene);
             Run(scene, sceneName);
         }
 
@@ -109,25 +118,43 @@ namespace AutoService.Infrastructure.Scenes
             _lifetime.Dispose();
         }
 
-        // Why: the loader's only async void — Load is fire-and-forget for its callers, so every exception is caught and
-        // logged here (an exception escaping async void has no caller to catch it).
+        // Why: the loader's only async void — Load is fire-and-forget for its callers, so every exception (subscribers of
+        // LoadStarted included) is caught here, and IsLoading is always reset: a throw must never lock the loader.
         private async void Run(GameScene scene, string sceneName)
         {
             try
             {
+                // Why: the old scene's pause requests die with it; the time scale is back to 1 while it unloads.
+                _pause.ResetAll();
+                LoadStarted?.Invoke(scene);
                 await LoadAsync(scene, sceneName, _lifetime.Token);
             }
             catch (OperationCanceledException)
             {
                 // The loader was disposed (Play Mode stopped): nothing to finish.
+                ReleaseOperation();
+                IsLoading = false;
             }
             catch (Exception exception)
             {
-                _logger.Error("[Scenes] Failed to load scene '" + sceneName + "': " + exception);
-            }
-            finally
-            {
+                _logger.Error("[Scenes] Failed to load scene '" + sceneName + "' (is it in File > Build Profiles > Scene List?): "
+                    + exception);
+
+                // Why: reset before raising LoadFailed — a listener may start the next load right away.
+                ReleaseOperation();
                 IsLoading = false;
+                Progress = 1f;
+                RaiseFailed(scene);
+            }
+        }
+
+        // Why: a pending operation with activation off blocks every later async load in Unity.
+        private void ReleaseOperation()
+        {
+            if (_operation != null)
+            {
+                _operation.allowSceneActivation = true;
+                _operation = null;
             }
         }
 
@@ -137,14 +164,26 @@ namespace AutoService.Infrastructure.Scenes
             AsyncOperation operation = SceneManager.LoadSceneAsync(sceneName, LoadSceneMode.Single);
             if (operation == null)
             {
-                throw new InvalidOperationException("Scene '" + sceneName + "' cannot be loaded. Is it in the Build Profile scene list?");
+                throw new InvalidOperationException("Scene '" + sceneName + "' cannot be loaded.");
             }
 
-            while (!operation.isDone)
+            // Why: activation swaps the scenes; it is held back until the curtain is opaque, so the player never sees the
+            // switch through a half-faded loading screen. Progress stops at 0.9 meanwhile (the bar shows it as full load).
+            _operation = operation;
+            operation.allowSceneActivation = false;
+            while (operation.progress < LoadedProgress || !IsCovered(startTime))
             {
                 Progress = VisibleProgress(operation.progress / LoadedProgress, startTime);
                 await Awaitable.NextFrameAsync(token);
             }
+
+            operation.allowSceneActivation = true;
+            while (!operation.isDone)
+            {
+                await Awaitable.NextFrameAsync(token);
+            }
+
+            _operation = null;
 
             // Why: again after the load — the old scene kept running behind the loading screen and may have paused.
             _pause.ResetAll();
@@ -158,7 +197,23 @@ namespace AutoService.Infrastructure.Scenes
 
             Progress = 1f;
             IsLoading = false;
-            LoadCompleted?.Invoke(scene);
+
+            // Why: the scene is in; a throwing listener must not be reported as a failed load.
+            try
+            {
+                LoadCompleted?.Invoke(scene);
+            }
+            catch (Exception exception)
+            {
+                _logger.Error("[Scenes] A LoadCompleted listener threw: " + exception);
+            }
+        }
+
+        private bool IsCovered(float startTime)
+        {
+            return _curtain == null
+                || _curtain.IsOpaque
+                || Time.realtimeSinceStartup - startTime >= MaxCurtainWaitSeconds;
         }
 
         // Why: a scene whose entry point throws is broken, but the loading screen must still go away so the error is
@@ -172,6 +227,18 @@ namespace AutoService.Infrastructure.Scenes
             catch (Exception exception)
             {
                 _logger.Error("[Scenes] Failed to enter scene '" + loaded.name + "': " + exception);
+            }
+        }
+
+        private void RaiseFailed(GameScene scene)
+        {
+            try
+            {
+                LoadFailed?.Invoke(scene);
+            }
+            catch (Exception exception)
+            {
+                _logger.Error("[Scenes] A LoadFailed listener threw: " + exception);
             }
         }
 

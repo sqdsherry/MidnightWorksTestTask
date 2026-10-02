@@ -46,7 +46,15 @@ namespace AutoService.Infrastructure.Settings
 
             if (settings.ResolutionWidth > 0 && settings.ResolutionHeight > 0)
             {
-                Screen.SetResolution(settings.ResolutionWidth, settings.ResolutionHeight, mode);
+                // Why: only on a real change — the applier also runs for volume changes, and SetResolution re-creates
+                // the swap chain (a visible flicker) even when the size is the same.
+                if (Screen.width != settings.ResolutionWidth
+                    || Screen.height != settings.ResolutionHeight
+                    || Screen.fullScreenMode != mode)
+                {
+                    Screen.SetResolution(settings.ResolutionWidth, settings.ResolutionHeight, mode);
+                }
+
                 return;
             }
 

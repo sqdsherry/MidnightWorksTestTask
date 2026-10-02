@@ -135,6 +135,9 @@ namespace AutoService.Presentation.Points.Panel
         /// <summary>Hire button once hired.</summary>
         public string HiredLabel => _hiredLabel;
 
+        /// <summary>True while the panel is on screen (false while closed or while its object is behind the camera).</summary>
+        public bool IsVisible => Anchor != null ? Anchor.IsVisible : gameObject.activeInHierarchy;
+
         private ScreenAnchoredPanel Anchor
         {
             get

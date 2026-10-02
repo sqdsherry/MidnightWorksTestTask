@@ -49,11 +49,17 @@ namespace AutoService.Presentation.Settings
         [Tooltip("Resolution option; {0} = width, {1} = height.")]
         private string _resolutionFormat = "{0} x {1}";
 
+        private SliderCommit _musicCommit;
+        private SliderCommit _sfxCommit;
+
         /// <summary>Raised while the music slider moves; the argument is the volume in [0, 1].</summary>
         public event Action<float> MusicChanged;
 
         /// <summary>Raised while the SFX slider moves; the argument is the volume in [0, 1].</summary>
         public event Action<float> SfxChanged;
+
+        /// <summary>Raised when the player lets go of a volume slider (the value may be saved now).</summary>
+        public event Action VolumeReleased;
 
         /// <summary>Raised when another quality preset is picked; the argument is its index in the list.</summary>
         public event Action<int> QualityChanged;
@@ -76,11 +82,19 @@ namespace AutoService.Presentation.Settings
             if (_musicSlider != null)
             {
                 _musicSlider.onValueChanged.AddListener(OnMusicSlider);
+                if (_musicSlider.TryGetComponent(out _musicCommit))
+                {
+                    _musicCommit.Released += OnVolumeReleased;
+                }
             }
 
             if (_sfxSlider != null)
             {
                 _sfxSlider.onValueChanged.AddListener(OnSfxSlider);
+                if (_sfxSlider.TryGetComponent(out _sfxCommit))
+                {
+                    _sfxCommit.Released += OnVolumeReleased;
+                }
             }
 
             if (_qualityDropdown != null)
@@ -114,6 +128,16 @@ namespace AutoService.Presentation.Settings
             if (_sfxSlider != null)
             {
                 _sfxSlider.onValueChanged.RemoveListener(OnSfxSlider);
+            }
+
+            if (_musicCommit != null)
+            {
+                _musicCommit.Released -= OnVolumeReleased;
+            }
+
+            if (_sfxCommit != null)
+            {
+                _sfxCommit.Released -= OnVolumeReleased;
             }
 
             if (_qualityDropdown != null)
@@ -211,6 +235,8 @@ namespace AutoService.Presentation.Settings
             ShowPercent(_sfxValue, value);
             SfxChanged?.Invoke(value);
         }
+
+        private void OnVolumeReleased() => VolumeReleased?.Invoke();
 
         private void OnQualityPicked(int index) => QualityChanged?.Invoke(index);
 

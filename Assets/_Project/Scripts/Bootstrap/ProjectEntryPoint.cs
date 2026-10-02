@@ -83,7 +83,9 @@ namespace AutoService.Bootstrap
             _container.Register<ISaveService>(CreateSaveService(timeProvider));
             _container.Register<ISettingsService>(CreateSettingsService());
 
-            _sceneLoader = new UnitySceneLoader(_mainMenuSceneName, _gameplaySceneName, pause, _logger, EnterScene);
+            // Why: Unity's == — an unassigned (or missing) view must reach the loader as a real null.
+            ILoadingCurtain curtain = _loadingScreen != null ? _loadingScreen : null;
+            _sceneLoader = new UnitySceneLoader(_mainMenuSceneName, _gameplaySceneName, pause, _logger, curtain, EnterScene);
             _container.Register(_sceneLoader);
             CreateLoadingScreen(random);
         }

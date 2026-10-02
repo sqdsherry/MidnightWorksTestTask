@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using AutoService.Presentation.Building;
 using AutoService.Presentation.Ui;
 using TMPro;
@@ -12,6 +14,10 @@ namespace AutoService.Bootstrap.Editor
     /// uGUI building blocks of the setup tools in the shell's style (prompt 09a §4.5): canvases, panels, texts, buttons
     /// and the default slider / toggle / dropdown controls resized for a 1920×1080 canvas.
     /// </summary>
+    /// <remarks>
+    /// <c>Create…</c> methods always build a new object; <see cref="EnsureChild{T}"/> reuses an existing child of that name
+    /// and creates only a missing one, so re-running a setup keeps whatever was edited by hand.
+    /// </remarks>
     internal static class SetupUi
     {
         /// <summary>Panel background.</summary>
@@ -183,24 +189,81 @@ namespace AutoService.Bootstrap.Editor
         }
 
         /// <summary>
-        /// Creates a vertical column of buttons centered on <paramref name="center"/> (top to bottom); the first one is
-        /// primary, the others secondary.
+        /// Finds or creates a vertical column of buttons centered on <paramref name="center"/> (top to bottom); the first
+        /// one is primary, the others secondary. Existing buttons (by name) are kept as they are.
         /// </summary>
-        public static Button[] CreateButtonColumn(Transform parent, Vector2 center, params string[] labels)
+        /// <returns>The buttons in <paramref name="labels"/> order; an entry is null when a same-named object is not a button.</returns>
+        public static Button[] EnsureButtonColumn(Transform parent, Vector2 center, List<string> problems, params string[] labels)
         {
             var buttons = new Button[labels.Length];
             float height = labels.Length * ButtonSize.y + (labels.Length - 1) * ButtonSpacing;
             float top = center.y + height * 0.5f;
             for (int i = 0; i < labels.Length; i++)
             {
+                string label = labels[i];
                 Color color = i == 0 ? PrimaryColor : SecondaryColor;
-                Button button = CreateButton(parent, labels[i].Replace(" ", string.Empty) + "Button", labels[i], color, ButtonSize);
                 float y = top - ButtonSize.y * 0.5f - i * (ButtonSize.y + ButtonSpacing);
-                Place((RectTransform)button.transform, new Vector2(0.5f, 0.5f), new Vector2(center.x, y), ButtonSize, new Vector2(0.5f, 0.5f));
-                buttons[i] = button;
+                buttons[i] = EnsureChild(parent, ButtonName(label), problems, p =>
+                {
+                    Button button = CreateButton(p, ButtonName(label), label, color, ButtonSize);
+                    Place((RectTransform)button.transform, new Vector2(0.5f, 0.5f), new Vector2(center.x, y), ButtonSize, new Vector2(0.5f, 0.5f));
+                    return button;
+                });
             }
 
             return buttons;
+        }
+
+        /// <summary>Object name of a button with <paramref name="label"/> ("Main Menu" → "MainMenuButton").</summary>
+        public static string ButtonName(string label) => label.Replace(" ", string.Empty) + "Button";
+
+        /// <summary>
+        /// Returns the child <paramref name="name"/> of <paramref name="parent"/> with its <typeparamref name="T"/>, or
+        /// creates it with <paramref name="create"/> when there is no such child. A same-named child without the component
+        /// is left alone and reported (null is returned) rather than duplicated.
+        /// </summary>
+        public static T EnsureChild<T>(Transform parent, string name, List<string> problems, Func<Transform, T> create) where T : Component
+        {
+            Transform child = parent.Find(name);
+            if (child == null)
+            {
+                return create(parent);
+            }
+
+            if (child.TryGetComponent(out T existing))
+            {
+                return existing;
+            }
+
+            problems?.Add("'" + parent.name + "/" + name + "' has no " + typeof(T).Name + " and was left as is");
+            return null;
+        }
+
+        /// <summary>Finds or creates a plain child rect; <paramref name="init"/> lays out a new one.</summary>
+        public static RectTransform EnsureRect(Transform parent, string name, List<string> problems, Action<RectTransform> init)
+        {
+            return EnsureChild(parent, name, problems, p =>
+            {
+                RectTransform rect = CreateRect(name, p);
+                init(rect);
+                return rect;
+            });
+        }
+
+        /// <summary>Returns the component, adding it when missing.</summary>
+        public static T GetOrAdd<T>(GameObject target) where T : Component
+        {
+            return target.TryGetComponent(out T existing) ? existing : target.AddComponent<T>();
+        }
+
+        /// <summary>Warns when TextMeshPro has no default font: every label would then be created invisible.</summary>
+        public static void WarnIfNoTmpFont(string tag)
+        {
+            if (TMP_Settings.instance == null || TMP_Settings.defaultFontAsset == null)
+            {
+                Debug.LogWarning(tag + "TextMeshPro has no default font asset, so the created labels will be empty. "
+                    + "Run Window > TextMeshPro > Import TMP Essential Resources, then run the setup again.");
+            }
         }
 
         /// <summary>Default uGUI slider in [0, 1], resized and with the primary color fill.</summary>

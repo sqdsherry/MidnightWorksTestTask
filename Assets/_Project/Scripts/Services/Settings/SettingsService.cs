@@ -54,5 +54,15 @@ namespace AutoService.Services.Settings
             _applier.Apply(settings);
             Changed?.Invoke(settings);
         }
+
+        /// <inheritdoc />
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="settings"/> is null.</exception>
+        public void Preview(GameSettings settings)
+        {
+            // Why: no store write — a slider raises a change every frame while dragged, and every save hits the disk.
+            Current = settings ?? throw new ArgumentNullException(nameof(settings));
+            _applier.Apply(settings);
+            Changed?.Invoke(settings);
+        }
     }
 }
