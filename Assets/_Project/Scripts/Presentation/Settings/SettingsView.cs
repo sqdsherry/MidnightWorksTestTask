@@ -140,21 +140,12 @@ namespace AutoService.Presentation.Settings
         /// <summary>Shows the screen.</summary>
         public void Show() => UiVisibility.ShowChain(gameObject);
 
-        /// <summary>Hides the screen (an open dropdown list is closed with it).</summary>
-        public void Hide()
-        {
-            if (_qualityDropdown != null)
-            {
-                _qualityDropdown.Hide();
-            }
-
-            if (_resolutionDropdown != null)
-            {
-                _resolutionDropdown.Hide();
-            }
-
-            UiVisibility.Hide(gameObject);
-        }
+        /// <summary>Hides the screen.</summary>
+        /// <remarks>
+        /// Why no explicit dropdown Hide(): a dropdown destroys its open list in its own OnDisable, which deactivating the
+        /// screen triggers; calling Hide() would also select the dropdown in the EventSystem.
+        /// </remarks>
+        public void Hide() => UiVisibility.Hide(gameObject);
 
         /// <summary>Shows the volumes without raising change events.</summary>
         public void SetVolumes(float music, float sfx)
