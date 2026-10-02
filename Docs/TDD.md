@@ -258,7 +258,7 @@ EditMode: `Wallet`, `PriceFormula`, `ServicePoint` (прогресс тольк�
 | 07 | `feature/07-progression` | **B1** Прогрессия: XP, уровни, `LevelUnlockGate` — **пишет пользователь** — [промпт](Prompts/07-progression.md) | Д2 | M | 🔨 в работе |
 | 09a | `feature/09a-shell` | **C1** Оболочка: сцены, загрузка, меню, настройки, пауза, Esc-роутер — [промпт](Prompts/09a-shell.md), [фикс](Prompts/09b-shell-review-fixes.md) | Д2 | M | ✔️ смержен |
 | 08a | `feature/08a-save-core` | Ядро сейва (SaveData, атомарная запись, SaveCoordinator, автосейв) + Settings — [промпт](Prompts/08a-save-core.md) | Д1 | M | ✔️ смержен |
-| 08b | `feature/08b-save-wiring` | Подключение сервисов к сейву (`ISaveable`), загрузка на старте, сейв при выходе — [промпт](Prompts/08b-save-wiring.md) | Д3 | M | 🔨 в работе |
+| 08b | `feature/08b-save-wiring` | Подключение сервисов к сейву (`ISaveable`), загрузка на старте, сейв при выходе — [промпт](Prompts/08b-save-wiring.md) | Д3 | M | ✔️ смержен |
 | 09 | `feature/09-scenes-ui` | Scene Flow + Loading + MainMenu + Settings + HUD + панели/попапы | 3 | M | ⏳ |
 | 10 | `feature/10-onboarding` | Onboarding | 3 | M | ⏳ |
 | 11 | `feature/11-location2` | 2-я локация + переключение камеры | 3 | M | ⏳ |
