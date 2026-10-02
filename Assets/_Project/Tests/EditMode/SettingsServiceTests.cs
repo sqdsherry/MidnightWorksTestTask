@@ -62,6 +62,36 @@ namespace AutoService.Tests.EditMode
         }
 
         [Test]
+        public void Preview_AppliesAndRaisesChangedWithoutSaving()
+        {
+            var service = new SettingsService(_store, _applier, _defaults);
+            GameSettings raised = null;
+            service.Changed += settings => raised = settings;
+            GameSettings dragged = _defaults.WithMusicVolume(0.3f);
+
+            service.Preview(dragged);
+
+            Assert.AreSame(dragged, service.Current);
+            Assert.AreEqual(0, _store.SaveCount);
+            Assert.AreEqual(1, _applier.Applied.Count);
+            Assert.AreSame(dragged, _applier.Applied[0]);
+            Assert.AreSame(dragged, raised);
+        }
+
+        [Test]
+        public void PreviewThenSetCurrent_SavesThePreviewedValueOnce()
+        {
+            var service = new SettingsService(_store, _applier, _defaults);
+            service.Preview(_defaults.WithSfxVolume(0.1f));
+            service.Preview(_defaults.WithSfxVolume(0.2f));
+
+            service.Set(service.Current);
+
+            Assert.AreEqual(1, _store.SaveCount);
+            Assert.AreEqual(0.2f, _store.Stored.SfxVolume, 1e-6f);
+        }
+
+        [Test]
         public void GameSettings_ClampsVolumesAndInvalidValues()
         {
             var settings = new GameSettings(1.5f, -0.2f, -3, false, 1920, 0);

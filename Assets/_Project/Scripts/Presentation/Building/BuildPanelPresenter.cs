@@ -20,11 +20,12 @@ namespace AutoService.Presentation.Building
     /// The panel is the shared <see cref="OfferPanelView"/>.
     /// </summary>
     /// <remarks>
-    /// Closes when the character leaves, on Close / Esc, and when the plot gets built.
+    /// Closes when the character leaves, on Close / Esc (registered in the <see cref="EscapeRouter"/> while open), and when
+    /// the plot gets built.
     /// The button label is re-evaluated only when the balance changes, and its two texts are formatted once per opening,
     /// so the per-frame work is the dwell timers plus one <see cref="Camera.WorldToScreenPoint(Vector3)"/> — no allocations.
     /// </remarks>
-    public sealed class BuildPanelPresenter : ITickable, IDisposable
+    public sealed class BuildPanelPresenter : ITickable, IEscapeHandler, IDisposable
     {
         private readonly IBuildService _build;
         private readonly IConfigProvider _config;
@@ -32,7 +33,7 @@ namespace AutoService.Presentation.Building
         private readonly OfferPanelView _view;
         private readonly Camera _camera;
         private readonly IReadOnlyList<BuildPlotView> _plots;
-        private readonly GameplayInput _input;
+        private readonly EscapeRouter _escape;
 
         private BuildPlotView _openPlot;
         private string _buildLabel;
@@ -47,7 +48,7 @@ namespace AutoService.Presentation.Building
         /// <param name="view">The scene's build panel.</param>
         /// <param name="camera">Gameplay camera, to place the panel next to the plot.</param>
         /// <param name="plots">Plots whose dwell this presenter drives.</param>
-        /// <param name="input">Gameplay input for Esc; may be null (no Esc then).</param>
+        /// <param name="escape">The scene's Esc router; may be null (no Esc then).</param>
         /// <exception cref="ArgumentNullException">Thrown when a required dependency is null.</exception>
         public BuildPanelPresenter(
             IBuildService build,
@@ -56,7 +57,7 @@ namespace AutoService.Presentation.Building
             OfferPanelView view,
             Camera camera,
             IReadOnlyList<BuildPlotView> plots,
-            GameplayInput input)
+            EscapeRouter escape)
         {
             _build = build ?? throw new ArgumentNullException(nameof(build));
             _config = config ?? throw new ArgumentNullException(nameof(config));
@@ -64,7 +65,7 @@ namespace AutoService.Presentation.Building
             _view = view != null ? view : throw new ArgumentNullException(nameof(view));
             _camera = camera != null ? camera : throw new ArgumentNullException(nameof(camera));
             _plots = plots ?? throw new ArgumentNullException(nameof(plots));
-            _input = input;
+            _escape = escape;
 
             for (int i = 0; i < _plots.Count; i++)
             {
@@ -81,12 +82,22 @@ namespace AutoService.Presentation.Building
             _build.Built += OnPlotBuilt;
             _build.BuiltRestored += OnPlotBuilt;
             _wallet.BalanceChanged += OnBalanceChanged;
-            if (_input != null)
-            {
-                _input.CancelPressed += Close;
-            }
 
             _view.Hide();
+        }
+
+        /// <inheritdoc />
+        public bool TryHandleEscape()
+        {
+            // Why: a panel hidden because its object is behind the camera stays open but invisible; Esc must not be
+            // swallowed by something the player cannot see — it goes on to the pause menu.
+            if (_openPlot == null || !_view.IsVisible)
+            {
+                return false;
+            }
+
+            Close();
+            return true;
         }
 
         /// <inheritdoc />
@@ -138,10 +149,7 @@ namespace AutoService.Presentation.Building
             _build.Built -= OnPlotBuilt;
             _build.BuiltRestored -= OnPlotBuilt;
             _wallet.BalanceChanged -= OnBalanceChanged;
-            if (_input != null)
-            {
-                _input.CancelPressed -= Close;
-            }
+            _escape?.Remove(this);
 
             _openPlot = null;
         }
@@ -160,6 +168,7 @@ namespace AutoService.Presentation.Building
         private void Open(BuildPlotView plot, BuildableSettings settings)
         {
             _openPlot = plot;
+            _escape?.Push(this);
             string cost = MoneyFormatter.Format(settings.Cost);
 
             // Why: formatted once per opening; the balance listener only picks one of them.
@@ -184,6 +193,7 @@ namespace AutoService.Presentation.Building
             }
 
             _openPlot = null;
+            _escape?.Remove(this);
             if (_view != null)
             {
                 _view.Hide();

@@ -4,8 +4,10 @@ using AutoService.Bootstrap.Installers;
 using AutoService.Presentation.CameraControl;
 using AutoService.Presentation.Hud;
 using AutoService.Presentation.Panels;
+using AutoService.Presentation.Pause;
 using AutoService.Presentation.Player;
 using AutoService.Presentation.Points.Panel;
+using AutoService.Presentation.Settings;
 using AutoService.Presentation.Staff;
 using AutoService.Presentation.Supplies;
 using AutoService.Presentation.Traffic;
@@ -114,6 +116,19 @@ namespace AutoService.Bootstrap
         [Tooltip("Shows the box in the player's hands (on the Player object).")]
         private PlayerCarryView _playerCarry;
 
+        [Header("Pause & Settings")]
+        [SerializeField]
+        [Tooltip("Pause menu (Resume / Settings / Main Menu / Quit).")]
+        private PauseMenuView _pauseMenu;
+
+        [SerializeField]
+        [Tooltip("Pause button in the top left corner of the HUD.")]
+        private PauseButtonView _pauseButton;
+
+        [SerializeField]
+        [Tooltip("Settings screen opened from the pause menu (Prefabs/UI/SettingsPanel).")]
+        private SettingsView _settingsPanel;
+
         // Why: lifecycle lists are filled by the installers (through GameplayContext), so every service created there is
         // initialized and ticked without each module having to remember to wire itself in.
         private readonly List<IInitializable> _initializables = new List<IInitializable>();
@@ -201,7 +216,10 @@ namespace AutoService.Bootstrap
                 _staffVisuals,
                 _supplyVisuals,
                 _staffRoot,
-                _playerCarry);
+                _playerCarry,
+                _pauseMenu,
+                _pauseButton,
+                _settingsPanel);
         }
 
         // Why: reverse order, like the container — dependents go before what they depend on.

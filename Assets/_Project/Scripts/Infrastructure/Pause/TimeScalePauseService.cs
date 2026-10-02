@@ -54,6 +54,20 @@ namespace AutoService.Infrastructure.Pause
             }
         }
 
+        /// <inheritdoc />
+        public void ResetAll()
+        {
+            bool wasPaused = _requestCount > 0;
+            _requestCount = 0;
+
+            // Why: set even when not paused — whatever left the time scale off, the next scene must start at normal speed.
+            SetTimeScale(1f);
+            if (wasPaused)
+            {
+                PausedChanged?.Invoke(false);
+            }
+        }
+
         private static void SetTimeScale(float scale) => Time.timeScale = scale;
     }
 }

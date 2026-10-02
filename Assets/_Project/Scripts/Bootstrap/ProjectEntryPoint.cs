@@ -1,15 +1,17 @@
-using System;
 using AutoService.Infrastructure.Config;
 using AutoService.Infrastructure.Logging;
 using AutoService.Infrastructure.Pause;
 using AutoService.Infrastructure.Randomness;
 using AutoService.Infrastructure.Save;
+using AutoService.Infrastructure.Scenes;
 using AutoService.Infrastructure.Settings;
 using AutoService.Infrastructure.Timing;
+using AutoService.Presentation.Loading;
 using AutoService.Services.Config;
 using AutoService.Services.Core;
 using AutoService.Services.Events;
 using AutoService.Services.Save;
+using AutoService.Services.Scenes;
 using AutoService.Services.Settings;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -20,6 +22,11 @@ namespace AutoService.Bootstrap
     /// Composition Root of the whole application. Lives in the <c>Boot</c> scene, survives scene loads,
     /// builds project-wide services and hands them to the entry point of every loaded scene.
     /// </summary>
+    /// <remarks>
+    /// Scenes are loaded by the <see cref="ISceneLoader"/> behind the persistent loading screen (a child of this object);
+    /// the loader calls back into <see cref="EnterScene"/> once a scene is loaded. The loading screen is ticked by the
+    /// game loop on this object — the only project-wide tickable.
+    /// </remarks>
     public sealed class ProjectEntryPoint : MonoBehaviour
     {
         private const float DefaultMusicVolume = 0.7f;
@@ -29,12 +36,32 @@ namespace AutoService.Bootstrap
         [Tooltip("Root game configuration asset.")]
         private GameConfig _gameConfig;
 
+        [Header("Scenes")]
         [SerializeField]
-        [Tooltip("Scene loaded right after boot. Must be in the Build Profile scene list.")]
-        private string _firstSceneName = "Gameplay";
+        [Tooltip("Scene loaded right after boot. MainMenu in builds; Gameplay is handy for debugging in the editor.")]
+        private GameScene _firstScene = GameScene.MainMenu;
+
+        [SerializeField]
+        [Tooltip("Name of the main menu scene in the Build Profile scene list.")]
+        private string _mainMenuSceneName = "MainMenu";
+
+        [SerializeField]
+        [Tooltip("Name of the gameplay scene in the Build Profile scene list.")]
+        private string _gameplaySceneName = "Gameplay";
+
+        [Header("Loading screen")]
+        [SerializeField]
+        [Tooltip("Persistent loading screen (child of this object).")]
+        private LoadingScreenView _loadingScreen;
+
+        [SerializeField]
+        [Tooltip("Game loop on this object; ticks the loading screen's progress bar.")]
+        private GameLoop _gameLoop;
 
         private ServiceContainer _container;
         private IGameLogger _logger;
+        private ISceneLoader _sceneLoader;
+        private LoadingScreenPresenter _loadingScreenPresenter;
 
         private void Awake()
         {
@@ -44,51 +71,60 @@ namespace AutoService.Bootstrap
             _container = new ServiceContainer();
 
             ITimeProvider timeProvider = new SystemTimeProvider();
+            IRandom random = new SystemRandom();
+            IPauseService pause = new TimeScalePauseService(_logger);
 
             _container.Register<IGameLogger>(_logger);
             _container.Register<ITimeProvider>(timeProvider);
-            _container.Register<IRandom>(new SystemRandom());
-            _container.Register<IPauseService>(new TimeScalePauseService(_logger));
+            _container.Register<IRandom>(random);
+            _container.Register<IPauseService>(pause);
             _container.Register<IEventBus>(new EventBus(_logger));
             _container.Register<IConfigProvider>(new ScriptableObjectConfigProvider(_gameConfig));
             _container.Register<ISaveService>(CreateSaveService(timeProvider));
             _container.Register<ISettingsService>(CreateSettingsService());
+
+            // Why: Unity's == — an unassigned (or missing) view must reach the loader as a real null.
+            ILoadingCurtain curtain = _loadingScreen != null ? _loadingScreen : null;
+            _sceneLoader = new UnitySceneLoader(_mainMenuSceneName, _gameplaySceneName, pause, _logger, curtain, EnterScene);
+            _container.Register(_sceneLoader);
+            CreateLoadingScreen(random);
         }
 
-        // TODO(09-scenes-ui): replace with ISceneLoader + loading screen.
-        private async void Start()
+        private void Start()
         {
-            // Why: an exception escaping an async void method has no caller to catch it,
-            // so everything is caught and logged here with the scene name for context.
-            try
-            {
-                AsyncOperation loading = SceneManager.LoadSceneAsync(_firstSceneName, LoadSceneMode.Single);
-                if (loading == null)
-                {
-                    _logger.Error("[Boot] Cannot load scene '" + _firstSceneName + "'. Is it added to the Build Profile scene list?");
-                    return;
-                }
-
-                await loading;
-
-                // The object may have been destroyed while awaiting (e.g. Play Mode stopped).
-                if (this == null)
-                {
-                    return;
-                }
-
-                EnterScene(SceneManager.GetSceneByName(_firstSceneName));
-            }
-            catch (Exception exception)
-            {
-                _logger.Error("[Boot] Failed to start scene '" + _firstSceneName + "': " + exception);
-            }
+            _sceneLoader.Load(_firstScene);
         }
 
         private void OnDestroy()
         {
+            // Why: Unity's == — the loop is on this object and may be destroyed first when Play Mode stops.
+            if (_gameLoop != null && _loadingScreenPresenter != null)
+            {
+                _gameLoop.Remove(_loadingScreenPresenter);
+            }
+
             _container?.Dispose();
             _container = null;
+        }
+
+        private void CreateLoadingScreen(IRandom random)
+        {
+            if (_loadingScreen == null)
+            {
+                _logger.Warning("[Boot] _loadingScreen is not assigned on " + name + "; scenes load without a loading screen.");
+                return;
+            }
+
+            _loadingScreenPresenter = new LoadingScreenPresenter(_sceneLoader, _loadingScreen, random);
+            _container.Register(_loadingScreenPresenter);
+            if (_gameLoop != null)
+            {
+                _gameLoop.Add(_loadingScreenPresenter);
+            }
+            else
+            {
+                _logger.Warning("[Boot] _gameLoop is not assigned on " + name + "; the loading bar will not move.");
+            }
         }
 
         private ISaveService CreateSaveService(ITimeProvider timeProvider)
@@ -116,6 +152,7 @@ namespace AutoService.Bootstrap
             return settings;
         }
 
+        /// <summary>Hands the project container to the <see cref="ISceneEntryPoint"/> of a freshly loaded scene.</summary>
         private void EnterScene(Scene scene)
         {
             GameObject[] roots = scene.GetRootGameObjects();

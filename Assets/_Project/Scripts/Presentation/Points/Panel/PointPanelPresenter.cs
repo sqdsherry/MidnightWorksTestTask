@@ -24,13 +24,14 @@ namespace AutoService.Presentation.Points.Panel
     /// next to the pad the character has stood on long enough, and buys upgrades / hires the worker on its buttons.
     /// </summary>
     /// <remarks>
-    /// Closes when the character leaves the pad, on Close / Esc (and hides while the pad is behind the camera).
+    /// Closes when the character leaves the pad, on Close / Esc (registered in the <see cref="EscapeRouter"/> while open),
+    /// and hides while the pad is behind the camera.
     /// <para><b>No garbage while open.</b> The balance changes inside the game loop (payments, boxes) several times a second,
     /// so every string is built only when the panel opens, an upgrade level changes or a worker is hired (player clicks).
     /// A balance or gate change only switches a button between its cached labels (Available ↔ Need / Locked); the status
     /// line and the income are numbers written into cached formats with the non-allocating <c>TMP_Text.SetText</c>.</para>
     /// </remarks>
-    public sealed class PointPanelPresenter : ITickable, IDisposable
+    public sealed class PointPanelPresenter : ITickable, IEscapeHandler, IDisposable
     {
         private const float IncomeRefreshSeconds = 1f;
 
@@ -44,7 +45,7 @@ namespace AutoService.Presentation.Points.Panel
         private readonly PointPanelView _view;
         private readonly Camera _camera;
         private readonly IReadOnlyList<ManagePadView> _pads;
-        private readonly GameplayInput _input;
+        private readonly EscapeRouter _escape;
         private readonly UpgradeRowState _speed = new UpgradeRowState(UpgradeKind.Speed);
         private readonly UpgradeRowState _price = new UpgradeRowState(UpgradeKind.Price);
         private readonly HireRowState _hire = new HireRowState();
@@ -68,7 +69,7 @@ namespace AutoService.Presentation.Points.Panel
         /// <param name="view">The scene's point panel.</param>
         /// <param name="camera">Gameplay camera, to place the panel next to the pad.</param>
         /// <param name="pads">Pads of the points (warehouse pads are ignored).</param>
-        /// <param name="input">Gameplay input for Esc; may be null (no Esc then).</param>
+        /// <param name="escape">The scene's Esc router; may be null (no Esc then).</param>
         /// <exception cref="ArgumentNullException">Thrown when a required dependency is null.</exception>
         public PointPanelPresenter(
             IServicePointService points,
@@ -81,7 +82,7 @@ namespace AutoService.Presentation.Points.Panel
             PointPanelView view,
             Camera camera,
             IReadOnlyList<ManagePadView> pads,
-            GameplayInput input)
+            EscapeRouter escape)
         {
             _points = points ?? throw new ArgumentNullException(nameof(points));
             _upgrades = upgrades ?? throw new ArgumentNullException(nameof(upgrades));
@@ -93,7 +94,7 @@ namespace AutoService.Presentation.Points.Panel
             _view = view != null ? view : throw new ArgumentNullException(nameof(view));
             _camera = camera != null ? camera : throw new ArgumentNullException(nameof(camera));
             _pads = pads ?? throw new ArgumentNullException(nameof(pads));
-            _input = input;
+            _escape = escape;
 
             for (int i = 0; i < _pads.Count; i++)
             {
@@ -112,12 +113,22 @@ namespace AutoService.Presentation.Points.Panel
             _staff.Hired += OnHired;
             _wallet.BalanceChanged += OnBalanceChanged;
             _gate.Changed += RefreshAvailability;
-            if (_input != null)
-            {
-                _input.CancelPressed += Close;
-            }
 
             _view.Hide();
+        }
+
+        /// <inheritdoc />
+        public bool TryHandleEscape()
+        {
+            // Why: a panel hidden because its object is behind the camera stays open but invisible; Esc must not be
+            // swallowed by something the player cannot see — it goes on to the pause menu.
+            if (_openPad == null || !_view.IsVisible)
+            {
+                return false;
+            }
+
+            Close();
+            return true;
         }
 
         /// <inheritdoc />
@@ -178,10 +189,7 @@ namespace AutoService.Presentation.Points.Panel
             _staff.Hired -= OnHired;
             _wallet.BalanceChanged -= OnBalanceChanged;
             _gate.Changed -= RefreshAvailability;
-            if (_input != null)
-            {
-                _input.CancelPressed -= Close;
-            }
+            _escape?.Remove(this);
 
             ReleasePoint();
             _openPad = null;
@@ -197,6 +205,7 @@ namespace AutoService.Presentation.Points.Panel
             ReleasePoint();
             _openPad = pad;
             _openPoint = point;
+            _escape?.Push(this);
             if (point.Supply != null)
             {
                 point.Supply.Changed += OnSupplyChanged;
@@ -224,6 +233,7 @@ namespace AutoService.Presentation.Points.Panel
 
             ReleasePoint();
             _openPad = null;
+            _escape?.Remove(this);
             if (_view != null)
             {
                 _view.Hide();

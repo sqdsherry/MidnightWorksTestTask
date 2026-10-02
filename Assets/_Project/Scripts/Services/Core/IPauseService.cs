@@ -22,5 +22,14 @@ namespace AutoService.Services.Core
         /// Calling it with no active requests logs a warning and does nothing.
         /// </summary>
         void Pop();
+
+        /// <summary>
+        /// Drops every pause request and resumes the game (raises <see cref="PausedChanged"/> if it was paused).
+        /// </summary>
+        /// <remarks>
+        /// Why: requests belong to the scene that made them. When that scene is unloaded its popups never pop, so the
+        /// scene loader calls this to keep a pause from leaking into the next scene. Not for gameplay code.
+        /// </remarks>
+        void ResetAll();
     }
 }

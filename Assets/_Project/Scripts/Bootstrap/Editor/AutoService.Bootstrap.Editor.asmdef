@@ -9,6 +9,7 @@
         "AutoService.Presentation",
         "Unity.TextMeshPro",
         "Unity.AI.Navigation",
+        "Unity.InputSystem",
         "UnityEngine.UI"
     ],
     "includePlatforms": [
