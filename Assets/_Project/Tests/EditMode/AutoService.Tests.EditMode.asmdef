@@ -5,6 +5,7 @@
         "AutoService.Domain",
         "AutoService.Services",
         "AutoService.Infrastructure",
+        "AutoService.Presentation",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],
