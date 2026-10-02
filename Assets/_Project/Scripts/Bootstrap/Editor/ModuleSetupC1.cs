@@ -141,8 +141,12 @@ namespace AutoService.Bootstrap.Editor
                 CompleteSettings(root, problems);
 
                 // Why: SaveAsPrefabAsset overwrites an existing prefab in place, so its GUID (and every instance) is kept.
-                GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, SettingsPrefabPath);
-                return prefab != null ? prefab.GetComponent<SettingsView>() : null;
+                PrefabUtility.SaveAsPrefabAsset(root, SettingsPrefabPath, out bool success);
+                if (!success)
+                {
+                    problems.Add("the settings prefab could not be saved to " + SettingsPrefabPath + " (see the console for the reason)");
+                    return null;
+                }
             }
             finally
             {
@@ -155,6 +159,19 @@ namespace AutoService.Bootstrap.Editor
                     Object.DestroyImmediate(root);
                 }
             }
+
+            // Why: the object SaveAsPrefabAsset returns for a NEW prefab may not yet be the imported asset, so the component
+            // was not found on the first run; the prefab is loaded back from disk once it is saved and imported.
+            AssetDatabase.SaveAssets();
+            AssetDatabase.ImportAsset(SettingsPrefabPath, ImportAssetOptions.ForceSynchronousImport);
+            var saved = AssetDatabase.LoadAssetAtPath<GameObject>(SettingsPrefabPath);
+            SettingsView view = saved != null ? saved.GetComponent<SettingsView>() : null;
+            if (view == null)
+            {
+                problems.Add("the settings prefab at " + SettingsPrefabPath + " was saved but has no SettingsView on its root");
+            }
+
+            return view;
         }
 
         private static GameObject CreateSettingsRoot()
@@ -309,7 +326,7 @@ namespace AutoService.Bootstrap.Editor
 
             if (prefab == null)
             {
-                problems.Add(sceneName + ": no settings panel (the settings prefab could not be saved)");
+                problems.Add(sceneName + ": no settings panel (see the settings prefab problem)");
                 return null;
             }
 
