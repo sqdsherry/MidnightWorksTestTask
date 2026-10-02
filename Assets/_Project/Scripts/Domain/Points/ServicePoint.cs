@@ -1,5 +1,6 @@
 using System;
 using AutoService.Domain.Common;
+using AutoService.Domain.Supplies;
 
 namespace AutoService.Domain.Points
 {
@@ -11,6 +12,8 @@ namespace AutoService.Domain.Points
     /// Core rule (GDD §4.2): both accepting the order and the service progress happen ONLY while the work spot is occupied.
     /// Leaving pauses the progress (it is not reset); leaving before acceptance restarts the accept delay.
     /// <para>The point never moves money itself: it raises <see cref="OrderAccepted"/> and the Services layer credits the wallet.</para>
+    /// <para>A point with a <see cref="Supply"/> needs one unit per order: while the stock is empty the car waits on the spot
+    /// and the order is not accepted. Upgrades scale the service time and the price of new orders (<see cref="ApplyModifiers"/>).</para>
     /// </remarks>
     public sealed class ServicePoint
     {
@@ -26,6 +29,9 @@ namespace AutoService.Domain.Points
         {
             Definition = definition ?? throw new ArgumentNullException(nameof(definition));
             CarId = NoCar;
+            Supply = definition.HasSupply ? new SupplyStock(definition.SupplyTypeId, definition.SupplyCapacity) : null;
+            DurationMultiplier = 1f;
+            PriceMultiplier = 1.0;
         }
 
         /// <summary>Raised after every <see cref="State"/> change.</summary>
@@ -63,6 +69,39 @@ namespace AutoService.Domain.Points
 
         /// <summary>True when a new car can be assigned (<see cref="ServicePointState.Idle"/>).</summary>
         public bool IsAvailable => State == ServicePointState.Idle;
+
+        /// <summary>Consumable stock (created full), or null when the point needs none (the barriers).</summary>
+        public SupplyStock Supply { get; }
+
+        /// <summary>True while a car waits for its order to be accepted, but the stock is empty (needs a box, not a worker).</summary>
+        public bool IsWaitingForSupply => State == ServicePointState.AwaitingAccept && Supply != null && Supply.IsEmpty;
+
+        /// <summary>Multiplier of <see cref="ServicePointDefinition.ServiceDuration"/> (speed upgrade); 1 by default.</summary>
+        public float DurationMultiplier { get; private set; }
+
+        /// <summary>Multiplier of the price of new orders (price upgrade); 1 by default. Applied by the traffic when it reserves.</summary>
+        public double PriceMultiplier { get; private set; }
+
+        /// <summary>Sets the upgrade multipliers. The running order keeps its price; its remaining time uses the new speed.</summary>
+        /// <param name="durationMultiplier">Service time multiplier (finite, &gt; 0).</param>
+        /// <param name="priceMultiplier">Price multiplier of new orders (finite, &gt; 0).</param>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown for a non-positive, NaN or infinite multiplier.</exception>
+        public void ApplyModifiers(float durationMultiplier, double priceMultiplier)
+        {
+            // Why: the negated comparisons also reject NaN.
+            if (!(durationMultiplier > 0f) || float.IsInfinity(durationMultiplier))
+            {
+                throw new ArgumentOutOfRangeException(nameof(durationMultiplier), durationMultiplier, "Duration multiplier must be finite and positive.");
+            }
+
+            if (!(priceMultiplier > 0.0) || double.IsInfinity(priceMultiplier))
+            {
+                throw new ArgumentOutOfRangeException(nameof(priceMultiplier), priceMultiplier, "Price multiplier must be finite and positive.");
+            }
+
+            DurationMultiplier = durationMultiplier;
+            PriceMultiplier = priceMultiplier;
+        }
 
         /// <summary>Puts <paramref name="occupant"/> on the work spot.</summary>
         /// <returns>True if the spot is now held by <paramref name="occupant"/> (also when it already was); false if someone else holds it.</returns>
@@ -187,7 +226,9 @@ namespace AutoService.Domain.Points
 
         private void TickAccept(float deltaTime)
         {
-            if (!IsOccupied)
+            // Why: without a unit there is nothing to sell — the car waits and the accept timer does not run,
+            // so a delivered box does not instantly accept an order nobody was "taking".
+            if (!IsOccupied || (Supply != null && Supply.IsEmpty))
             {
                 return;
             }
@@ -199,7 +240,11 @@ namespace AutoService.Domain.Points
             }
 
             _acceptTimer = 0f;
+
+            // Why: the state changes first, so stock listeners (HUD, SupplyDepletedEvent) already see an order being served,
+            // not a car still waiting for a box.
             SetState(ServicePointState.Servicing);
+            Supply?.TryConsume();
             OrderAccepted?.Invoke(this, CurrentPrice);
         }
 
@@ -211,7 +256,8 @@ namespace AutoService.Domain.Points
             }
 
             // Why: a zero duration is a valid "instant" service; dividing by it would produce NaN/Infinity.
-            float step = Definition.ServiceDuration > 0f ? deltaTime / Definition.ServiceDuration : 1f;
+            float duration = Definition.ServiceDuration * DurationMultiplier;
+            float step = duration > 0f ? deltaTime / duration : 1f;
             Progress = Math.Min(1f, Progress + step);
             if (Progress < 1f)
             {

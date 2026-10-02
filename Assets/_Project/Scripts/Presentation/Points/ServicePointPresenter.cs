@@ -1,13 +1,15 @@
 using System;
 using AutoService.Domain.Points;
+using AutoService.Domain.Supplies;
 using AutoService.Services.Core;
 using UnityEngine;
 
 namespace AutoService.Presentation.Points
 {
     /// <summary>
-    /// Shows a <see cref="ServicePoint"/>'s state on its <see cref="ServicePointView"/>: HUD every tick (cheap, change-checked)
-    /// and, for barriers, opens the arm while the order is serviced / the car drives through.
+    /// Shows a <see cref="ServicePoint"/>'s state on its <see cref="ServicePointView"/>: HUD every tick (cheap, change-checked),
+    /// the supply counter when the stock changes and, for barriers, opens the arm while the order is serviced / the car
+    /// drives through.
     /// </summary>
     public sealed class ServicePointPresenter : ITickable, IDisposable
     {
@@ -33,6 +35,15 @@ namespace AutoService.Presentation.Points
 
             _point.StateChanged += OnStateChanged;
             OnStateChanged(_point);
+            if (_point.Supply != null)
+            {
+                _point.Supply.Changed += OnSupplyChanged;
+                OnSupplyChanged(_point.Supply);
+            }
+            else if (_hud != null)
+            {
+                _hud.HideSupply();
+            }
         }
 
         /// <inheritdoc />
@@ -40,7 +51,7 @@ namespace AutoService.Presentation.Points
         {
             if (_hud != null)
             {
-                _hud.Render(_point.State, _point.Progress, _point.IsOccupied);
+                _hud.Render(_point.State, _point.Progress, _point.IsOccupied, _point.Supply != null && _point.Supply.IsEmpty);
             }
 
             if (_barrierArm != null)
@@ -60,6 +71,19 @@ namespace AutoService.Presentation.Points
 
             _disposed = true;
             _point.StateChanged -= OnStateChanged;
+            if (_point.Supply != null)
+            {
+                _point.Supply.Changed -= OnSupplyChanged;
+            }
+        }
+
+        private void OnSupplyChanged(SupplyStock stock)
+        {
+            // Why: the HUD may already be destroyed while the scene unloads.
+            if (_hud != null)
+            {
+                _hud.SetSupply(stock.Current, stock.Capacity);
+            }
         }
 
         private void OnStateChanged(ServicePoint point)

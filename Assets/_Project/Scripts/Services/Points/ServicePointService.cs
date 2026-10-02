@@ -33,6 +33,9 @@ namespace AutoService.Services.Points
         }
 
         /// <inheritdoc />
+        public event Action<ServicePoint> PointRegistered;
+
+        /// <inheritdoc />
         public IReadOnlyList<ServicePoint> All => _points;
 
         /// <summary>Creates and registers a point. Called by the scene entry point while building the scene.</summary>
@@ -55,6 +58,7 @@ namespace AutoService.Services.Points
             _points.Add(point);
             _pointsById.Add(definition.Id, point);
             point.OrderAccepted += OnOrderAccepted;
+            PointRegistered?.Invoke(point);
             return point;
         }
 

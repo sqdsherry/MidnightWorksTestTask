@@ -16,6 +16,12 @@ MonoBehaviour:
   _displayName: Car Wash
   _kind: 1
   _basePrice: 12
+  _pricePerSecond: 0
   _serviceDuration: 6
   _acceptDelay: 0.4
   _clearDelay: 1.5
+  _supplyTypeId: shampoo
+  _supplyCapacity: 10
+  _workerTitle: Washer
+  _workerHireCost: 300
+  _workerRequiredLevel: 2

@@ -20,3 +20,8 @@ MonoBehaviour:
   _serviceDuration: 9
   _acceptDelay: 0.4
   _clearDelay: 1.5
+  _supplyTypeId: oil
+  _supplyCapacity: 10
+  _workerTitle: Oil Mechanic
+  _workerHireCost: 400
+  _workerRequiredLevel: 3

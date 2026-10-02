@@ -8,7 +8,6 @@ using AutoService.Services.Building;
 using AutoService.Services.Config;
 using AutoService.Services.Core;
 using AutoService.Services.Formatting;
-using AutoService.Services.Points;
 using AutoService.Services.Traffic;
 
 namespace AutoService.Presentation.Building
@@ -20,20 +19,20 @@ namespace AutoService.Presentation.Building
     /// </summary>
     /// <remarks>
     /// Parking slots are offered one at a time, in slot order: the traffic only grows its lot (slots 0..N-1), so the
-    /// ghost of slot 4 appears once slot 3 is bought. Owns (ticks and disposes) the presenters of the points it creates.
+    /// ghost of slot 4 appears once slot 3 is bought. Built bays go through the same <see cref="PointRegistrar"/> as the
+    /// points that work from the start, so they get the same view setup and presenter.
     /// </remarks>
-    public sealed class BuildableBinder : ITickable, IDisposable
+    public sealed class BuildableBinder : IDisposable
     {
         private readonly IBuildService _build;
         private readonly IConfigProvider _config;
-        private readonly ServicePointService _points;
+        private readonly PointRegistrar _registrar;
         private readonly LocationTraffic _traffic;
         private readonly LocationLayout _layout;
         private readonly IGameLogger _logger;
 
         private readonly Dictionary<string, BuildPlotView> _views = new Dictionary<string, BuildPlotView>(StringComparer.Ordinal);
         private readonly List<BuildPlotView> _parkingViews = new List<BuildPlotView>();
-        private readonly List<ServicePointPresenter> _presenters = new List<ServicePointPresenter>();
         private bool _disposed;
 
         /// <summary>
@@ -44,14 +43,14 @@ namespace AutoService.Presentation.Building
         public BuildableBinder(
             IBuildService build,
             IConfigProvider config,
-            ServicePointService points,
+            PointRegistrar registrar,
             LocationTraffic traffic,
             LocationLayout layout,
             IGameLogger logger)
         {
             _build = build ?? throw new ArgumentNullException(nameof(build));
             _config = config ?? throw new ArgumentNullException(nameof(config));
-            _points = points ?? throw new ArgumentNullException(nameof(points));
+            _registrar = registrar ?? throw new ArgumentNullException(nameof(registrar));
             _traffic = traffic ?? throw new ArgumentNullException(nameof(traffic));
             _layout = layout != null ? layout : throw new ArgumentNullException(nameof(layout));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -63,16 +62,7 @@ namespace AutoService.Presentation.Building
             ShowCurrentState();
         }
 
-        /// <inheritdoc />
-        public void Tick(float deltaTime)
-        {
-            for (int i = 0; i < _presenters.Count; i++)
-            {
-                _presenters[i].Tick(deltaTime);
-            }
-        }
-
-        /// <summary>Stops listening and disposes the created point presenters. Safe to call repeatedly.</summary>
+        /// <summary>Stops listening to the build service. Safe to call repeatedly.</summary>
         public void Dispose()
         {
             if (_disposed)
@@ -83,12 +73,6 @@ namespace AutoService.Presentation.Building
             _disposed = true;
             _build.Built -= OnBuilt;
             _build.BuiltRestored -= OnBuiltRestored;
-            for (int i = 0; i < _presenters.Count; i++)
-            {
-                _presenters[i].Dispose();
-            }
-
-            _presenters.Clear();
         }
 
         private void CollectViews()
@@ -197,26 +181,20 @@ namespace AutoService.Presentation.Building
                 return;
             }
 
-            if (!_config.TryGetServiceType(view.ServiceTypeId, out ServiceTypeSettings settings) || settings.Kind != PointKind.Service)
+            // The registrar logs why a point could not be registered.
+            if (!_registrar.TryRegister(view, _layout.LocationId, PointKind.Service, out ServicePoint point))
             {
-                _logger.Error("[Build] Point '" + pointId + "': service type '" + view.ServiceTypeId + "' is missing or not a Service.");
                 return;
             }
 
-            ServicePoint point;
             try
             {
-                point = _points.Register(settings.CreatePointDefinition(pointId, _layout.LocationId));
                 _traffic.AddServicePoint(point, view.BufferSlots.Length);
             }
             catch (Exception exception) when (exception is ArgumentException || exception is InvalidOperationException)
             {
-                _logger.Error("[Build] Point '" + pointId + "' could not start: " + exception.Message);
-                return;
+                _logger.Error("[Build] Point '" + pointId + "' could not join the traffic: " + exception.Message);
             }
-
-            view.Construct(_points);
-            _presenters.Add(new ServicePointPresenter(view, point));
         }
 
         // Why: called once per construction, never per frame, so the component lookup is fine here.

@@ -3,10 +3,12 @@
     "rootNamespace": "AutoService.Bootstrap.Editor",
     "references": [
         "AutoService.Domain",
+        "AutoService.Services",
         "AutoService.Infrastructure",
         "AutoService.Bootstrap",
         "AutoService.Presentation",
         "Unity.TextMeshPro",
+        "Unity.AI.Navigation",
         "UnityEngine.UI"
     ],
     "includePlatforms": [

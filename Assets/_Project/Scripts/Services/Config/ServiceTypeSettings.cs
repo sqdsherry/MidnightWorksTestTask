@@ -18,7 +18,12 @@ namespace AutoService.Services.Config
         /// <param name="serviceDuration">Seconds of occupied work per car.</param>
         /// <param name="acceptDelay">Seconds of presence before the order is accepted.</param>
         /// <param name="clearDelay">Seconds the point stays unavailable after a car was served.</param>
-        /// <exception cref="ArgumentException">Thrown for an empty id, a negative/NaN price per second or negative/NaN durations.</exception>
+        /// <param name="supplyTypeId">Consumable every order uses; empty = none (the barriers).</param>
+        /// <param name="supplyCapacity">Units a point's stock holds; must be &gt; 0 when <paramref name="supplyTypeId"/> is set.</param>
+        /// <param name="worker">Hiring settings of the point worker, or null when points of this type cannot hire one.</param>
+        /// <exception cref="ArgumentException">
+        /// Thrown for an empty id, a negative/NaN price per second, negative/NaN durations or a supply type without capacity.
+        /// </exception>
         public ServiceTypeSettings(
             string id,
             string displayName,
@@ -27,7 +32,10 @@ namespace AutoService.Services.Config
             double pricePerSecond,
             float serviceDuration,
             float acceptDelay,
-            float clearDelay)
+            float clearDelay,
+            string supplyTypeId = "",
+            int supplyCapacity = 0,
+            PointWorkerSettings worker = null)
         {
             if (string.IsNullOrWhiteSpace(id))
             {
@@ -43,6 +51,12 @@ namespace AutoService.Services.Config
             RequireDuration(serviceDuration, nameof(serviceDuration));
             RequireDuration(acceptDelay, nameof(acceptDelay));
             RequireDuration(clearDelay, nameof(clearDelay));
+            bool needsSupply = !string.IsNullOrWhiteSpace(supplyTypeId);
+            if (needsSupply && supplyCapacity <= 0)
+            {
+                throw new ArgumentException(
+                    "Supply capacity must be positive for supply type '" + supplyTypeId + "', got " + supplyCapacity + ".", nameof(supplyCapacity));
+            }
 
             Id = id;
             DisplayName = displayName ?? string.Empty;
@@ -52,6 +66,9 @@ namespace AutoService.Services.Config
             ServiceDuration = serviceDuration;
             AcceptDelay = acceptDelay;
             ClearDelay = clearDelay;
+            SupplyTypeId = needsSupply ? supplyTypeId : string.Empty;
+            SupplyCapacity = needsSupply ? supplyCapacity : 0;
+            Worker = worker;
         }
 
         /// <summary>Unique id referenced by scene points.</summary>
@@ -78,13 +95,23 @@ namespace AutoService.Services.Config
         /// <summary>Seconds the point stays unavailable after a car was served.</summary>
         public float ClearDelay { get; }
 
+        /// <summary>Consumable every order uses; empty when points of this type need none.</summary>
+        public string SupplyTypeId { get; }
+
+        /// <summary>Units a point's stock holds (0 without a consumable).</summary>
+        public int SupplyCapacity { get; }
+
+        /// <summary>Hiring settings of the point worker, or null when points of this type cannot hire one.</summary>
+        public PointWorkerSettings Worker { get; }
+
         /// <summary>Builds the definition of a concrete point of this type.</summary>
         /// <param name="pointId">Unique point id from the scene.</param>
         /// <param name="locationId">Id of the location the point belongs to.</param>
         /// <exception cref="ArgumentException">Thrown for empty ids.</exception>
         public ServicePointDefinition CreatePointDefinition(string pointId, string locationId)
         {
-            return new ServicePointDefinition(pointId, locationId, Id, Kind, BasePrice, PricePerSecond, ServiceDuration, AcceptDelay, ClearDelay);
+            return new ServicePointDefinition(
+                pointId, locationId, Id, Kind, BasePrice, PricePerSecond, ServiceDuration, AcceptDelay, ClearDelay, SupplyTypeId, SupplyCapacity);
         }
 
         private static void RequireDuration(float value, string parameterName)

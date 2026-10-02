@@ -252,6 +252,108 @@ namespace AutoService.Tests.EditMode
             Assert.Throws<InvalidOperationException>(() => _point.CancelReservation(CarId), "The car is already there.");
         }
 
+        // ── Supplies and upgrades (A2) ───────────────────────────────────────────────────────────────────────────
+
+        [Test]
+        public void Definition_RejectsSupplyWithoutCapacity()
+        {
+            Assert.Throws<ArgumentException>(() =>
+                new ServicePointDefinition("p", "loc1", "oil", PointKind.Service, Money.Zero, 0.0, 1f, 0f, 0f, "oil", 0));
+        }
+
+        [Test]
+        public void PointWithoutSupplyType_HasNoStock_AndWorksAsBefore()
+        {
+            Assert.IsNull(_point.Supply);
+
+            StartServicing();
+            Assert.IsFalse(_point.IsWaitingForSupply);
+            Assert.AreEqual(1, _acceptedCount);
+        }
+
+        [Test]
+        public void SuppliedPoint_StartsFull_AndAcceptedOrderUsesOneUnit()
+        {
+            UseSuppliedPoint(10);
+            Assert.AreEqual(10, _point.Supply.Current);
+
+            ServicePointState stateWhenConsumed = ServicePointState.Idle;
+            _point.Supply.Changed += stock => stateWhenConsumed = _point.State;
+
+            StartServicing();
+
+            Assert.AreEqual(9, _point.Supply.Current);
+            Assert.AreEqual(1, _acceptedCount);
+            Assert.AreEqual(ServicePointState.Servicing, stateWhenConsumed, "Stock listeners see the order already being served.");
+        }
+
+        [Test]
+        public void EmptySupply_BlocksAcceptance_AndTheAcceptTimerDoesNotRun()
+        {
+            UseSuppliedPoint(1);
+            ServeOneOrder();
+            Assert.IsTrue(_point.Supply.IsEmpty);
+
+            ArriveCar(new Money(12));
+            _point.TryOccupy(OccupantKind.Player);
+            _point.Tick(10f);
+
+            Assert.AreEqual(ServicePointState.AwaitingAccept, _point.State);
+            Assert.IsTrue(_point.IsWaitingForSupply);
+            Assert.AreEqual(1, _acceptedCount, "Only the first order was accepted.");
+
+            _point.Supply.Add(1);
+            _point.Tick(AcceptDelay * 0.5f);
+            Assert.AreEqual(1, _acceptedCount, "The delay starts only once there is a unit to sell.");
+
+            _point.Tick(AcceptDelay * 0.6f);
+            Assert.AreEqual(2, _acceptedCount);
+            Assert.IsTrue(_point.Supply.IsEmpty);
+            Assert.IsFalse(_point.IsWaitingForSupply);
+        }
+
+        [Test]
+        public void DurationMultiplier_Half_ServicesTwiceAsFast()
+        {
+            _point.ApplyModifiers(0.5f, 1.0);
+            StartServicing();
+
+            _point.Tick(ServiceDuration * 0.25f);
+            Assert.AreEqual(0.5f, _point.Progress, 0.001f);
+
+            _point.Tick(ServiceDuration * 0.25f + 0.001f);
+            Assert.AreEqual(CarId, _completedCar);
+        }
+
+        [Test]
+        public void ApplyModifiers_RejectsNonPositiveAndNaN()
+        {
+            Assert.Throws<ArgumentOutOfRangeException>(() => _point.ApplyModifiers(0f, 1.0));
+            Assert.Throws<ArgumentOutOfRangeException>(() => _point.ApplyModifiers(float.NaN, 1.0));
+            Assert.Throws<ArgumentOutOfRangeException>(() => _point.ApplyModifiers(1f, -1.0));
+            Assert.Throws<ArgumentOutOfRangeException>(() => _point.ApplyModifiers(1f, double.NaN));
+            Assert.AreEqual(1f, _point.DurationMultiplier);
+            Assert.AreEqual(1.0, _point.PriceMultiplier);
+        }
+
+        private void UseSuppliedPoint(int capacity)
+        {
+            var definition = new ServicePointDefinition(
+                "oil_1", "loc1", "oil", PointKind.Service, new Money(12), 0.0, ServiceDuration, AcceptDelay, ClearDelay, "oil", capacity);
+            _point = new ServicePoint(definition);
+            _point.OrderAccepted += (point, price) => _acceptedCount++;
+            _point.ServiceCompleted += (point, carId) => _completedCar = carId;
+        }
+
+        private void ServeOneOrder()
+        {
+            StartServicing();
+            _point.Tick(ServiceDuration);
+            _point.Tick(ClearDelay);
+            _point.Vacate(OccupantKind.Player);
+            Assert.AreEqual(ServicePointState.Idle, _point.State);
+        }
+
         private void ArriveCar(Money price)
         {
             _point.TryReserve(CarId, price);

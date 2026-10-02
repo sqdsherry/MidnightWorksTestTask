@@ -499,7 +499,10 @@ namespace AutoService.Services.Traffic
             // Why: the stay is rolled now and paid up front, so the fee shown at the barrier is final.
             stay = NextParkingStay();
             ServicePointDefinition barrier = entrance.Definition;
-            Money fee = PriceFormula.TimeBased(barrier.BasePrice, barrier.PricePerSecond, stay, car.Type.PriceMultiplier);
+            // Why: the price upgrade multiplies the fee now, at the reservation — the shown fee is final, and an upgrade
+            // bought later only affects new orders (nothing has to be recalculated).
+            Money fee = PriceFormula.TimeBased(
+                barrier.BasePrice, barrier.PricePerSecond, stay, car.Type.PriceMultiplier * entrance.PriceMultiplier);
             entrance.TryReserve(car.Id, fee);
             return true;
         }
@@ -601,8 +604,10 @@ namespace AutoService.Services.Traffic
             return _carTypes[_carTypes.Count - 1];
         }
 
-        // Why: the service price scales with the car type, like the parking fee.
-        private static Money PriceFor(ServicePoint point, Car car) => point.Definition.BasePrice * car.Type.PriceMultiplier;
+        // Why: the service price scales with the car type and the point's price upgrade, like the parking fee; it is fixed
+        // at the reservation, so an upgrade only affects new orders.
+        private static Money PriceFor(ServicePoint point, Car car) =>
+            point.Definition.BasePrice * (car.Type.PriceMultiplier * point.PriceMultiplier);
 
         private int IndexOfServicePoint(string pointId)
         {

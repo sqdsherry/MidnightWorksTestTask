@@ -1,23 +1,17 @@
 using System;
 using System.Collections.Generic;
-using AutoService.Domain.Economy;
-using AutoService.Domain.Points;
-using AutoService.Presentation.Building;
+using AutoService.Bootstrap.Installers;
 using AutoService.Presentation.CameraControl;
-using AutoService.Presentation.Controls;
 using AutoService.Presentation.Hud;
-using AutoService.Presentation.Interaction;
+using AutoService.Presentation.Panels;
 using AutoService.Presentation.Player;
-using AutoService.Presentation.Points;
+using AutoService.Presentation.Points.Panel;
+using AutoService.Presentation.Staff;
+using AutoService.Presentation.Supplies;
 using AutoService.Presentation.Traffic;
-using AutoService.Services.Building;
-using AutoService.Services.Config;
 using AutoService.Services.Core;
 using AutoService.Services.Economy;
-using AutoService.Services.Events;
 using AutoService.Services.Formatting;
-using AutoService.Services.Points;
-using AutoService.Services.Traffic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -28,8 +22,9 @@ namespace AutoService.Bootstrap
     /// initializes them and starts ticking.
     /// </summary>
     /// <remarks>
-    /// Build order: configs → domain → services → (save load) → views/presenters → Initialize() → ticking.
-    /// Every module adds its own <c>Register*</c> step below.
+    /// <see cref="Enter"/> is a table of contents: one installer per module (<c>Bootstrap/Installers</c>), run in
+    /// dependency order, then Initialize() → ticking. The serialized scene references stay here and reach the installers
+    /// as an immutable <see cref="GameplaySceneRefs"/>.
     /// </remarks>
     public sealed class GameplayEntryPoint : MonoBehaviour, ISceneEntryPoint
     {
@@ -88,12 +83,42 @@ namespace AutoService.Bootstrap
 
         [SerializeField]
         [Tooltip("Screen-space build panel shown next to a plot the character stands at.")]
-        private BuildPanelView _buildPanel;
+        private OfferPanelView _buildPanel;
 
-        // Why: lifecycle lists are filled while registering, so every service created here is initialized
-        // and ticked without each module having to remember to wire itself in.
+        [Header("Staff & Supplies")]
+        [SerializeField]
+        [Tooltip("Screen-space management panel opened from a point's blue pad.")]
+        private PointPanelView _pointPanel;
+
+        [SerializeField]
+        [Tooltip("Screen-space storekeeper offer opened from the warehouse's blue pad.")]
+        private OfferPanelView _storekeeperPanel;
+
+        [SerializeField]
+        [Tooltip("Body prefab of hired NPCs (Prefabs/Staff).")]
+        private StaffView _staffPrefab;
+
+        [SerializeField]
+        [Tooltip("Staff role → body material.")]
+        private StaffVisualCatalog _staffVisuals;
+
+        [SerializeField]
+        [Tooltip("Consumable → box color.")]
+        private SupplyVisualCatalog _supplyVisuals;
+
+        [SerializeField]
+        [Tooltip("Parent of NPC instances. Optional (scene root if empty).")]
+        private Transform _staffRoot;
+
+        [SerializeField]
+        [Tooltip("Shows the box in the player's hands (on the Player object).")]
+        private PlayerCarryView _playerCarry;
+
+        // Why: lifecycle lists are filled by the installers (through GameplayContext), so every service created there is
+        // initialized and ticked without each module having to remember to wire itself in.
         private readonly List<IInitializable> _initializables = new List<IInitializable>();
         private readonly List<ITickable> _tickables = new List<ITickable>();
+        private readonly List<TickPhase> _tickPhases = new List<TickPhase>();
 
         // Why: the container holds one instance per contract type, but there is one presenter per point (and, later,
         // one traffic per location); such instances are owned and disposed by this entry point instead.
@@ -118,15 +143,27 @@ namespace AutoService.Bootstrap
 
             _container = new ServiceContainer(projectServices);
             _logger = _container.Resolve<IGameLogger>();
+            var context = new GameplayContext(
+                _container, _logger, CreateSceneRefs(), name, _initializables, _tickables, _tickPhases, _ownedDisposables);
 
-            IConfigProvider config = _container.Resolve<IConfigProvider>();
-            IEventBus eventBus = _container.Resolve<IEventBus>();
+            // Why: the order is the dependency order — every installer only uses what the ones above it produced.
+            var player = new PlayerInstaller();
+            var serviceLoop = new ServiceLoopInstaller();
+            var building = new BuildingInstaller(serviceLoop, player);
+            IGameplayInstaller[] installers =
+            {
+                new EconomyInstaller(),
+                player,
+                serviceLoop,
+                building,
+                new StaffSuppliesInstaller(serviceLoop, building, player),
+                new HudInstaller(),
+            };
 
-            RegisterEconomy(config, eventBus);
-            RegisterPlayer(_container.Resolve<IPauseService>());
-            RegisterServiceLoop(config, eventBus, _container.Resolve<IRandom>(), out ServicePointService points, out LocationTraffic traffic);
-            RegisterBuilding(config, eventBus, points, traffic);
-            RegisterHud();
+            for (int i = 0; i < installers.Length; i++)
+            {
+                installers[i].Install(context);
+            }
 
             InitializeServices();
             StartTicking();
@@ -142,316 +179,29 @@ namespace AutoService.Bootstrap
             _container = null;
         }
 
-        private void RegisterEconomy(IConfigProvider config, IEventBus eventBus)
+        private GameplaySceneRefs CreateSceneRefs()
         {
-            // TODO(08-save): start from the saved balance when a save exists.
-            var wallet = new Wallet(config.Economy.StartingMoney);
-            Register<IWalletService>(new WalletService(wallet, eventBus));
-        }
-
-        // Why: a scene with missing references should still run the rest of the game and say exactly what is missing,
-        // instead of failing with a NullReferenceException deep inside a constructor.
-        private void RegisterPlayer(IPauseService pause)
-        {
-            // Why: non-short-circuit `|` so every missing reference is reported at once, not one per Play.
-            if (!HasReference(_inputActions, nameof(_inputActions))
-                | !HasReference(_camera, nameof(_camera))
-                | !HasReference(_cameraRig, nameof(_cameraRig))
-                | !HasReference(_player, nameof(_player)))
-            {
-                _logger.Error("[Gameplay] Player module skipped: assign the missing references on " + name + ".");
-                return;
-            }
-
-            if (_player.Agent == null)
-            {
-                _logger.Error("[Gameplay] Player module skipped: PlayerView '" + _player.name + "' has no NavMeshAgent assigned.");
-                return;
-            }
-
-            if (_interactableMask.value == 0)
-            {
-                _logger.Warning("[Gameplay] " + nameof(_interactableMask) + " is empty; interactables cannot be clicked.");
-            }
-
-            if (_groundMask.value == 0)
-            {
-                _logger.Warning("[Gameplay] " + nameof(_groundMask) + " is empty; clicks on the ground are ignored.");
-            }
-
-            GameplayInput input;
-            try
-            {
-                input = new GameplayInput(_inputActions);
-            }
-            catch (InvalidOperationException exception)
-            {
-                _logger.Error("[Gameplay] Player module skipped: " + exception.Message);
-                return;
-            }
-
-            // Why: Presentation classes have no contracts of their own; they are registered under their concrete types
-            // so the container disposes them (presenter and motor first, input last — reverse registration order).
-            Register(input);
-            input.Enable();
-
-            var raycaster = new PointerRaycaster(_camera, _interactableMask, _groundMask, _occluderMask);
-            Register(new PlayerMotor(_player));
-            Register(new PlayerInputPresenter(input, raycaster, _player, pause, _clickMarker));
-            _cameraRig.Construct(input, _player);
-        }
-
-        /// <summary>Points, traffic and their presenters. Tick order: point service → traffic → car agents → point presenters.</summary>
-        /// <param name="points">The point service, or null when the location cannot run.</param>
-        /// <param name="traffic">Traffic of location 1, or null when it was skipped.</param>
-        private void RegisterServiceLoop(
-            IConfigProvider config,
-            IEventBus eventBus,
-            IRandom random,
-            out ServicePointService points,
-            out LocationTraffic traffic)
-        {
-            var presenters = new List<ServicePointPresenter>();
-            traffic = null;
-            points = RegisterPoints(config, eventBus, presenters);
-            if (points != null)
-            {
-                traffic = RegisterTraffic(points, config, random, eventBus);
-            }
-
-            // Why: presenters are tracked last so they render the state produced by this frame's simulation.
-            for (int i = 0; i < presenters.Count; i++)
-            {
-                Track(presenters[i]);
-            }
-        }
-
-        /// <returns>The point service, or null when the location cannot run (traffic is skipped then).</returns>
-        private ServicePointService RegisterPoints(IConfigProvider config, IEventBus eventBus, List<ServicePointPresenter> presenters)
-        {
-            if (!HasReference(_location1, nameof(_location1)))
-            {
-                _logger.Error("[Gameplay] Service loop skipped: assign the location layout on " + name + ".");
-                return null;
-            }
-
-            if (!_location1.Validate(out string problem) || !_location1.ValidateBuildPlots(config, out problem))
-            {
-                _logger.Error("[Gameplay] Service loop skipped: LocationLayout '" + _location1.name + "': " + problem + ".");
-                return null;
-            }
-
-            var points = new ServicePointService(_container.Resolve<IWalletService>(), eventBus);
-            Register<IServicePointService>(points);
-
-            // Why: every parking visit pays at one of the two entrances, so both must be Barrier-kind points; without them
-            // the traffic cannot run (the kind is checked inside TryRegisterPoint). Non-short-circuit `|` reports both.
-            if (!TryRegisterPoint(points, config, _location1.MainEntrance, PointKind.Barrier, presenters)
-                | !TryRegisterPoint(points, config, _location1.ServiceEntrance, PointKind.Barrier, presenters))
-            {
-                _logger.Error("[Gameplay] Traffic skipped: location '" + _location1.LocationId + "' needs two valid parking entrances.");
-                return null;
-            }
-
-            // Why: points that are still build plots join later, when built (BuildableBinder).
-            ServicePointView[] servicePoints = _location1.ServicePoints;
-            for (int i = 0; i < servicePoints.Length; i++)
-            {
-                if (_location1.IsBuiltAtStart(servicePoints[i]))
-                {
-                    TryRegisterPoint(points, config, servicePoints[i], PointKind.Service, presenters);
-                }
-            }
-
-            return points;
-        }
-
-        private bool TryRegisterPoint(
-            ServicePointService points,
-            IConfigProvider config,
-            ServicePointView view,
-            PointKind expectedKind,
-            List<ServicePointPresenter> presenters)
-        {
-            if (!config.TryGetServiceType(view.ServiceTypeId, out ServiceTypeSettings settings))
-            {
-                _logger.Error("[Gameplay] ServicePointView '" + view.name + "': unknown service type '" + view.ServiceTypeId
-                    + "'; add it to GameConfig. Point skipped.");
-                return false;
-            }
-
-            if (settings.Kind != expectedKind)
-            {
-                _logger.Error("[Gameplay] ServicePointView '" + view.name + "': service type '" + settings.Id + "' is "
-                    + settings.Kind + ", expected " + expectedKind + ". Point skipped.");
-                return false;
-            }
-
-            ServicePoint point;
-            try
-            {
-                point = points.Register(settings.CreatePointDefinition(view.PointId, _location1.LocationId));
-            }
-            catch (Exception exception) when (exception is ArgumentException || exception is InvalidOperationException)
-            {
-                // Empty or duplicate point id.
-                _logger.Error("[Gameplay] ServicePointView '" + view.name + "': " + exception.Message + " Point skipped.");
-                return false;
-            }
-
-            view.Construct(points);
-            presenters.Add(new ServicePointPresenter(view, point));
-            return true;
-        }
-
-        /// <returns>The traffic, or null when it was skipped.</returns>
-        private LocationTraffic RegisterTraffic(IServicePointService points, IConfigProvider config, IRandom random, IEventBus eventBus)
-        {
-            if (!HasReference(_carVisuals, nameof(_carVisuals)))
-            {
-                _logger.Error("[Gameplay] Traffic skipped: assign the car visual catalog on " + name + ".");
-                return null;
-            }
-
-            if (config.CarTypes.Count == 0)
-            {
-                _logger.Warning("[Gameplay] GameConfig has no car types; no cars will spawn.");
-            }
-
-            var definition = new LocationTrafficDefinition(
-                _location1.LocationId,
-                _location1.MainEntrance.PointId,
-                _location1.ServiceEntrance.PointId,
-                _location1.QueueSlotCount,
-                _location1.InitialParkingCapacity(config),
-                _location1.ServiceBufferCapacity);
-            var agents = new CarAgents(_location1, _carVisuals, _carPoolRoot);
-
-            LocationTraffic traffic;
-            try
-            {
-                traffic = new LocationTraffic(definition, points, agents, config, random, eventBus);
-            }
-            catch (ArgumentException exception)
-            {
-                agents.Dispose();
-                _logger.Error("[Gameplay] Traffic skipped: " + exception.Message);
-                return null;
-            }
-
-            // Debug only: Scene view labels "#id plan state" above the cars.
-            agents.SetDebugTraffic(traffic);
-
-            // Why: tracked, not registered — module 11 adds a second location with its own traffic and agents.
-            Track(traffic);
-            Track(agents);
-            return traffic;
-        }
-
-        /// <summary>
-        /// Build plots of location 1: build service (A1: everything unlocked), the binder that turns built plots into
-        /// points/slots, and the build panel. Ticks after the point presenters.
-        /// </summary>
-        private void RegisterBuilding(IConfigProvider config, IEventBus eventBus, ServicePointService points, LocationTraffic traffic)
-        {
-            if (points == null || traffic == null)
-            {
-                _logger.Warning("[Gameplay] Building skipped: the service loop of location 1 is not running.");
-                return;
-            }
-
-            // TODO(07-progression): replace with the level-based gate.
-            var gate = new AlwaysUnlockedGate();
-            var build = new BuildService(_container.Resolve<IWalletService>(), gate, eventBus);
-            Register<IUnlockGate>(gate);
-            Register<IBuildService>(build);
-
-            // Plots were validated against the config together with the layout (ValidateBuildPlots).
-            BuildPlotView[] plots = _location1.BuildPlots;
-            for (int i = 0; i < plots.Length; i++)
-            {
-                if (config.TryGetBuildable(plots[i].PlotId, out BuildableSettings settings))
-                {
-                    build.Register(settings.PlotDefinition);
-                }
-            }
-
-            // TODO(08-save): build.RestoreBuilt(saved ids) — before or after the binder, it handles both.
-            Track(new BuildableBinder(build, config, points, traffic, _location1, _logger));
-
-            if (_buildPanel == null || _camera == null)
-            {
-                _logger.Warning("[Gameplay] " + nameof(_buildPanel) + " or " + nameof(_camera)
-                    + " is not assigned; build plots cannot be bought.");
-                return;
-            }
-
-            _container.TryResolve(out GameplayInput input);
-            Register(new BuildPanelPresenter(build, config, _container.Resolve<IWalletService>(), _buildPanel, _camera, plots, input));
-        }
-
-        private void RegisterHud()
-        {
-            if (_balanceView == null)
-            {
-                _logger.Warning("[Gameplay] " + nameof(_balanceView) + " is not assigned; the balance is not shown.");
-                return;
-            }
-
-            Register(new BalancePresenter(_container.Resolve<IWalletService>(), _balanceView));
-        }
-
-        private bool HasReference(UnityEngine.Object reference, string fieldName)
-        {
-            if (reference != null)
-            {
-                return true;
-            }
-
-            _logger.Error("[Gameplay] " + fieldName + " is not assigned on " + name + ".");
-            return false;
-        }
-
-        /// <summary>Registers a service and tracks its lifecycle interfaces.</summary>
-        /// <remarks>
-        /// The same instance may be registered under several contracts; it is tracked once,
-        /// so <see cref="IInitializable.Initialize"/> and <see cref="ITickable.Tick"/> run once per instance.
-        /// </remarks>
-        private void Register<T>(T service) where T : class
-        {
-            _container.Register(service);
-
-            if (service is IInitializable initializable && !ContainsReference(_initializables, initializable))
-            {
-                _initializables.Add(initializable);
-            }
-
-            if (service is ITickable tickable && !ContainsReference(_tickables, tickable))
-            {
-                _tickables.Add(tickable);
-            }
-        }
-
-        /// <summary>
-        /// Tracks the lifecycle of an instance that is NOT put into the container (several instances of one type):
-        /// it is initialized, ticked in tracking order and disposed by this entry point.
-        /// </summary>
-        private void Track(object service)
-        {
-            if (service is IInitializable initializable && !ContainsReference(_initializables, initializable))
-            {
-                _initializables.Add(initializable);
-            }
-
-            if (service is ITickable tickable && !ContainsReference(_tickables, tickable))
-            {
-                _tickables.Add(tickable);
-            }
-
-            if (service is IDisposable disposable && !ContainsReference(_ownedDisposables, disposable))
-            {
-                _ownedDisposables.Add(disposable);
-            }
+            return new GameplaySceneRefs(
+                _inputActions,
+                _camera,
+                _cameraRig,
+                _player,
+                _clickMarker,
+                _interactableMask,
+                _groundMask,
+                _occluderMask,
+                _location1,
+                _carVisuals,
+                _carPoolRoot,
+                _balanceView,
+                _buildPanel,
+                _pointPanel,
+                _storekeeperPanel,
+                _staffPrefab,
+                _staffVisuals,
+                _supplyVisuals,
+                _staffRoot,
+                _playerCarry);
         }
 
         // Why: reverse order, like the container — dependents go before what they depend on.
@@ -473,20 +223,6 @@ namespace AutoService.Bootstrap
             _ownedDisposables.Clear();
         }
 
-        // Why: reference identity, not Equals — a service with overridden equality is still one instance to track.
-        private static bool ContainsReference<TItem>(List<TItem> list, TItem item) where TItem : class
-        {
-            for (int i = 0; i < list.Count; i++)
-            {
-                if (ReferenceEquals(list[i], item))
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
         private void InitializeServices()
         {
             for (int i = 0; i < _initializables.Count; i++)
@@ -495,6 +231,7 @@ namespace AutoService.Bootstrap
             }
         }
 
+        // Why: phase by phase, registration order inside a phase (see TickPhase).
         private void StartTicking()
         {
             if (_tickables.Count == 0)
@@ -508,9 +245,15 @@ namespace AutoService.Bootstrap
                 return;
             }
 
-            for (int i = 0; i < _tickables.Count; i++)
+            for (TickPhase phase = TickPhase.Input; phase <= TickPhase.Presentation; phase++)
             {
-                _gameLoop.Add(_tickables[i]);
+                for (int i = 0; i < _tickables.Count; i++)
+                {
+                    if (_tickPhases[i] == phase)
+                    {
+                        _gameLoop.Add(_tickables[i]);
+                    }
+                }
             }
         }
 
@@ -527,6 +270,7 @@ namespace AutoService.Bootstrap
             }
 
             _tickables.Clear();
+            _tickPhases.Clear();
         }
     }
 }

@@ -42,6 +42,28 @@ namespace AutoService.Infrastructure.Config
         [Tooltip("Seconds the point stays unavailable after a car was served (it drives away).")]
         private float _clearDelay = 1.5f;
 
+        [Header("Supplies")]
+        [SerializeField]
+        [Tooltip("Id of the Supply Type every accepted order uses, e.g. \"shampoo\". Empty = no consumable (parking barriers).")]
+        private string _supplyTypeId = string.Empty;
+
+        [SerializeField, Min(1)]
+        [Tooltip("Units a point's stock holds; it starts full. Ignored without a supply type.")]
+        private int _supplyCapacity = 10;
+
+        [Header("Worker")]
+        [SerializeField]
+        [Tooltip("Job title of the hired point worker (English), e.g. \"Washer\". Empty = points of this type cannot hire one.")]
+        private string _workerTitle = string.Empty;
+
+        [SerializeField, Min(0)]
+        [Tooltip("One-time hiring price of the worker, in whole dollars.")]
+        private long _workerHireCost = 150;
+
+        [SerializeField, Min(0)]
+        [Tooltip("Player level needed to hire the worker.")]
+        private int _workerRequiredLevel = 1;
+
         /// <summary>Unique id.</summary>
         public string Id => _id;
 
@@ -66,6 +88,21 @@ namespace AutoService.Infrastructure.Config
         /// <summary>Seconds the point stays unavailable after a car was served.</summary>
         public float ClearDelay => _clearDelay;
 
+        /// <summary>Id of the consumable; empty when none.</summary>
+        public string SupplyTypeId => _supplyTypeId;
+
+        /// <summary>Units a point's stock holds.</summary>
+        public int SupplyCapacity => _supplyCapacity;
+
+        /// <summary>Job title of the point worker; empty when none can be hired.</summary>
+        public string WorkerTitle => _workerTitle;
+
+        /// <summary>Hiring price of the worker, in whole dollars.</summary>
+        public long WorkerHireCost => _workerHireCost;
+
+        /// <summary>Player level needed to hire the worker.</summary>
+        public int WorkerRequiredLevel => _workerRequiredLevel;
+
         private void OnValidate()
         {
             _id = _id == null ? string.Empty : _id.Trim();
@@ -74,6 +111,11 @@ namespace AutoService.Infrastructure.Config
             _serviceDuration = Mathf.Max(0f, _serviceDuration);
             _acceptDelay = Mathf.Max(0f, _acceptDelay);
             _clearDelay = Mathf.Max(0f, _clearDelay);
+            _supplyTypeId = _supplyTypeId == null ? string.Empty : _supplyTypeId.Trim();
+            _supplyCapacity = Mathf.Max(1, _supplyCapacity);
+            _workerTitle = _workerTitle == null ? string.Empty : _workerTitle.Trim();
+            _workerHireCost = _workerHireCost < 0 ? 0 : _workerHireCost;
+            _workerRequiredLevel = Mathf.Max(0, _workerRequiredLevel);
         }
     }
 }
