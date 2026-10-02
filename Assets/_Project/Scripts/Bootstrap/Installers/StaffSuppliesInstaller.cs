@@ -75,7 +75,7 @@ namespace AutoService.Bootstrap.Installers
             context.Track(agents, TickPhase.Agents);
             context.Register<IStaffService>(staff, TickPhase.Staff);
 
-            // TODO(08b-save): restore supplies, upgrade levels and staff here, after the built bays were restored.
+            // Restored by SaveInstaller (see its order).
             context.Track(new PointStaffSuppliesBinder(_serviceLoop.Registrar, layout, supplies, carry, staff));
             layout.Warehouse.Construct(supplies, carry);
             if (scene.PlayerCarry != null)

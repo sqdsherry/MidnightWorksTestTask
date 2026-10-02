@@ -57,7 +57,7 @@ namespace AutoService.Bootstrap.Installers
                 }
             }
 
-            // TODO(08b-save): build.RestoreBuilt(saved ids) — before or after the binder, it handles both.
+            // Restored by SaveInstaller (see its order).
             context.Track(new BuildableBinder(build, config, _serviceLoop.Registrar, _serviceLoop.Traffic, scene.Location1, context.Logger));
 
             if (scene.BuildPanel == null || scene.Camera == null)

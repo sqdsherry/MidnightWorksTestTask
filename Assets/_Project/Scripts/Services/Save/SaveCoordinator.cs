@@ -12,7 +12,7 @@ namespace AutoService.Services.Save
     /// Saveables are captured and restored in registration order, so a slice that depends on another one
     /// (e.g. workers on built plots) can rely on it being restored first.
     /// </remarks>
-    public sealed class SaveCoordinator : ITickable, IDisposable
+    public sealed class SaveCoordinator : IGameSaver, ITickable, IDisposable
     {
         /// <summary>Autosave interval used when none is given, in seconds.</summary>
         public const float DefaultAutosaveIntervalSeconds = 30f;

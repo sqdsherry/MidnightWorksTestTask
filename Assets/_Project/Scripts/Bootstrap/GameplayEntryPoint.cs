@@ -14,6 +14,7 @@ using AutoService.Presentation.Traffic;
 using AutoService.Services.Core;
 using AutoService.Services.Economy;
 using AutoService.Services.Formatting;
+using AutoService.Services.Save;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -141,6 +142,7 @@ namespace AutoService.Bootstrap
 
         private ServiceContainer _container;
         private IGameLogger _logger;
+        private IGameSaver _saver;
 
         /// <inheritdoc />
         /// <exception cref="InvalidOperationException">Thrown if the scene was already entered.</exception>
@@ -172,6 +174,7 @@ namespace AutoService.Bootstrap
                 serviceLoop,
                 building,
                 new StaffSuppliesInstaller(serviceLoop, building, player),
+                new SaveInstaller(),
                 new HudInstaller(),
             };
 
@@ -180,14 +183,32 @@ namespace AutoService.Bootstrap
                 installers[i].Install(context);
             }
 
+            _container.TryResolve(out _saver);
             InitializeServices();
             StartTicking();
 
             _logger.Info("[Gameplay] Ready. Balance: " + MoneyFormatter.Format(_container.Resolve<IWalletService>().Balance));
         }
 
+        // Why: Unity calls OnApplicationQuit before OnDestroy, so the services are still alive and can be captured;
+        // disposal (OnDestroy) must not save — see SaveCoordinator.Dispose.
+        private void OnApplicationQuit()
+        {
+            _saver?.SaveNow();
+        }
+
+        // Why: a suspended app may be killed without OnApplicationQuit ever being called.
+        private void OnApplicationPause(bool paused)
+        {
+            if (paused)
+            {
+                _saver?.SaveNow();
+            }
+        }
+
         private void OnDestroy()
         {
+            _saver = null;
             StopTicking();
             DisposeOwned();
             _container?.Dispose();
