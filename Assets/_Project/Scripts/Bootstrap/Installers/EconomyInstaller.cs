@@ -13,7 +13,7 @@ namespace AutoService.Bootstrap.Installers
         {
             IConfigProvider config = context.Resolve<IConfigProvider>();
 
-            // TODO(08b-save): start from the saved balance when a save exists.
+            // Restored by SaveInstaller (see its order).
             var wallet = new Wallet(config.Economy.StartingMoney);
             context.Register<IWalletService>(new WalletService(wallet, context.Resolve<IEventBus>()));
         }

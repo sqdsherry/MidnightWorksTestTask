@@ -40,6 +40,9 @@ namespace AutoService.Services.Economy
         /// <inheritdoc />
         public void Add(Money amount) => _wallet.Add(amount);
 
+        /// <inheritdoc />
+        public void Restore(Money balance) => _wallet.Restore(balance);
+
         /// <summary>Stops listening to the wallet.</summary>
         public void Dispose()
         {

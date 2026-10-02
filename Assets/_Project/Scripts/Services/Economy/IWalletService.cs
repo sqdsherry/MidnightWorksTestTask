@@ -23,5 +23,8 @@ namespace AutoService.Services.Economy
 
         /// <summary>Adds income to the balance.</summary>
         void Add(Money amount);
+
+        /// <summary>Sets the balance to a saved value (raises <see cref="BalanceChanged"/> if it changes). For the save module only.</summary>
+        void Restore(Money balance);
     }
 }
