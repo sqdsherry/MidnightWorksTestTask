@@ -40,6 +40,7 @@ namespace AutoService.Services.Staff
         private readonly IStaffAgents _agents;
         private readonly IConfigProvider _config;
         private readonly IEventBus _eventBus;
+        private readonly IGameLogger _logger;
 
         private readonly List<StaffMember> _staff = new List<StaffMember>();
         private readonly List<StaffEntry> _entries = new List<StaffEntry>();
@@ -59,7 +60,8 @@ namespace AutoService.Services.Staff
             IUnlockGate gate,
             IStaffAgents agents,
             IConfigProvider config,
-            IEventBus eventBus)
+            IEventBus eventBus,
+            IGameLogger logger)
         {
             _points = points ?? throw new ArgumentNullException(nameof(points));
             _supplies = supplies ?? throw new ArgumentNullException(nameof(supplies));
@@ -68,6 +70,7 @@ namespace AutoService.Services.Staff
             _agents = agents ?? throw new ArgumentNullException(nameof(agents));
             _config = config ?? throw new ArgumentNullException(nameof(config));
             _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _agents.Arrived += OnArrived;
         }
 
@@ -158,10 +161,19 @@ namespace AutoService.Services.Staff
         /// <inheritdoc />
         public void RestoreStorekeeper(string locationId)
         {
-            if (!string.IsNullOrEmpty(locationId) && !_storekeepersByLocation.ContainsKey(locationId))
+            if (string.IsNullOrEmpty(locationId) || _storekeepersByLocation.ContainsKey(locationId))
             {
-                AddStorekeeper(locationId);
+                return;
             }
+
+            // Why: same guard as GetStorekeeperAvailability — without staff settings the storekeeper has no restock rule.
+            if (_config.Staff == null)
+            {
+                _logger.Warning("[Staff] Storekeeper of '" + locationId + "' is not restored: GameConfig has no staff settings.");
+                return;
+            }
+
+            AddStorekeeper(locationId);
         }
 
         /// <inheritdoc />
@@ -271,14 +283,26 @@ namespace AutoService.Services.Staff
 
         private void TickIdleStorekeeper(StaffMember member)
         {
-            ServicePoint hungriest = _supplies.FindHungriest(member.LocationId);
-            if (hungriest == null || hungriest.Supply.Fill01 >= _config.Staff.RestockThreshold)
+            if (!TryFindRestockTarget(member.LocationId, out _))
             {
                 return;
             }
 
             member.GoToWarehouse();
             _agents.MoveTo(member.Id, StaffDestination.Warehouse(member.LocationId));
+        }
+
+        /// <summary>The point the storekeeper should restock: the hungriest one, if it is below the restock threshold.</summary>
+        private bool TryFindRestockTarget(string locationId, out ServicePoint point)
+        {
+            point = _supplies.FindHungriest(locationId);
+            if (point != null && _config.Staff != null && point.Supply.Fill01 < _config.Staff.RestockThreshold)
+            {
+                return true;
+            }
+
+            point = null;
+            return false;
         }
 
         private void OnArrived(int staffId)
@@ -306,6 +330,16 @@ namespace AutoService.Services.Staff
         private void BuyAtWarehouse(StaffEntry entry)
         {
             StaffMember member = entry.Member;
+
+            // Why: the threshold is checked again at the warehouse — the player may have restocked the point while the
+            // storekeeper walked; it must not buy a box for a point that is fine now (nor wait for money for it).
+            if (!TryFindRestockTarget(member.LocationId, out _))
+            {
+                member.CancelRestock();
+                return;
+            }
+
+            // Why: the purchase is for the same hungriest point the check above found; failing now means no money.
             if (_supplies.TryBuyBoxForHungriest(member.LocationId, false, out SupplyBox box, out ServicePoint target))
             {
                 string targetId = target.Definition.Id;
@@ -313,13 +347,6 @@ namespace AutoService.Services.Staff
                 member.PickUp(box, targetId);
                 _agents.SetCarried(member.Id, box.SupplyTypeId);
                 _agents.MoveTo(member.Id, StaffDestination.SupplyDrop(targetId));
-                return;
-            }
-
-            // Why: the purchase fails for two reasons — nothing left to restock (the player did it) or no money.
-            if (_supplies.FindHungriest(member.LocationId) == null)
-            {
-                member.CancelRestock();
                 return;
             }
 

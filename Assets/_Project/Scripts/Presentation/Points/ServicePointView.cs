@@ -137,7 +137,15 @@ namespace AutoService.Presentation.Points
                 _carry.Drop();
             }
 
-            // Why: the result is ignored on purpose — if a worker holds the spot, the player just stands next to it.
+            // Why: the spot of a hired worker is never the player's (GDD: the player does not help a worker). Without this
+            // the player could take it while the worker still walks from the staff room — after handing over a box, or by
+            // arriving on a work spot it was already walking to when the worker was hired — and the worker would wait forever.
+            if (_staff != null && _staff.HasWorker(_pointId))
+            {
+                return;
+            }
+
+            // Why: the result is ignored on purpose — if someone else holds the spot, the player just stands next to it.
             _service?.TryOccupy(_pointId, OccupantKind.Player);
         }
 

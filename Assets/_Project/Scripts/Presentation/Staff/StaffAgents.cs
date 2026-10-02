@@ -18,8 +18,9 @@ namespace AutoService.Presentation.Staff
     /// Destinations: work spot = the point view's work spot, warehouse = the warehouse's approach point, supply drop = the
     /// approach point of the point's blue pad (next to the point, never on its work spot).
     /// <para>Arrivals are collected during the tick and raised after the pass over the NPCs (handlers react with
-    /// <see cref="MoveTo"/>), never synchronously. A missing prefab or an unresolvable destination is logged and reported
-    /// as reached on the next tick, so the staff logic never stalls.</para>
+    /// <see cref="MoveTo"/>), never synchronously. Without a prefab the NPCs are invisible "ghosts" (the installer warns
+    /// once); an unresolvable destination is logged. Both are reported as reached on the next tick, so the staff logic
+    /// never stalls.</para>
     /// <para>Steady state is allocation-free.</para>
     /// </remarks>
     public sealed class StaffAgents : IStaffAgents, ITickable, IDisposable
@@ -81,11 +82,8 @@ namespace AutoService.Presentation.Staff
                 view.Place(position, rotation);
                 view.SetBodyMaterial(_staffVisuals != null ? _staffVisuals.MaterialOf(role) : null);
             }
-            else
-            {
-                Debug.LogError("[StaffAgents] No staff prefab assigned; staff " + staffId + " (" + role + ") is invisible.");
-            }
 
+            // Without a prefab the NPC is a ghost: the installer already warned once that NPCs will be invisible.
             _bodies.Add(staffId, new Body(view));
             _ids.Add(staffId);
         }

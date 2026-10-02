@@ -48,6 +48,10 @@ namespace AutoService.Bootstrap.Editor
         private const string NoSupplyIconName = "NoSupplyIcon";
         private const string UiSpritePath = "UI/Skin/UISprite.psd";
 
+        // Defaults of ScreenAnchoredPanel; a value still equal to them is replaced by the old panel's value.
+        private static readonly Vector2 DefaultScreenOffset = new Vector2(40f, 40f);
+        private const float DefaultScreenMargin = 16f;
+
         // Staff body (prompt 05 §8): capsule 1.8 m, NavMeshAgent humanoid, speed 3.5, box socket at (0, 1.1, 0.5).
         private const float StaffHeight = 1.8f;
         private const float StaffRadius = 0.4f;
@@ -129,16 +133,19 @@ namespace AutoService.Bootstrap.Editor
             var buildPanel = entry.FindProperty("_buildPanel").objectReferenceValue as OfferPanelView;
             PointPanelView pointPanel = null;
             OfferPanelView storekeeperPanel = null;
-            if (buildPanel != null)
+            if (buildPanel == null)
             {
-                RectTransform canvas = (RectTransform)buildPanel.transform.parent;
-                EnsureAnchoredPanel(buildPanel);
-                storekeeperPanel = SetupStorekeeperPanel(buildPanel, canvas);
-                pointPanel = BuildPointPanel(canvas);
+                problems.Add("_buildPanel is not assigned on the entry point (the panels are created next to it)");
+            }
+            else if (!(buildPanel.transform.parent is RectTransform canvas))
+            {
+                problems.Add("build panel '" + buildPanel.name + "' is not inside a UI canvas (the panels are created next to it)");
             }
             else
             {
-                problems.Add("_buildPanel is not assigned on the entry point (the panels are created next to it)");
+                EnsureAnchoredPanel(buildPanel);
+                storekeeperPanel = SetupStorekeeperPanel(buildPanel, canvas);
+                pointPanel = BuildPointPanel(canvas);
             }
 
             int huds = SetupPointHuds(layout);
@@ -214,43 +221,58 @@ namespace AutoService.Bootstrap.Editor
 
             var root = new GameObject(name);
             SceneManager.MoveGameObjectToScene(root, scene);
+            Undo.RegisterCreatedObjectUndo(root, "Create " + name);
             return root.transform;
         }
 
         // ── Staff prefab and catalogs ────────────────────────────────────────────────────────────────────────────────
 
+        /// <summary>
+        /// Creates the staff prefab, or completes an existing one: only missing parts (agent, body, head, socket, box,
+        /// view references) are added, so changes made to the prefab by hand survive a re-run.
+        /// </summary>
         private static StaffView CreateStaffPrefab(Material bodyMaterial)
         {
-            var root = new GameObject("Staff");
+            bool exists = AssetDatabase.LoadAssetAtPath<GameObject>(StaffPrefabPath) != null;
+            GameObject root = exists ? PrefabUtility.LoadPrefabContents(StaffPrefabPath) : new GameObject("Staff");
             try
             {
-                var agent = root.AddComponent<NavMeshAgent>();
-                agent.agentTypeID = 0;
-                agent.speed = StaffSpeed;
-                agent.radius = StaffRadius;
-                agent.height = StaffHeight;
-                agent.angularSpeed = 720f;
-                agent.acceleration = 16f;
-                agent.stoppingDistance = 0.1f;
-                agent.baseOffset = 0f;
+                if (!root.TryGetComponent(out NavMeshAgent agent))
+                {
+                    agent = root.AddComponent<NavMeshAgent>();
+                    agent.agentTypeID = 0;
+                    agent.speed = StaffSpeed;
+                    agent.radius = StaffRadius;
+                    agent.height = StaffHeight;
+                    agent.angularSpeed = 720f;
+                    agent.acceleration = 16f;
+                    agent.stoppingDistance = 0.1f;
+                    agent.baseOffset = 0f;
+                }
 
                 // Why: a 2 m capsule scaled to a 1.5 m body plus a head on top makes 1.8 m.
-                Renderer body = CreateVisual(PrimitiveType.Capsule, "Body", root.transform,
-                    new Vector3(0f, 0.75f, 0f), new Vector3(StaffRadius * 2f, 0.75f, StaffRadius * 2f));
-                body.sharedMaterial = bodyMaterial;
-                CreateVisual(PrimitiveType.Sphere, "Head", root.transform, new Vector3(0f, 1.575f, 0f), Vector3.one * 0.45f);
+                Renderer body = FindRenderer(root.transform, "Body");
+                if (body == null)
+                {
+                    body = CreateVisual(PrimitiveType.Capsule, "Body", root.transform,
+                        new Vector3(0f, 0.75f, 0f), new Vector3(StaffRadius * 2f, 0.75f, StaffRadius * 2f));
+                    body.sharedMaterial = bodyMaterial;
+                }
 
-                Transform socket = new GameObject(CarrySocketName).transform;
-                socket.SetParent(root.transform, false);
-                socket.localPosition = StaffCarrySocket;
-                Renderer box = CreateVisual(PrimitiveType.Cube, BoxName, socket, Vector3.zero, Vector3.one * BoxSize);
+                if (root.transform.Find("Head") == null)
+                {
+                    CreateVisual(PrimitiveType.Sphere, "Head", root.transform, new Vector3(0f, 1.575f, 0f), Vector3.one * 0.45f);
+                }
 
-                var view = root.AddComponent<StaffView>();
+                Transform socket = GetOrCreateSocket(root.transform, StaffCarrySocket);
+                Renderer box = GetOrCreateHiddenBox(socket);
+
+                StaffView view = root.TryGetComponent(out StaffView existing) ? existing : root.AddComponent<StaffView>();
                 var serialized = new SerializedObject(view);
-                serialized.FindProperty("_agent").objectReferenceValue = agent;
-                serialized.FindProperty("_body").objectReferenceValue = body;
-                serialized.FindProperty("_carrySocket").objectReferenceValue = socket;
-                serialized.FindProperty("_boxRenderer").objectReferenceValue = box;
+                SetIfEmpty(serialized.FindProperty("_agent"), agent);
+                SetIfEmpty(serialized.FindProperty("_body"), body);
+                SetIfEmpty(serialized.FindProperty("_carrySocket"), socket);
+                SetIfEmpty(serialized.FindProperty("_boxRenderer"), box);
                 serialized.ApplyModifiedPropertiesWithoutUndo();
 
                 // Why: SaveAsPrefabAsset overwrites an existing prefab in place, so its GUID (and every reference) is kept.
@@ -259,8 +281,62 @@ namespace AutoService.Bootstrap.Editor
             }
             finally
             {
-                Object.DestroyImmediate(root);
+                if (exists)
+                {
+                    PrefabUtility.UnloadPrefabContents(root);
+                }
+                else
+                {
+                    Object.DestroyImmediate(root);
+                }
             }
+        }
+
+        // Why: objects inside prefab contents (a preview scene unloaded right after saving) must not enter the undo stack.
+        private static void RegisterCreatedInScene(GameObject created, string undoName)
+        {
+            if (!EditorSceneManager.IsPreviewSceneObject(created))
+            {
+                Undo.RegisterCreatedObjectUndo(created, undoName);
+            }
+        }
+
+        private static Renderer FindRenderer(Transform parent, string name)
+        {
+            Transform child = parent.Find(name);
+            return child != null ? child.GetComponent<Renderer>() : null;
+        }
+
+        private static Transform GetOrCreateSocket(Transform parent, Vector3 localPosition)
+        {
+            Transform socket = parent.Find(CarrySocketName);
+            if (socket != null)
+            {
+                return socket;
+            }
+
+            socket = new GameObject(CarrySocketName).transform;
+            socket.SetParent(parent, false);
+            socket.localPosition = localPosition;
+            RegisterCreatedInScene(socket.gameObject, "Create carry socket");
+            return socket;
+        }
+
+        // Why: created inactive — the carry views switch it on with a box. An active box would also be baked into the
+        // NavMesh (RenderMeshes) as an obstacle right where the character stands.
+        private static Renderer GetOrCreateHiddenBox(Transform socket)
+        {
+            Renderer box = FindRenderer(socket, BoxName);
+            if (box != null)
+            {
+                box.gameObject.SetActive(false);
+                return box;
+            }
+
+            box = CreateVisual(PrimitiveType.Cube, BoxName, socket, Vector3.zero, Vector3.one * BoxSize);
+            box.gameObject.SetActive(false);
+            RegisterCreatedInScene(box.gameObject, "Create carried box");
+            return box;
         }
 
         // Why: render-only parts — a collider on the NPC would catch clicks and block the player's NavMesh agent.
@@ -354,20 +430,8 @@ namespace AutoService.Bootstrap.Editor
                 return null;
             }
 
-            Transform socket = player.transform.Find(CarrySocketName);
-            if (socket == null)
-            {
-                socket = new GameObject(CarrySocketName).transform;
-                socket.SetParent(player.transform, false);
-                Undo.RegisterCreatedObjectUndo(socket.gameObject, "Create carry socket");
-            }
-
-            socket.localPosition = PlayerCarrySocket;
-            socket.localRotation = Quaternion.identity;
-            Transform boxTransform = socket.Find(BoxName);
-            Renderer box = boxTransform != null
-                ? boxTransform.GetComponent<Renderer>()
-                : CreateVisual(PrimitiveType.Cube, BoxName, socket, Vector3.zero, Vector3.one * BoxSize);
+            Transform socket = GetOrCreateSocket(player.transform, PlayerCarrySocket);
+            Renderer box = GetOrCreateHiddenBox(socket);
 
             PlayerCarryView carry = player.TryGetComponent(out PlayerCarryView existing) ? existing : Undo.AddComponent<PlayerCarryView>(player.gameObject);
             var serialized = new SerializedObject(carry);
@@ -381,24 +445,42 @@ namespace AutoService.Bootstrap.Editor
 
         /// <summary>
         /// The build panel's positioning moved from <c>BuildPanelView</c> into <see cref="ScreenAnchoredPanel"/>: adds the
-        /// component on the panel's container and points it at the moved child.
+        /// component on the panel's container and moves the old values into it — the root from the old serialized
+        /// reference first (then by name / first child), offset and margin while the new component still has its defaults.
         /// </summary>
         private static void EnsureAnchoredPanel(OfferPanelView view)
         {
-            ScreenAnchoredPanel anchor = view.TryGetComponent(out ScreenAnchoredPanel existing)
-                ? existing
-                : Undo.AddComponent<ScreenAnchoredPanel>(view.gameObject);
+            bool created = !view.TryGetComponent(out ScreenAnchoredPanel anchor);
+            if (created)
+            {
+                anchor = Undo.AddComponent<ScreenAnchoredPanel>(view.gameObject);
+            }
+
+            var viewObject = new SerializedObject(view);
             var anchorObject = new SerializedObject(anchor);
             SerializedProperty root = anchorObject.FindProperty("_root");
             if (root.objectReferenceValue == null)
             {
+                Object legacyRoot = viewObject.FindProperty("_root").objectReferenceValue;
                 Transform child = view.transform.Find(PanelChildName);
-                root.objectReferenceValue = child != null ? child : view.transform.childCount > 0 ? view.transform.GetChild(0) : null;
+                root.objectReferenceValue = legacyRoot != null
+                    ? legacyRoot
+                    : child != null ? child : view.transform.childCount > 0 ? view.transform.GetChild(0) : null;
+            }
+
+            SerializedProperty offset = anchorObject.FindProperty("_screenOffset");
+            if (offset.vector2Value == DefaultScreenOffset)
+            {
+                offset.vector2Value = viewObject.FindProperty("_screenOffset").vector2Value;
+            }
+
+            SerializedProperty margin = anchorObject.FindProperty("_screenMargin");
+            if (Mathf.Approximately(margin.floatValue, DefaultScreenMargin))
+            {
+                margin.floatValue = viewObject.FindProperty("_screenMargin").floatValue;
             }
 
             anchorObject.ApplyModifiedProperties();
-
-            var viewObject = new SerializedObject(view);
             viewObject.FindProperty("_anchor").objectReferenceValue = anchor;
             viewObject.ApplyModifiedProperties();
         }
@@ -414,13 +496,15 @@ namespace AutoService.Bootstrap.Editor
                 copy.name = StorekeeperPanelName;
                 Undo.RegisterCreatedObjectUndo(copy, "Create storekeeper panel");
                 panel = copy.GetComponent<OfferPanelView>();
+
+                // Why: only on creation — labels edited on the panel later survive a re-run.
+                var serialized = new SerializedObject(panel);
+                serialized.FindProperty("_actionLabelFormat").stringValue = "Hire {0}";
+                serialized.FindProperty("_completedLabel").stringValue = "Hired";
+                serialized.ApplyModifiedProperties();
             }
 
             EnsureAnchoredPanel(panel);
-            var serialized = new SerializedObject(panel);
-            serialized.FindProperty("_actionLabelFormat").stringValue = "Hire {0}";
-            serialized.FindProperty("_completedLabel").stringValue = "Hired";
-            serialized.ApplyModifiedProperties();
             return panel;
         }
 

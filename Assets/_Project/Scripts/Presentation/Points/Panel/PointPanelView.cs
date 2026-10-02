@@ -230,6 +230,18 @@ namespace AutoService.Presentation.Points.Panel
         /// <summary>Writes the status line.</summary>
         public void SetStatus(string status) => SetText(_status, status);
 
+        /// <summary>Writes the status line from a cached format and two numbers without allocating.</summary>
+        /// <param name="format">TMP SetText format with {0} and {1}.</param>
+        /// <param name="arg0">Value of {0}.</param>
+        /// <param name="arg1">Value of {1}.</param>
+        public void SetStatus(string format, float arg0, float arg1)
+        {
+            if (_status != null)
+            {
+                _status.SetText(format, arg0, arg1);
+            }
+        }
+
         /// <summary>Writes the income per minute without allocating.</summary>
         public void SetIncome(float dollarsPerMinute)
         {

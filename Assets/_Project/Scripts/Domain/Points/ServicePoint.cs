@@ -240,8 +240,11 @@ namespace AutoService.Domain.Points
             }
 
             _acceptTimer = 0f;
-            Supply?.TryConsume();
+
+            // Why: the state changes first, so stock listeners (HUD, SupplyDepletedEvent) already see an order being served,
+            // not a car still waiting for a box.
             SetState(ServicePointState.Servicing);
+            Supply?.TryConsume();
             OrderAccepted?.Invoke(this, CurrentPrice);
         }
 

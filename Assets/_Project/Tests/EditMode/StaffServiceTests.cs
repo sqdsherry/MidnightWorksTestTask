@@ -35,6 +35,7 @@ namespace AutoService.Tests.EditMode
         private FakeStaffAgents _agents;
         private SupplyService _supplies;
         private StaffService _service;
+        private FakeGameLogger _logger;
 
         private readonly List<StaffHiredEvent> _hired = new List<StaffHiredEvent>();
 
@@ -61,7 +62,8 @@ namespace AutoService.Tests.EditMode
             _points.Register(wash.CreatePointDefinition(Wash2, LocationId));
             _points.Register(oil.CreatePointDefinition(Oil, LocationId));
             _supplies = new SupplyService(_points, _wallet, _config, _bus);
-            _service = new StaffService(_points, _supplies, _wallet, _gate, _agents, _config, _bus);
+            _logger = new FakeGameLogger();
+            _service = new StaffService(_points, _supplies, _wallet, _gate, _agents, _config, _bus, _logger);
 
             _hired.Clear();
             _bus.Subscribe<StaffHiredEvent>(OnHired);
@@ -229,6 +231,90 @@ namespace AutoService.Tests.EditMode
             _agents.Arrive(keeper);
             Assert.AreEqual(9, Point(Wash2).Supply.Current);
             Assert.AreEqual(StaffState.Idle, Keeper().State);
+        }
+
+        [Test]
+        public void Storekeeper_AtExactlyTheThreshold_StaysIdle()
+        {
+            _service.TryHireStorekeeper(LocationId);
+            Consume(Wash1, 5);
+
+            _service.Tick(1f);
+
+            Assert.AreEqual(StaffState.Idle, Keeper().State, "5/10 is not below the 0.5 threshold.");
+        }
+
+        [Test]
+        public void Storekeeper_PointRestockedWhileWalking_ReturnsIdleWithoutBuying()
+        {
+            _service.TryHireStorekeeper(LocationId);
+            int keeper = _agents.Spawned[0].Key;
+            Consume(Wash1, 6);
+            _service.Tick(0.1f);
+            Assert.AreEqual(StaffState.ToWarehouse, Keeper().State);
+            Money before = _wallet.Balance;
+
+            _supplies.TryDeliver(new SupplyBox("shampoo", 5), Wash1, true);
+            _agents.Arrive(keeper);
+
+            Assert.AreEqual(StaffState.Idle, Keeper().State);
+            Assert.AreEqual(before, _wallet.Balance, "No box for a point that is 9/10 now.");
+            Assert.IsTrue(Keeper().CarriedBox.IsNone);
+        }
+
+        [Test]
+        public void Storekeeper_WithNowhereToPutTheBox_DropsIt_AndCanDeliverThereAgain()
+        {
+            _service.TryHireStorekeeper(LocationId);
+            int keeper = _agents.Spawned[0].Key;
+            Consume(Wash1, 6);
+            _service.Tick(0.1f);
+            _agents.Arrive(keeper);
+            Assert.AreEqual(Wash1, Keeper().TargetPointId);
+
+            // The player fills wash 1 meanwhile (4 + 5 = 9/10), and wash 2 is full: the box fits nowhere.
+            _supplies.TryDeliver(new SupplyBox("shampoo", 5), Wash1, true);
+            _agents.Arrive(keeper);
+
+            Assert.AreEqual(StaffState.Idle, Keeper().State);
+            Assert.IsTrue(Keeper().CarriedBox.IsNone);
+            Assert.AreEqual(string.Empty, _agents.Carried[keeper]);
+
+            // Incoming was cleared: once wash 1 is hungry again, the storekeeper delivers there.
+            Consume(Wash1, 5);
+            _service.Tick(0.1f);
+            _agents.Arrive(keeper);
+            Assert.AreEqual(Wash1, Keeper().TargetPointId);
+            _agents.Arrive(keeper);
+            Assert.AreEqual(9, Point(Wash1).Supply.Current);
+        }
+
+        [Test]
+        public void StorekeeperPurchase_IsNotByThePlayer()
+        {
+            var bought = new List<BoxBoughtEvent>();
+            Action<BoxBoughtEvent> onBought = bought.Add;
+            _bus.Subscribe(onBought);
+            _service.TryHireStorekeeper(LocationId);
+            Consume(Wash1, 6);
+            _service.Tick(0.1f);
+
+            _agents.Arrive(_agents.Spawned[0].Key);
+            _bus.Unsubscribe(onBought);
+
+            Assert.AreEqual(1, bought.Count);
+            Assert.IsFalse(bought[0].ByPlayer);
+        }
+
+        [Test]
+        public void RestoreStorekeeper_WithoutStaffSettings_IsSkippedAndLogged()
+        {
+            _config.Staff = null;
+
+            _service.RestoreStorekeeper(LocationId);
+
+            Assert.AreEqual(0, _agents.Spawned.Count);
+            Assert.AreEqual(1, _logger.Warnings.Count);
         }
 
         [Test]

@@ -176,7 +176,18 @@ namespace AutoService.Services.Upgrades
             return _wallet.CanAfford(settings.CostAt(track.Level)) ? UpgradeAvailability.Available : UpgradeAvailability.NotEnoughMoney;
         }
 
-        private UpgradeSettings SettingsOf(UpgradeKind kind) => kind == UpgradeKind.Speed ? _speed : _price;
+        private UpgradeSettings SettingsOf(UpgradeKind kind)
+        {
+            switch (kind)
+            {
+                case UpgradeKind.Speed:
+                    return _speed;
+                case UpgradeKind.Price:
+                    return _price;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown upgrade kind.");
+            }
+        }
 
         private void Apply(PointUpgrades upgrades)
         {
@@ -201,7 +212,18 @@ namespace AutoService.Services.Upgrades
 
             public UpgradeTrack Price { get; }
 
-            public UpgradeTrack TrackOf(UpgradeKind kind) => kind == UpgradeKind.Speed ? Speed : Price;
+            public UpgradeTrack TrackOf(UpgradeKind kind)
+            {
+                switch (kind)
+                {
+                    case UpgradeKind.Speed:
+                        return Speed;
+                    case UpgradeKind.Price:
+                        return Price;
+                    default:
+                        throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown upgrade kind.");
+                }
+            }
         }
     }
 }

@@ -277,10 +277,14 @@ namespace AutoService.Tests.EditMode
             UseSuppliedPoint(10);
             Assert.AreEqual(10, _point.Supply.Current);
 
+            ServicePointState stateWhenConsumed = ServicePointState.Idle;
+            _point.Supply.Changed += stock => stateWhenConsumed = _point.State;
+
             StartServicing();
 
             Assert.AreEqual(9, _point.Supply.Current);
             Assert.AreEqual(1, _acceptedCount);
+            Assert.AreEqual(ServicePointState.Servicing, stateWhenConsumed, "Stock listeners see the order already being served.");
         }
 
         [Test]

@@ -65,6 +65,17 @@ namespace AutoService.Presentation.Panels
         [Tooltip("Requirement text when locked; {0} = level.")]
         private string _requirementFormat = "Requires level {0}";
 
+        // Why: legacy fields of BuildPanelView, kept only so the A2 setup can read the scene's old values and move them to
+        // ScreenAnchoredPanel (a removed field's data cannot be read). Not used at runtime; delete after the migration.
+        [SerializeField, HideInInspector]
+        private RectTransform _root;
+
+        [SerializeField, HideInInspector]
+        private Vector2 _screenOffset = new Vector2(40f, 40f);
+
+        [SerializeField, HideInInspector]
+        private float _screenMargin = 16f;
+
         private bool _anchorResolved;
 
         /// <summary>Raised when the action button is clicked.</summary>

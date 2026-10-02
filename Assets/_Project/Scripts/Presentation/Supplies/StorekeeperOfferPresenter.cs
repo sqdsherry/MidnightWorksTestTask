@@ -142,12 +142,17 @@ namespace AutoService.Presentation.Supplies
             }
 
             _open = true;
+            ShowOffer(availability);
+            _view.Follow(_camera, _pad.PanelAnchor.position);
+        }
+
+        private void ShowOffer(HireAvailability availability)
+        {
             string requirement = availability == HireAvailability.Locked
                 ? string.Format(_view.RequirementFormat, _settings.StorekeeperRequiredLevel.ToString(CultureInfo.InvariantCulture))
                 : null;
             _view.Show(_settings.StorekeeperTitle, _settings.StorekeeperDescription, MoneyFormatter.Format(_settings.StorekeeperCost), requirement);
             Show(availability);
-            _view.Follow(_camera, _pad.PanelAnchor.position);
         }
 
         private void Refresh()
@@ -158,7 +163,18 @@ namespace AutoService.Presentation.Supplies
             }
 
             HireAvailability availability = _staff.GetStorekeeperAvailability(_locationId);
-            if (availability != _shown)
+            if (availability == _shown)
+            {
+                return;
+            }
+
+            // Why: the requirement line only exists while locked, so entering or leaving Locked redraws the whole offer
+            // (a gate change, not a per-frame event); otherwise only the button switches.
+            if ((availability == HireAvailability.Locked) != (_shown == HireAvailability.Locked))
+            {
+                ShowOffer(availability);
+            }
+            else
             {
                 Show(availability);
             }

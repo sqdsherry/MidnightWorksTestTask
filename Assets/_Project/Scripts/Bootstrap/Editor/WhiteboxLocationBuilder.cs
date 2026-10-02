@@ -572,7 +572,9 @@ namespace AutoService.Bootstrap.Editor
         }
 
         // Why (TDD K4): the NavMesh is baked while the built-later bays are off, so their walls are not cut out of it;
-        // carving obstacles on the walls block the character and the NPCs without a rebake.
+        // carving obstacles on the walls block the character and the NPCs without a rebake. NavMeshSurface skips objects
+        // with a NavMeshObstacle when baking (m_IgnoreNavMeshObstacle), so even the walls of the built wash 1 are not baked
+        // any more — the hole they leave is closed by the carve at runtime, the same as for the bays built later.
         private static void AddWallObstacles(ServicePointView bay)
         {
             BoxCollider[] colliders = bay.GetComponentsInChildren<BoxCollider>(true);

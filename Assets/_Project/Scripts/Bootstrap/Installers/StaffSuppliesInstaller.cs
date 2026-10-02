@@ -62,9 +62,14 @@ namespace AutoService.Bootstrap.Installers
             context.Register<IUpgradeService>(upgrades);
             context.Register(income, TickPhase.Trackers);
 
-            context.HasReference(scene.StaffPrefab, "_staffPrefab");
+            if (scene.StaffPrefab == null)
+            {
+                context.Logger.Warning("[Gameplay] _staffPrefab is not assigned on " + context.OwnerName
+                    + ": hired NPCs will be invisible (their jobs still run).");
+            }
+
             var agents = new StaffAgents(layout, scene.StaffPrefab, scene.StaffVisuals, scene.SupplyVisuals, scene.StaffRoot);
-            var staff = new StaffService(points, supplies, wallet, gate, agents, config, eventBus);
+            var staff = new StaffService(points, supplies, wallet, gate, agents, config, eventBus, context.Logger);
 
             // Why: tracked, not registered — module 11 adds a second location with its own staff bodies.
             context.Track(agents, TickPhase.Agents);

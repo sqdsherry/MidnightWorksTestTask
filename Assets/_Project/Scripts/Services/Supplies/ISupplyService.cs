@@ -33,7 +33,10 @@ namespace AutoService.Services.Supplies
         /// <param name="locationId">Location of the warehouse.</param>
         /// <param name="byPlayer">True for the player, false for the storekeeper (reported in <see cref="BoxBoughtEvent"/>).</param>
         /// <param name="box">The bought box, or <see cref="SupplyBox.None"/>.</param>
-        /// <param name="target">The hungriest point the box was picked for, or null.</param>
+        /// <param name="target">
+        /// The hungriest point the box was picked for. Null only when there is nothing to restock; when the purchase fails
+        /// for lack of money it is still set, so the caller can show the price ("Need $15").
+        /// </param>
         /// <returns>False (nothing charged) when there is nothing to restock or the balance does not cover the box.</returns>
         bool TryBuyBoxForHungriest(string locationId, bool byPlayer, out SupplyBox box, out ServicePoint target);
 

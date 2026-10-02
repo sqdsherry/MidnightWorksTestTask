@@ -108,15 +108,33 @@ namespace AutoService.Presentation.Staff
             switch (_phase)
             {
                 case Phase.Walking:
-                    if (_agent.pathPending || _agent.remainingDistance > _agent.stoppingDistance + _arrivalTolerance)
+                    // Why: off the NavMesh remainingDistance throws every frame, and a partial/invalid path ends at the edge
+                    // of the reachable area — "arriving" there would let a worker hold a spot it does not stand on or the
+                    // storekeeper deliver through a wall. The NPC must not get stuck forever either, so it is teleported
+                    // onto the target (logged once) and then arrives normally.
+                    if (!_agent.isOnNavMesh)
+                    {
+                        SnapToTarget("is not on the NavMesh");
+                        return false;
+                    }
+
+                    if (_agent.pathPending)
                     {
                         return false;
                     }
 
-                    // Why: a partial path (target inside an obstacle) still ends at the closest reachable point — stop there.
-                    _agent.ResetPath();
-                    _agent.updateRotation = false;
-                    _phase = Phase.Turning;
+                    if (_agent.pathStatus != NavMeshPathStatus.PathComplete)
+                    {
+                        SnapToTarget("has no complete path (" + _agent.pathStatus + ")");
+                        return false;
+                    }
+
+                    if (_agent.remainingDistance > _agent.stoppingDistance + _arrivalTolerance)
+                    {
+                        return false;
+                    }
+
+                    StartTurning();
                     return false;
                 case Phase.Turning:
                     Quaternion goal = YawOnly(_target != null ? _target.rotation : transform.rotation, transform.rotation);
@@ -133,6 +151,34 @@ namespace AutoService.Presentation.Staff
                 default:
                     return false;
             }
+        }
+
+        private void StartTurning()
+        {
+            if (_agent.isOnNavMesh)
+            {
+                _agent.ResetPath();
+            }
+
+            _agent.updateRotation = false;
+            _phase = Phase.Turning;
+        }
+
+        private void SnapToTarget(string reason)
+        {
+            Debug.LogWarning("[StaffView] '" + name + "' " + reason + " to '" + (_target != null ? _target.name : "nothing")
+                + "'; teleported there.", this);
+            if (_target != null)
+            {
+                if (_agent.isOnNavMesh)
+                {
+                    _agent.ResetPath();
+                }
+
+                Place(_target.position, _target.rotation);
+            }
+
+            StartTurning();
         }
 
         // Why: target points may be tilted in the scene; the NPC only ever rotates around the vertical axis.

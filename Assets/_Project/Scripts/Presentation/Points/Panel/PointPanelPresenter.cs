@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Text;
 using AutoService.Domain.Common;
 using AutoService.Domain.Points;
 using AutoService.Domain.Staff;
@@ -26,8 +25,10 @@ namespace AutoService.Presentation.Points.Panel
     /// </summary>
     /// <remarks>
     /// Closes when the character leaves the pad, on Close / Esc (and hides while the pad is behind the camera).
-    /// Texts are rebuilt only on events (balance, upgrade, hire, the point's stock, the unlock gate); per frame the presenter
-    /// only ticks the dwell timers and moves the panel, and once a second writes the income with a non-allocating SetText.
+    /// <para><b>No garbage while open.</b> The balance changes inside the game loop (payments, boxes) several times a second,
+    /// so every string is built only when the panel opens, an upgrade level changes or a worker is hired (player clicks).
+    /// A balance or gate change only switches a button between its cached labels (Available ↔ Need / Locked); the status
+    /// line and the income are numbers written into cached formats with the non-allocating <c>TMP_Text.SetText</c>.</para>
     /// </remarks>
     public sealed class PointPanelPresenter : ITickable, IDisposable
     {
@@ -44,10 +45,15 @@ namespace AutoService.Presentation.Points.Panel
         private readonly Camera _camera;
         private readonly IReadOnlyList<ManagePadView> _pads;
         private readonly GameplayInput _input;
-        private readonly StringBuilder _status = new StringBuilder(64);
+        private readonly UpgradeRowState _speed = new UpgradeRowState(UpgradeKind.Speed);
+        private readonly UpgradeRowState _price = new UpgradeRowState(UpgradeKind.Price);
+        private readonly HireRowState _hire = new HireRowState();
 
         private ManagePadView _openPad;
         private ServicePoint _openPoint;
+        private PointWorkerSettings _worker;
+        private string _statusHiredFormat;
+        private string _statusNotHiredFormat;
         private float _incomeTimer;
         private bool _disposed;
 
@@ -105,7 +111,7 @@ namespace AutoService.Presentation.Points.Panel
             _upgrades.Upgraded += OnUpgraded;
             _staff.Hired += OnHired;
             _wallet.BalanceChanged += OnBalanceChanged;
-            _gate.Changed += Refresh;
+            _gate.Changed += RefreshAvailability;
             if (_input != null)
             {
                 _input.CancelPressed += Close;
@@ -171,7 +177,7 @@ namespace AutoService.Presentation.Points.Panel
             _upgrades.Upgraded -= OnUpgraded;
             _staff.Hired -= OnHired;
             _wallet.BalanceChanged -= OnBalanceChanged;
-            _gate.Changed -= Refresh;
+            _gate.Changed -= RefreshAvailability;
             if (_input != null)
             {
                 _input.CancelPressed -= Close;
@@ -196,10 +202,14 @@ namespace AutoService.Presentation.Points.Panel
                 point.Supply.Changed += OnSupplyChanged;
             }
 
-            _view.SetTitle(_config.TryGetServiceType(point.Definition.ServiceTypeId, out ServiceTypeSettings type)
-                ? type.DisplayName
-                : point.Definition.Id);
-            Refresh();
+            bool knownType = _config.TryGetServiceType(point.Definition.ServiceTypeId, out ServiceTypeSettings type);
+            _worker = knownType ? type.Worker : null;
+            _view.SetTitle(knownType ? type.DisplayName : point.Definition.Id);
+            PrepareStatusFormats();
+            ShowStatus();
+            PrepareUpgradeRow(_speed);
+            PrepareUpgradeRow(_price);
+            PrepareHireRow();
             ShowIncome();
             _view.Show();
             _view.Follow(_camera, pad.PanelAnchor.position);
@@ -228,84 +238,111 @@ namespace AutoService.Presentation.Points.Panel
             }
 
             _openPoint = null;
+            _worker = null;
         }
 
-        private void Refresh()
+        // ── Status ─────────────────────────────────────────────────────────────────────────────────────────────────
+
+        // Why: the worker part never changes while open except hired ↔ not hired, so both full status formats are built
+        // once; the supply numbers are then filled in by SetText ("Supply {0}/{1} · Washer: hired").
+        private void PrepareStatusFormats()
         {
-            if (_openPoint == null)
+            string supply = _openPoint.Supply != null ? _view.SupplyFormat : string.Empty;
+            if (_worker == null)
             {
+                _statusHiredFormat = supply;
+                _statusNotHiredFormat = supply;
                 return;
             }
 
-            string pointId = _openPoint.Definition.Id;
-            _config.TryGetServiceType(_openPoint.Definition.ServiceTypeId, out ServiceTypeSettings type);
-            PointWorkerSettings worker = type?.Worker;
-
-            _view.SetStatus(BuildStatus(worker, _staff.HasWorker(pointId)));
-            ShowUpgrade(pointId, UpgradeKind.Speed);
-            ShowUpgrade(pointId, UpgradeKind.Price);
-            ShowHire(pointId, worker);
+            string separator = supply.Length > 0 ? _view.StatusSeparator : string.Empty;
+            _statusHiredFormat = supply + separator + string.Format(_view.WorkerFormat, _worker.Title, _view.WorkerHiredText);
+            _statusNotHiredFormat = supply + separator + string.Format(_view.WorkerFormat, _worker.Title, _view.WorkerNotHiredText);
         }
 
-        private string BuildStatus(PointWorkerSettings worker, bool hired)
+        private void ShowStatus()
         {
-            _status.Clear();
+            string format = _staff.HasWorker(_openPoint.Definition.Id) ? _statusHiredFormat : _statusNotHiredFormat;
             SupplyStock supply = _openPoint.Supply;
             if (supply != null)
             {
-                _status.AppendFormat(CultureInfo.InvariantCulture, _view.SupplyFormat, supply.Current, supply.Capacity);
+                _view.SetStatus(format, supply.Current, supply.Capacity);
             }
-
-            if (worker != null)
+            else
             {
-                if (_status.Length > 0)
-                {
-                    _status.Append(_view.StatusSeparator);
-                }
-
-                _status.AppendFormat(_view.WorkerFormat, worker.Title, hired ? _view.WorkerHiredText : _view.WorkerNotHiredText);
+                _view.SetStatus(format);
             }
-
-            return _status.ToString();
         }
 
-        private void ShowUpgrade(string pointId, UpgradeKind kind)
+        // ── Upgrades ───────────────────────────────────────────────────────────────────────────────────────────────
+
+        /// <summary>Formats the row's labels for the current level (on opening and after a purchase).</summary>
+        private void PrepareUpgradeRow(UpgradeRowState state)
         {
-            UpgradeRowView row = _view.RowOf(kind);
+            UpgradeRowView row = _view.RowOf(state.Kind);
             if (row == null)
             {
                 return;
             }
 
-            UpgradeAvailability availability = _upgrades.GetAvailability(pointId, kind);
-            if (availability == UpgradeAvailability.NotSupported || !_config.TryGetUpgrade(kind, out UpgradeSettings settings))
+            string pointId = _openPoint.Definition.Id;
+            UpgradeAvailability availability = _upgrades.GetAvailability(pointId, state.Kind);
+            if (availability == UpgradeAvailability.NotSupported || !_config.TryGetUpgrade(state.Kind, out UpgradeSettings settings))
             {
                 row.SetVisible(false);
+                state.Visible = false;
                 return;
             }
 
+            state.Visible = true;
             row.SetVisible(true);
             row.SetInfo(settings.DisplayName, settings.EffectFormat);
-            row.SetLevel(_upgrades.GetLevel(pointId, kind));
-            string cost = MoneyFormatter.Format(_upgrades.GetNextCost(pointId, kind));
+            row.SetLevel(_upgrades.GetLevel(pointId, state.Kind));
+            string cost = MoneyFormatter.Format(_upgrades.GetNextCost(pointId, state.Kind));
+            state.BuyLabel = string.Format(_view.UpgradeLabelFormat, cost);
+            state.NeedLabel = string.Format(_view.NeedLabelFormat, cost);
+            state.LockedLabel = LockedLabel(settings.RequiredLevel);
+            ShowUpgradeButton(state, availability);
+        }
+
+        private void ShowUpgradeButton(UpgradeRowState state, UpgradeAvailability availability)
+        {
+            state.Shown = availability;
+            UpgradeRowView row = _view.RowOf(state.Kind);
             switch (availability)
             {
                 case UpgradeAvailability.Available:
-                    row.SetButton(true, string.Format(_view.UpgradeLabelFormat, cost));
+                    row.SetButton(true, state.BuyLabel);
                     break;
                 case UpgradeAvailability.NotEnoughMoney:
-                    row.SetButton(false, string.Format(_view.NeedLabelFormat, cost));
+                    row.SetButton(false, state.NeedLabel);
                     break;
                 case UpgradeAvailability.Maxed:
                     row.SetButton(false, _view.MaxLabel);
                     break;
                 default:
-                    row.SetButton(false, LockedLabel(settings.RequiredLevel));
+                    row.SetButton(false, state.LockedLabel);
                     break;
             }
         }
 
-        private void ShowHire(string pointId, PointWorkerSettings worker)
+        private void RefreshUpgradeButton(UpgradeRowState state)
+        {
+            if (!state.Visible)
+            {
+                return;
+            }
+
+            UpgradeAvailability availability = _upgrades.GetAvailability(_openPoint.Definition.Id, state.Kind);
+            if (availability != state.Shown)
+            {
+                ShowUpgradeButton(state, availability);
+            }
+        }
+
+        // ── Hire ───────────────────────────────────────────────────────────────────────────────────────────────────
+
+        private void PrepareHireRow()
         {
             HireRowView row = _view.HireRow;
             if (row == null)
@@ -313,31 +350,60 @@ namespace AutoService.Presentation.Points.Panel
                 return;
             }
 
-            HireAvailability availability = _staff.GetWorkerAvailability(pointId);
-            if (availability == HireAvailability.NotSupported || worker == null)
+            HireAvailability availability = _staff.GetWorkerAvailability(_openPoint.Definition.Id);
+            if (availability == HireAvailability.NotSupported || _worker == null)
             {
                 row.SetVisible(false);
+                _hire.Visible = false;
                 return;
             }
 
+            _hire.Visible = true;
             row.SetVisible(true);
-            string cost = MoneyFormatter.Format(worker.HireCost);
+            row.SetTitle(_worker.Title);
+            string cost = MoneyFormatter.Format(_worker.HireCost);
+            _hire.HireLabel = string.Format(_view.HireLabelFormat, _worker.Title, cost);
+            _hire.NeedLabel = string.Format(_view.NeedLabelFormat, cost);
+            _hire.LockedLabel = LockedLabel(_worker.RequiredLevel);
+            ShowHireButton(availability);
+        }
+
+        private void ShowHireButton(HireAvailability availability)
+        {
+            _hire.Shown = availability;
+            HireRowView row = _view.HireRow;
             switch (availability)
             {
                 case HireAvailability.Available:
-                    row.SetButton(true, string.Format(_view.HireLabelFormat, worker.Title, cost));
+                    row.SetButton(true, _hire.HireLabel);
                     break;
                 case HireAvailability.NotEnoughMoney:
-                    row.SetButton(false, string.Format(_view.NeedLabelFormat, cost));
+                    row.SetButton(false, _hire.NeedLabel);
                     break;
                 case HireAvailability.Hired:
                     row.SetButton(false, _view.HiredLabel);
                     break;
                 default:
-                    row.SetButton(false, LockedLabel(worker.RequiredLevel));
+                    row.SetButton(false, _hire.LockedLabel);
                     break;
             }
         }
+
+        private void RefreshHireButton()
+        {
+            if (!_hire.Visible)
+            {
+                return;
+            }
+
+            HireAvailability availability = _staff.GetWorkerAvailability(_openPoint.Definition.Id);
+            if (availability != _hire.Shown)
+            {
+                ShowHireButton(availability);
+            }
+        }
+
+        // ── Events ─────────────────────────────────────────────────────────────────────────────────────────────────
 
         private string LockedLabel(int requiredLevel)
         {
@@ -353,12 +419,25 @@ namespace AutoService.Presentation.Points.Panel
             }
         }
 
+        // Why: balance and gate changes only switch the buttons between their cached labels — no strings are built.
+        private void RefreshAvailability()
+        {
+            if (_openPoint == null)
+            {
+                return;
+            }
+
+            RefreshUpgradeButton(_speed);
+            RefreshUpgradeButton(_price);
+            RefreshHireButton();
+        }
+
         private void OnUpgradeClicked(UpgradeKind kind)
         {
-            // Why: on success the Upgraded event refreshes the panel; on failure (spent meanwhile) refresh it here.
+            // Why: on success the Upgraded event re-formats the row; on failure (spent meanwhile) only the button changes.
             if (_openPoint != null && !_upgrades.TryUpgrade(_openPoint.Definition.Id, kind))
             {
-                Refresh();
+                RefreshAvailability();
             }
         }
 
@@ -366,23 +445,42 @@ namespace AutoService.Presentation.Points.Panel
         {
             if (_openPoint != null && !_staff.TryHireWorker(_openPoint.Definition.Id))
             {
-                Refresh();
+                RefreshAvailability();
             }
         }
 
         private void OnUpgraded(string pointId, UpgradeKind kind)
         {
-            if (_openPoint != null && string.Equals(_openPoint.Definition.Id, pointId, StringComparison.Ordinal))
+            if (_openPoint == null || !string.Equals(_openPoint.Definition.Id, pointId, StringComparison.Ordinal))
             {
-                Refresh();
+                return;
             }
+
+            // Why: a new level means a new price — this row's labels are formatted again; the other row only re-checks.
+            PrepareUpgradeRow(kind == UpgradeKind.Speed ? _speed : _price);
+            RefreshAvailability();
         }
 
-        private void OnHired(StaffMember member) => Refresh();
+        private void OnHired(StaffMember member)
+        {
+            if (_openPoint == null)
+            {
+                return;
+            }
 
-        private void OnBalanceChanged(Money balance) => Refresh();
+            ShowStatus();
+            RefreshAvailability();
+        }
 
-        private void OnSupplyChanged(SupplyStock stock) => Refresh();
+        private void OnBalanceChanged(Money balance) => RefreshAvailability();
+
+        private void OnSupplyChanged(SupplyStock stock)
+        {
+            if (_openPoint != null)
+            {
+                ShowStatus();
+            }
+        }
 
         private void OnPadLeft(ManagePadView pad)
         {
@@ -390,6 +488,41 @@ namespace AutoService.Presentation.Points.Panel
             {
                 Close();
             }
+        }
+
+        /// <summary>Cached labels and the last shown state of one upgrade row.</summary>
+        private sealed class UpgradeRowState
+        {
+            public UpgradeRowState(UpgradeKind kind)
+            {
+                Kind = kind;
+            }
+
+            public UpgradeKind Kind { get; }
+
+            public bool Visible { get; set; }
+
+            public UpgradeAvailability Shown { get; set; }
+
+            public string BuyLabel { get; set; }
+
+            public string NeedLabel { get; set; }
+
+            public string LockedLabel { get; set; }
+        }
+
+        /// <summary>Cached labels and the last shown state of the hire row.</summary>
+        private sealed class HireRowState
+        {
+            public bool Visible { get; set; }
+
+            public HireAvailability Shown { get; set; }
+
+            public string HireLabel { get; set; }
+
+            public string NeedLabel { get; set; }
+
+            public string LockedLabel { get; set; }
         }
     }
 }
