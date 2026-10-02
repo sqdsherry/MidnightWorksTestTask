@@ -256,7 +256,7 @@ EditMode: `Wallet`, `PriceFormula`, `ServicePoint` (прогресс тольк�
 | 04 | `feature/04-build` | **A1** Стройка: ряд 4 боксов с буферами, места парковки, рост потока, панель постройки — [промпт](Prompts/04-a1-build.md), [фикс](Prompts/04c-a1-setup-tools.md) | Д1 | M | ✔️ смержен |
 | 05 | `feature/05-staff-supplies` | **A2** R1-инсталлеры + персонал (работник точки, кладовщик), склад/расходники/перенос, ManagePad + панель точки + апгрейды — [промпт](Prompts/05-a2-staff-supplies.md), фиксы [05b](Prompts/05b-a2-review-fixes.md), [05c](Prompts/05c-a2-playtest-fixes.md) | Д2 | M | ✔️ смержен |
 | 07 | `feature/07-progression` | **B1** Прогрессия: XP, уровни, `LevelUnlockGate` — **пишет пользователь** — [промпт](Prompts/07-progression.md) | Д2 | M | 🔨 в работе |
-| 09a | `feature/09a-shell` | **C1** Оболочка: сцены, загрузка, меню, настройки, пауза, Esc-роутер — [промпт](Prompts/09a-shell.md) | Д2 | M | 🔨 в работе |
+| 09a | `feature/09a-shell` | **C1** Оболочка: сцены, загрузка, меню, настройки, пауза, Esc-роутер — [промпт](Prompts/09a-shell.md), [фикс](Prompts/09b-shell-review-fixes.md) | Д2 | M | ✔️ смержен |
 | 08a | `feature/08a-save-core` | Ядро сейва (SaveData, атомарная запись, SaveCoordinator, автосейв) + Settings — [промпт](Prompts/08a-save-core.md) | Д1 | M | ✔️ смержен |
 | 08b | `feature/08b-save-wiring` | Подключение сервисов к сейву (`ISaveable`), загрузка на старте, сейв при выходе | 2 | M | ⏳ |
 | 09 | `feature/09-scenes-ui` | Scene Flow + Loading + MainMenu + Settings + HUD + панели/попапы | 3 | M | ⏳ |
