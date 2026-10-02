@@ -108,3 +108,6 @@ InitTestScene*.unity*
 
 # Rider
 .idea/
+
+# Downloaded asset packs (source material, not part of the project)
+/Donwload/
