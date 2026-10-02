@@ -92,10 +92,10 @@ namespace AutoService.Bootstrap.Editor
             var problems = new List<string>();
 
             EnsureFolder(PrefabsFolder, "UI");
-            SettingsView settingsPrefab = SetupSettingsPrefab(problems);
-            SetupMainMenuScene(settingsPrefab, problems);
+            bool settingsPrefabReady = SetupSettingsPrefab(problems);
+            SetupMainMenuScene(settingsPrefabReady, problems);
             SetupBootScene(problems);
-            SetupGameplayScene(settingsPrefab, problems);
+            SetupGameplayScene(settingsPrefabReady, problems);
             SetupBuildScenes();
             AssetDatabase.SaveAssets();
             RestoreScenes(originalSetup);
@@ -132,7 +132,8 @@ namespace AutoService.Bootstrap.Editor
         /// Creates <c>Prefabs/UI/SettingsPanel.prefab</c> (prompt 09a §4.3, §4.5), or completes the existing one in place:
         /// only missing parts are added, so edits made to the prefab survive and its object ids stay the same.
         /// </summary>
-        private static SettingsView SetupSettingsPrefab(List<string> problems)
+        /// <returns>True when the prefab is saved and has a <see cref="SettingsView"/> on its root.</returns>
+        private static bool SetupSettingsPrefab(List<string> problems)
         {
             bool exists = AssetDatabase.LoadAssetAtPath<GameObject>(SettingsPrefabPath) != null;
             GameObject root = exists ? PrefabUtility.LoadPrefabContents(SettingsPrefabPath) : CreateSettingsRoot();
@@ -145,7 +146,7 @@ namespace AutoService.Bootstrap.Editor
                 if (!success)
                 {
                     problems.Add("the settings prefab could not be saved to " + SettingsPrefabPath + " (see the console for the reason)");
-                    return null;
+                    return false;
                 }
             }
             finally
@@ -169,9 +170,10 @@ namespace AutoService.Bootstrap.Editor
             if (view == null)
             {
                 problems.Add("the settings prefab at " + SettingsPrefabPath + " was saved but has no SettingsView on its root");
+                return false;
             }
 
-            return view;
+            return true;
         }
 
         private static GameObject CreateSettingsRoot()
@@ -310,7 +312,7 @@ namespace AutoService.Bootstrap.Editor
         }
 
         /// <summary>Uses the settings instance already under <paramref name="canvas"/>, or adds one of the prefab.</summary>
-        private static SettingsView EnsureSettingsInstance(SettingsView prefab, Transform canvas, List<string> problems, string sceneName)
+        private static SettingsView EnsureSettingsInstance(bool prefabReady, Transform canvas, List<string> problems, string sceneName)
         {
             Transform existing = canvas.Find(SettingsPanelName);
             if (existing != null)
@@ -324,13 +326,16 @@ namespace AutoService.Bootstrap.Editor
                 return null;
             }
 
+            // Why: loaded here, right before use — OpenScene/NewScene(Single) unload unused assets, so a prefab reference
+            // kept from before the scene switch turns into a Unity-null.
+            GameObject prefab = prefabReady ? AssetDatabase.LoadAssetAtPath<GameObject>(SettingsPrefabPath) : null;
             if (prefab == null)
             {
                 problems.Add(sceneName + ": no settings panel (see the settings prefab problem)");
                 return null;
             }
 
-            var instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab.gameObject, canvas);
+            var instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab, canvas);
             instance.name = SettingsPanelName;
             instance.transform.SetAsLastSibling();
             instance.SetActive(false);
@@ -339,7 +344,7 @@ namespace AutoService.Bootstrap.Editor
 
         // ── MainMenu scene ───────────────────────────────────────────────────────────────────────────────────────────
 
-        private static void SetupMainMenuScene(SettingsView settingsPrefab, List<string> problems)
+        private static void SetupMainMenuScene(bool settingsPrefabReady, List<string> problems)
         {
             bool exists = AssetDatabase.LoadAssetAtPath<SceneAsset>(MainMenuScenePath) != null;
             Scene scene = exists
@@ -372,7 +377,7 @@ namespace AutoService.Bootstrap.Editor
                 Transform canvasTransform = canvasObject.transform;
                 entry.FindProperty("_menu").objectReferenceValue = EnsureMainMenu(canvasTransform, problems);
                 entry.FindProperty("_confirmDialog").objectReferenceValue = EnsureConfirmDialog(canvasTransform, problems);
-                entry.FindProperty("_settings").objectReferenceValue = EnsureSettingsInstance(settingsPrefab, canvasTransform, problems, "MainMenu");
+                entry.FindProperty("_settings").objectReferenceValue = EnsureSettingsInstance(settingsPrefabReady, canvasTransform, problems, "MainMenu");
             }
 
             SerializedProperty input = entry.FindProperty("_inputActions");
@@ -679,7 +684,7 @@ namespace AutoService.Bootstrap.Editor
 
         // ── Gameplay scene ───────────────────────────────────────────────────────────────────────────────────────────
 
-        private static void SetupGameplayScene(SettingsView settingsPrefab, List<string> problems)
+        private static void SetupGameplayScene(bool settingsPrefabReady, List<string> problems)
         {
             if (AssetDatabase.LoadAssetAtPath<SceneAsset>(GameplayScenePath) == null)
             {
@@ -705,7 +710,7 @@ namespace AutoService.Bootstrap.Editor
 
             entry.FindProperty("_pauseButton").objectReferenceValue = EnsurePauseButton(hud, problems);
             entry.FindProperty("_pauseMenu").objectReferenceValue = EnsurePauseMenu(hud, problems);
-            entry.FindProperty("_settingsPanel").objectReferenceValue = EnsureSettingsInstance(settingsPrefab, hud, problems, "Gameplay");
+            entry.FindProperty("_settingsPanel").objectReferenceValue = EnsureSettingsInstance(settingsPrefabReady, hud, problems, "Gameplay");
             entry.ApplyModifiedPropertiesWithoutUndo();
 
             EditorSceneManager.MarkSceneDirty(scene);
