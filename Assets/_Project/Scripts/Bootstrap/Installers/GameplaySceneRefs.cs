@@ -1,8 +1,10 @@
 using AutoService.Presentation.CameraControl;
 using AutoService.Presentation.Hud;
 using AutoService.Presentation.Panels;
+using AutoService.Presentation.Pause;
 using AutoService.Presentation.Player;
 using AutoService.Presentation.Points.Panel;
+using AutoService.Presentation.Settings;
 using AutoService.Presentation.Staff;
 using AutoService.Presentation.Supplies;
 using AutoService.Presentation.Traffic;
@@ -42,7 +44,10 @@ namespace AutoService.Bootstrap.Installers
             StaffVisualCatalog staffVisuals,
             SupplyVisualCatalog supplyVisuals,
             Transform staffRoot,
-            PlayerCarryView playerCarry)
+            PlayerCarryView playerCarry,
+            PauseMenuView pauseMenu,
+            PauseButtonView pauseButton,
+            SettingsView settingsPanel)
         {
             InputActions = inputActions;
             Camera = camera;
@@ -64,6 +69,9 @@ namespace AutoService.Bootstrap.Installers
             SupplyVisuals = supplyVisuals;
             StaffRoot = staffRoot;
             PlayerCarry = playerCarry;
+            PauseMenu = pauseMenu;
+            PauseButton = pauseButton;
+            SettingsPanel = settingsPanel;
         }
 
         /// <summary>GameControls asset with the 'Gameplay' action map.</summary>
@@ -125,5 +133,14 @@ namespace AutoService.Bootstrap.Installers
 
         /// <summary>The box in the player's hands.</summary>
         public PlayerCarryView PlayerCarry { get; }
+
+        /// <summary>The pause menu.</summary>
+        public PauseMenuView PauseMenu { get; }
+
+        /// <summary>The HUD's pause button.</summary>
+        public PauseButtonView PauseButton { get; }
+
+        /// <summary>Settings screen opened from the pause menu.</summary>
+        public SettingsView SettingsPanel { get; }
     }
 }
