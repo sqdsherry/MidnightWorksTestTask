@@ -5,6 +5,7 @@ using AutoService.Presentation.Settings;
 using AutoService.Services.Core;
 using AutoService.Services.Economy;
 using AutoService.Services.Menu;
+using AutoService.Services.Save;
 using AutoService.Services.Scenes;
 using AutoService.Services.Settings;
 
@@ -62,7 +63,9 @@ namespace AutoService.Bootstrap.Installers
             // The router exists only when the player module (input) is running; without it the pause is button-only.
             context.TryResolve(out EscapeRouter escape);
 
-            var model = new PauseMenuModel(context.Resolve<IPauseService>(), context.Resolve<ISceneLoader>());
+            // Null when the save module did not run: the pause still works, it just does not save.
+            context.TryResolve(out IGameSaver saver);
+            var model = new PauseMenuModel(context.Resolve<IPauseService>(), context.Resolve<ISceneLoader>(), saver);
             context.Register(model);
             context.Register(new PauseMenuPresenter(model, scene.PauseMenu, scene.PauseButton, settings, escape));
         }

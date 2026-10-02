@@ -16,7 +16,7 @@ namespace AutoService.Tests.EditMode
         {
             _pause = new FakePauseService();
             _scenes = new FakeSceneLoader();
-            _model = new PauseMenuModel(_pause, _scenes);
+            _model = new PauseMenuModel(_pause, _scenes, null);
         }
 
         [Test]
