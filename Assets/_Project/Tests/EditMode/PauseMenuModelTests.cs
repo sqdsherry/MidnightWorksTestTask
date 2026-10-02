@@ -76,5 +76,30 @@ namespace AutoService.Tests.EditMode
             Assert.AreEqual(1, _pause.PopCount);
             CollectionAssert.AreEqual(new[] { GameScene.MainMenu }, _scenes.Loaded);
         }
+
+        [Test]
+        public void ToMainMenu_SavesBeforeLoadingTheMenu()
+        {
+            int loadedWhenSaved = -1;
+            var saver = new FakeGameSaver(() => loadedWhenSaved = _scenes.Loaded.Count);
+            var model = new PauseMenuModel(_pause, _scenes, saver);
+            model.Open();
+
+            model.ToMainMenu();
+
+            Assert.AreEqual(1, saver.SaveCount);
+            Assert.AreEqual(0, loadedWhenSaved, "Saved while the gameplay scene was still loaded.");
+            CollectionAssert.AreEqual(new[] { GameScene.MainMenu }, _scenes.Loaded);
+        }
+
+        [Test]
+        public void SaveProgress_SavesOnce_AndWorksWithoutSaver()
+        {
+            var saver = new FakeGameSaver(null);
+            new PauseMenuModel(_pause, _scenes, saver).SaveProgress();
+
+            Assert.AreEqual(1, saver.SaveCount);
+            Assert.DoesNotThrow(() => _model.SaveProgress());
+        }
     }
 }
