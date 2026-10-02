@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: GameConfig
   m_EditorClassIdentifier: AutoService.Infrastructure::AutoService.Infrastructure.Config.GameConfig
   _economy:
-    _startingMoney: 100
+    _startingMoney: 2000
   _serviceTypes:
   - {fileID: 11400000, guid: ebb75d638506884498705552fc06f6c0, type: 2}
   - {fileID: 11400000, guid: 8aa51d7740bedc1469cee2695c1f7f0e, type: 2}
@@ -38,3 +38,16 @@ MonoBehaviour:
   - {fileID: 11400000, guid: e0eaddf47ee0b1e4b9bac9e8c8caa7d4, type: 2}
   - {fileID: 11400000, guid: 33946f25266d1a94fb2438d25f350434, type: 2}
   - {fileID: 11400000, guid: 5c1452170990a3b41bfadf69c6c2e538, type: 2}
+  _supplyTypes:
+  - {fileID: 11400000, guid: 3cd0e6c388f5c2c46b4462e31cde82fa, type: 2}
+  - {fileID: 11400000, guid: 062e40392346a8143be472a79d046f37, type: 2}
+  - {fileID: 11400000, guid: db2162cb772014c4fae1d0e4d92d95e1, type: 2}
+  _upgrades:
+  - {fileID: 11400000, guid: 6e37214ff01b2274c8b611bbe65591f0, type: 2}
+  - {fileID: 11400000, guid: 7c0658184cae9374aa413291cf23c452, type: 2}
+  _staff:
+    _storekeeperTitle: Storekeeper
+    _storekeeperDescription: Carries boxes to the hungriest bay
+    _storekeeperCost: 600
+    _storekeeperRequiredLevel: 3
+    _restockThreshold: 0.5

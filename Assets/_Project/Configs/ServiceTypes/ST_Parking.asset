@@ -20,3 +20,8 @@ MonoBehaviour:
   _serviceDuration: 1
   _acceptDelay: 0.4
   _clearDelay: 1.5
+  _supplyTypeId: 
+  _supplyCapacity: 10
+  _workerTitle: Parking Attendant
+  _workerHireCost: 150
+  _workerRequiredLevel: 1
