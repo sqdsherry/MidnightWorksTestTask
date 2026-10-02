@@ -17,11 +17,13 @@ namespace AutoService.Presentation.Supplies
 {
     /// <summary>
     /// The warehouse's blue pad: stand on it and the storekeeper offer opens (an <see cref="OfferPanelView"/>:
-    /// title, description, cost, requirement, Hire). Hires through <see cref="IStaffService.TryHireStorekeeper"/>.
+    /// "Storekeepers 1/3", description, the next price, requirement, "Hire Storekeeper $900" / "Max staff").
+    /// Hires through <see cref="IStaffService.TryHireStorekeeper"/>; the panel stays open and moves on to the next one.
     /// </summary>
     /// <remarks>
-    /// Same flow as the build panel: closes when the character leaves, on Close / Esc; the button is re-evaluated on
-    /// balance, gate and hire changes only. Per frame: the pad's dwell and the panel position.
+    /// Same flow as the build panel: closes when the character leaves, on Close / Esc. The texts are formatted on opening
+    /// and after a hire (the count and the price change); a balance or gate change only switches the button between its
+    /// cached labels. Per frame: the pad's dwell and the panel position.
     /// </remarks>
     public sealed class StorekeeperOfferPresenter : ITickable, IDisposable
     {
@@ -34,9 +36,9 @@ namespace AutoService.Presentation.Supplies
         private readonly ManagePadView _pad;
         private readonly GameplayInput _input;
         private readonly string _locationId;
-        private readonly string _hireLabel;
-        private readonly string _needLabel;
 
+        private string _hireLabel;
+        private string _needLabel;
         private bool _open;
         private HireAvailability _shown;
         private bool _disposed;
@@ -45,7 +47,7 @@ namespace AutoService.Presentation.Supplies
         /// <param name="staff">Storekeeper hiring.</param>
         /// <param name="wallet">Balance, for the Hire / Need label.</param>
         /// <param name="gate">Level requirement.</param>
-        /// <param name="config">Storekeeper texts and price.</param>
+        /// <param name="config">Storekeeper texts, prices and maximum.</param>
         /// <param name="view">The scene's storekeeper offer panel.</param>
         /// <param name="camera">Gameplay camera, to place the panel next to the pad.</param>
         /// <param name="pad">The warehouse pad (its Target Id is the location id).</param>
@@ -70,11 +72,6 @@ namespace AutoService.Presentation.Supplies
             _pad = pad != null ? pad : throw new ArgumentNullException(nameof(pad));
             _input = input;
             _locationId = pad.TargetId;
-
-            // Why: the price never changes, so both labels are formatted once.
-            string cost = MoneyFormatter.Format(_settings.StorekeeperCost);
-            _hireLabel = string.Format(_view.ActionLabelFormat, cost);
-            _needLabel = string.Format(_view.NeedLabelFormat, cost);
 
             _pad.DwellCompleted += OnDwellCompleted;
             _pad.Left += OnPadLeft;
@@ -146,12 +143,23 @@ namespace AutoService.Presentation.Supplies
             _view.Follow(_camera, _pad.PanelAnchor.position);
         }
 
+        /// <summary>Formats every text for the current count and the price of the next storekeeper.</summary>
         private void ShowOffer(HireAvailability availability)
         {
+            int hired = _staff.StorekeeperCount(_locationId);
+            string title = string.Format(
+                _view.CountTitleFormat,
+                _settings.StorekeeperTitle,
+                hired.ToString(CultureInfo.InvariantCulture),
+                _settings.MaxStorekeepers.ToString(CultureInfo.InvariantCulture));
+            bool maxed = availability == HireAvailability.Hired;
+            string cost = maxed ? null : MoneyFormatter.Format(_staff.GetStorekeeperCost(_locationId));
+            _hireLabel = maxed ? null : string.Format(_view.ActionLabelFormat, cost, _settings.StorekeeperTitle);
+            _needLabel = maxed ? null : string.Format(_view.NeedLabelFormat, cost);
             string requirement = availability == HireAvailability.Locked
                 ? string.Format(_view.RequirementFormat, _settings.StorekeeperRequiredLevel.ToString(CultureInfo.InvariantCulture))
                 : null;
-            _view.Show(_settings.StorekeeperTitle, _settings.StorekeeperDescription, MoneyFormatter.Format(_settings.StorekeeperCost), requirement);
+            _view.Show(title, _settings.StorekeeperDescription, cost, requirement);
             Show(availability);
         }
 
@@ -195,7 +203,7 @@ namespace AutoService.Presentation.Supplies
                     _view.SetAffordable(false, _view.LockedLabel);
                     break;
                 default:
-                    _view.SetAffordable(false, _view.CompletedLabel);
+                    _view.SetAffordable(false, _view.MaxLabel);
                     break;
             }
         }
@@ -216,14 +224,21 @@ namespace AutoService.Presentation.Supplies
 
         private void OnHireClicked()
         {
-            // Why: on success the Hired event refreshes the button; on failure (spent meanwhile) refresh it here.
+            // Why: on success the Hired event moves the panel on to the next storekeeper; on failure refresh the button.
             if (_open && !_staff.TryHireStorekeeper(_locationId))
             {
                 Refresh();
             }
         }
 
-        private void OnHired(StaffMember member) => Refresh();
+        // Why: a hire changes the count and the next price — the offer is formatted again and stays open.
+        private void OnHired(StaffMember member)
+        {
+            if (_open && member.Role == StaffRole.Storekeeper)
+            {
+                ShowOffer(_staff.GetStorekeeperAvailability(_locationId));
+            }
+        }
 
         private void OnBalanceChanged(Money balance) => Refresh();
 

@@ -56,6 +56,9 @@ namespace AutoService.Bootstrap.Editor
         private const int UpgradeMaxLevel = 10;
         private const string StorekeeperTitle = "Storekeeper";
         private const string StorekeeperDescription = "Carries boxes to the hungriest bay";
+        private const int RestockAtOrBelow = 5;
+        private const int MaxStorekeepers = 3;
+        private const float StorekeeperCostGrowth = 1.5f;
 
         private static readonly ServiceTypeSpec[] ServiceTypes =
         {
@@ -143,7 +146,10 @@ namespace AutoService.Bootstrap.Editor
                 + AddMissing(serializedConfig.FindProperty("_supplyTypes"), supplyTypes, asset => asset.Id)
                 + AddMissing(serializedConfig.FindProperty("_upgrades"), upgrades, asset => asset.Kind.ToString());
             int completed = FillEmptyString(serializedConfig.FindProperty("_staff._storekeeperTitle"), StorekeeperTitle)
-                + FillEmptyString(serializedConfig.FindProperty("_staff._storekeeperDescription"), StorekeeperDescription);
+                + FillEmptyString(serializedConfig.FindProperty("_staff._storekeeperDescription"), StorekeeperDescription)
+                + FillInvalidInt(serializedConfig.FindProperty("_staff._restockAtOrBelow"), RestockAtOrBelow, 0)
+                + FillInvalidInt(serializedConfig.FindProperty("_staff._maxStorekeepers"), MaxStorekeepers, 1)
+                + FillInvalidFloat(serializedConfig.FindProperty("_staff._storekeeperCostGrowth"), StorekeeperCostGrowth, 1f);
             serializedConfig.ApplyModifiedProperties();
 
             ServiceTypeConfig[] allTypes = gameConfig.ServiceTypes;
@@ -207,6 +213,30 @@ namespace AutoService.Bootstrap.Editor
 
             serialized.ApplyModifiedPropertiesWithoutUndo();
             return filled;
+        }
+
+        // Why: an old asset gets the field initializers (5 / 3 / 1.5) on load; only a value that is out of range is replaced,
+        // so a balance tweak made in the inspector survives.
+        private static int FillInvalidInt(SerializedProperty property, int value, int minimum)
+        {
+            if (property == null || property.intValue >= minimum)
+            {
+                return 0;
+            }
+
+            property.intValue = value;
+            return 1;
+        }
+
+        private static int FillInvalidFloat(SerializedProperty property, float value, float minimum)
+        {
+            if (property == null || property.floatValue >= minimum)
+            {
+                return 0;
+            }
+
+            property.floatValue = value;
+            return 1;
         }
 
         private static int FillEmptyString(SerializedProperty property, string value)

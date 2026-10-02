@@ -499,9 +499,19 @@ namespace AutoService.Bootstrap.Editor
 
                 // Why: only on creation — labels edited on the panel later survive a re-run.
                 var serialized = new SerializedObject(panel);
-                serialized.FindProperty("_actionLabelFormat").stringValue = "Hire {0}";
+                serialized.FindProperty("_actionLabelFormat").stringValue = "Hire {1} {0}";
                 serialized.FindProperty("_completedLabel").stringValue = "Hired";
                 serialized.ApplyModifiedProperties();
+            }
+
+            // Why: A2.1 hires several storekeepers and names the role on the button; only the label this setup itself wrote
+            // earlier is upgraded, a label edited by hand stays.
+            var labels = new SerializedObject(panel);
+            SerializedProperty action = labels.FindProperty("_actionLabelFormat");
+            if (action.stringValue == "Hire {0}")
+            {
+                action.stringValue = "Hire {1} {0}";
+                labels.ApplyModifiedProperties();
             }
 
             EnsureAnchoredPanel(panel);
@@ -819,7 +829,11 @@ namespace AutoService.Bootstrap.Editor
             {
                 var config = new ScriptableObjectConfigProvider(AssetDatabase.LoadAssetAtPath<GameConfig>(AssetDatabase.GUIDToAssetPath(guids[0])));
                 var validated = copy.GetComponent<LocationLayout>();
-                return validated.Validate(out string problem) && validated.ValidateBuildPlots(config, out problem) ? null : problem;
+                return validated.Validate(out string problem)
+                    && validated.ValidateBuildPlots(config, out problem)
+                    && validated.ValidateStaff(config, out problem)
+                    ? null
+                    : problem;
             }
             catch (Exception exception) when (exception is InvalidOperationException || exception is ArgumentException)
             {

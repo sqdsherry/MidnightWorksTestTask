@@ -23,9 +23,13 @@ namespace AutoService.Services.Staff
     /// If the player stands there, the worker waits and retries every tick. Why: pushing the player off would desync the
     /// character's own FSM; the point view stops offering the spot to the player once a worker is hired, so the player
     /// cannot take it again after leaving.</para>
-    /// <para><b>Storekeeper:</b> idle until a point of its location drops below the restock threshold → warehouse → buy the
-    /// box for the hungriest point (no money: wait, retry every second) → carry it there (counted as incoming) → deliver.
-    /// If the target filled up meanwhile, the box goes to another point that can take it, otherwise it is dropped.</para>
+    /// <para><b>Storekeepers</b> (up to <see cref="StaffSettings.MaxStorekeepers"/> per location, each with its own waiting
+    /// spot at the warehouse): waiting (or walking) home until the hungriest point holds
+    /// <see cref="StaffSettings.RestockAtOrBelow"/> units or fewer → the point is reserved at once (its box counts as
+    /// incoming, so a second storekeeper deciding in the same tick picks another point) → warehouse → the target is
+    /// re-checked (the player may have restocked it) → buy the box (no money: wait, retry every second) → carry it there →
+    /// deliver → walk home. If the target filled up meanwhile, the box goes to another point that can take it, otherwise
+    /// it is dropped.</para>
     /// <para>The tick only walks the staff list and calls allocation-free lookups.</para>
     /// </remarks>
     public sealed class StaffService : IStaffService, ITickable, IDisposable
@@ -46,7 +50,7 @@ namespace AutoService.Services.Staff
         private readonly List<StaffEntry> _entries = new List<StaffEntry>();
         private readonly Dictionary<int, StaffEntry> _entriesById = new Dictionary<int, StaffEntry>();
         private readonly Dictionary<string, StaffMember> _workersByPoint = new Dictionary<string, StaffMember>(StringComparer.Ordinal);
-        private readonly Dictionary<string, StaffMember> _storekeepersByLocation = new Dictionary<string, StaffMember>(StringComparer.Ordinal);
+        private readonly Dictionary<string, int> _storekeeperCounts = new Dictionary<string, int>(StringComparer.Ordinal);
 
         private int _nextId;
         private bool _disposed;
@@ -130,16 +134,27 @@ namespace AutoService.Services.Staff
                 return HireAvailability.NotSupported;
             }
 
-            return Availability(_storekeepersByLocation.ContainsKey(locationId), staff.StorekeeperRequiredLevel, staff.StorekeeperCost);
+            int hired = StorekeeperCount(locationId);
+            return Availability(hired >= staff.MaxStorekeepers, staff.StorekeeperRequiredLevel, staff.StorekeeperCostAt(hired));
         }
 
         /// <inheritdoc />
-        public Money GetStorekeeperCost(string locationId) => _config.Staff?.StorekeeperCost ?? Money.Zero;
+        public Money GetStorekeeperCost(string locationId)
+        {
+            StaffSettings staff = _config.Staff;
+            return staff != null ? staff.StorekeeperCostAt(StorekeeperCount(locationId)) : Money.Zero;
+        }
+
+        /// <inheritdoc />
+        public int StorekeeperCount(string locationId)
+        {
+            return locationId != null && _storekeeperCounts.TryGetValue(locationId, out int count) ? count : 0;
+        }
 
         /// <inheritdoc />
         public bool TryHireStorekeeper(string locationId)
         {
-            if (GetStorekeeperAvailability(locationId) != HireAvailability.Available || !_wallet.TrySpend(_config.Staff.StorekeeperCost))
+            if (GetStorekeeperAvailability(locationId) != HireAvailability.Available || !_wallet.TrySpend(GetStorekeeperCost(locationId)))
             {
                 return false;
             }
@@ -161,7 +176,7 @@ namespace AutoService.Services.Staff
         /// <inheritdoc />
         public void RestoreStorekeeper(string locationId)
         {
-            if (string.IsNullOrEmpty(locationId) || _storekeepersByLocation.ContainsKey(locationId))
+            if (string.IsNullOrEmpty(locationId))
             {
                 return;
             }
@@ -173,7 +188,11 @@ namespace AutoService.Services.Staff
                 return;
             }
 
-            AddStorekeeper(locationId);
+            // Why: a save from a config that allowed more storekeepers keeps only as many as are allowed now.
+            if (StorekeeperCount(locationId) < _config.Staff.MaxStorekeepers)
+            {
+                AddStorekeeper(locationId);
+            }
         }
 
         /// <inheritdoc />
@@ -199,7 +218,8 @@ namespace AutoService.Services.Staff
 
                         break;
                     case StaffState.Idle:
-                        TickIdleStorekeeper(member);
+                    case StaffState.ReturningHome:
+                        TickWaitingStorekeeper(entry);
                         break;
                     case StaffState.WaitingForMoney:
                         entry.RetryTimer -= deltaTime;
@@ -265,9 +285,12 @@ namespace AutoService.Services.Staff
 
         private StaffMember AddStorekeeper(string locationId)
         {
-            StaffMember member = StaffMember.CreateStorekeeper(_nextId++, locationId);
-            _storekeepersByLocation.Add(locationId, member);
+            // Why: the n-th storekeeper of a location waits at spot n, so they never stand on each other.
+            int index = StorekeeperCount(locationId);
+            StaffMember member = StaffMember.CreateStorekeeper(_nextId++, locationId, index);
+            _storekeeperCounts[locationId] = index + 1;
             Add(member);
+            _agents.MoveTo(member.Id, StaffDestination.Home(locationId, index));
             return member;
         }
 
@@ -281,28 +304,58 @@ namespace AutoService.Services.Staff
             Hired?.Invoke(member);
         }
 
-        private void TickIdleStorekeeper(StaffMember member)
+        // Why: also while walking home — a hungry point turns the storekeeper straight back to the warehouse.
+        private void TickWaitingStorekeeper(StaffEntry entry)
         {
-            if (!TryFindRestockTarget(member.LocationId, out _))
+            StaffMember member = entry.Member;
+            if (!TryFindRestockTarget(member.LocationId, out ServicePoint target))
             {
                 return;
             }
 
-            member.GoToWarehouse();
+            string targetId = target.Definition.Id;
+            member.GoToWarehouse(targetId);
+            Reserve(entry, target);
             _agents.MoveTo(member.Id, StaffDestination.Warehouse(member.LocationId));
         }
 
-        /// <summary>The point the storekeeper should restock: the hungriest one, if it is below the restock threshold.</summary>
+        /// <summary>
+        /// The point a storekeeper should restock: the hungriest one, if it holds <see cref="StaffSettings.RestockAtOrBelow"/>
+        /// units or fewer, counting the boxes other storekeepers already bring.
+        /// </summary>
         private bool TryFindRestockTarget(string locationId, out ServicePoint point)
         {
             point = _supplies.FindHungriest(locationId);
-            if (point != null && _config.Staff != null && point.Supply.Fill01 < _config.Staff.RestockThreshold)
+            StaffSettings staff = _config.Staff;
+            if (point != null
+                && staff != null
+                && point.Supply.Current + _supplies.GetIncoming(point.Definition.Id) <= staff.RestockAtOrBelow)
             {
                 return true;
             }
 
             point = null;
             return false;
+        }
+
+        // Why: reserved when the storekeeper decides, not when it buys — otherwise two storekeepers deciding in the same
+        // tick would both walk for the same point.
+        private void Reserve(StaffEntry entry, ServicePoint target)
+        {
+            int units = _config.TryGetSupplyType(target.Supply.SupplyTypeId, out SupplyTypeSettings settings) ? settings.UnitsPerBox : 0;
+            _supplies.MarkIncoming(target.Definition.Id, units);
+            entry.ReservedUnits = units;
+        }
+
+        private void ReleaseReservation(StaffEntry entry)
+        {
+            _supplies.ClearIncoming(entry.Member.TargetPointId, entry.ReservedUnits);
+            entry.ReservedUnits = 0;
+        }
+
+        private void GoHome(StaffMember member)
+        {
+            _agents.MoveTo(member.Id, StaffDestination.Home(member.LocationId, member.HomeIndex));
         }
 
         private void OnArrived(int staffId)
@@ -322,7 +375,10 @@ namespace AutoService.Services.Staff
                     BuyAtWarehouse(entry);
                     break;
                 case StaffState.ToPoint:
-                    Deliver(member);
+                    Deliver(entry);
+                    break;
+                case StaffState.ReturningHome:
+                    member.ArriveHome();
                     break;
             }
         }
@@ -331,19 +387,22 @@ namespace AutoService.Services.Staff
         {
             StaffMember member = entry.Member;
 
-            // Why: the threshold is checked again at the warehouse — the player may have restocked the point while the
-            // storekeeper walked; it must not buy a box for a point that is fine now (nor wait for money for it).
-            if (!TryFindRestockTarget(member.LocationId, out _))
+            // Why: the target is checked again at the warehouse (without this storekeeper's own reservation) — the player
+            // may have restocked it while the storekeeper walked; it must not buy a box for a point that is fine now (nor
+            // wait for money for it). Another hungry point may take its place.
+            ReleaseReservation(entry);
+            if (!TryFindRestockTarget(member.LocationId, out ServicePoint target))
             {
                 member.CancelRestock();
+                GoHome(member);
                 return;
             }
 
-            // Why: the purchase is for the same hungriest point the check above found; failing now means no money.
-            if (_supplies.TryBuyBoxForHungriest(member.LocationId, false, out SupplyBox box, out ServicePoint target))
+            string targetId = target.Definition.Id;
+            member.Retarget(targetId);
+            Reserve(entry, target);
+            if (_supplies.TryBuyBoxFor(targetId, false, out SupplyBox box))
             {
-                string targetId = target.Definition.Id;
-                _supplies.MarkIncoming(targetId, box.Units);
                 member.PickUp(box, targetId);
                 _agents.SetCarried(member.Id, box.SupplyTypeId);
                 _agents.MoveTo(member.Id, StaffDestination.SupplyDrop(targetId));
@@ -358,15 +417,17 @@ namespace AutoService.Services.Staff
             entry.RetryTimer = MoneyRetryInterval;
         }
 
-        private void Deliver(StaffMember member)
+        private void Deliver(StaffEntry entry)
         {
+            StaffMember member = entry.Member;
             SupplyBox box = member.CarriedBox;
             string targetId = member.TargetPointId;
-            _supplies.ClearIncoming(targetId, box.Units);
+            ReleaseReservation(entry);
             if (_supplies.TryDeliver(box, targetId, false))
             {
                 member.ReleaseBox();
                 _agents.SetCarried(member.Id, string.Empty);
+                GoHome(member);
                 return;
             }
 
@@ -375,17 +436,19 @@ namespace AutoService.Services.Staff
             if (other != null)
             {
                 string otherId = other.Definition.Id;
-                _supplies.MarkIncoming(otherId, box.Units);
                 member.Redirect(otherId);
+                _supplies.MarkIncoming(otherId, box.Units);
+                entry.ReservedUnits = box.Units;
                 _agents.MoveTo(member.Id, StaffDestination.SupplyDrop(otherId));
                 return;
             }
 
             member.ReleaseBox();
             _agents.SetCarried(member.Id, string.Empty);
+            GoHome(member);
         }
 
-        /// <summary>A hired member plus the service-side timer of its money retries.</summary>
+        /// <summary>A hired member plus service-side bookkeeping: the money retry timer and the units it reserved at its target.</summary>
         private sealed class StaffEntry
         {
             public StaffEntry(StaffMember member)
@@ -396,6 +459,8 @@ namespace AutoService.Services.Staff
             public StaffMember Member { get; }
 
             public float RetryTimer { get; set; }
+
+            public int ReservedUnits { get; set; }
         }
     }
 }

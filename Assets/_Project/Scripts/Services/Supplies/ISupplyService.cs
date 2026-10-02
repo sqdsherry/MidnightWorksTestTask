@@ -40,6 +40,19 @@ namespace AutoService.Services.Supplies
         /// <returns>False (nothing charged) when there is nothing to restock or the balance does not cover the box.</returns>
         bool TryBuyBoxForHungriest(string locationId, bool byPlayer, out SupplyBox box, out ServicePoint target);
 
+        /// <summary>
+        /// Charges the wallet and returns a box of <paramref name="pointId"/>'s consumable (the storekeeper buys for the
+        /// point it reserved). Does not check whether the box still fits — the caller decided that.
+        /// </summary>
+        /// <param name="pointId">Point with a stock.</param>
+        /// <param name="byPlayer">True for the player, false for the storekeeper.</param>
+        /// <param name="box">The bought box, or <see cref="SupplyBox.None"/>.</param>
+        /// <returns>False (nothing charged) for a point without a stock or when the balance does not cover the box.</returns>
+        bool TryBuyBoxFor(string pointId, bool byPlayer, out SupplyBox box);
+
+        /// <summary>Units the storekeepers carry to <paramref name="pointId"/> right now (<see cref="MarkIncoming"/>); 0 for unknown points.</summary>
+        int GetIncoming(string pointId);
+
         /// <summary>True when <paramref name="pointId"/> uses <paramref name="box"/>'s consumable and its stock can take the whole box.</summary>
         bool CanDeliver(in SupplyBox box, string pointId);
 
@@ -50,7 +63,7 @@ namespace AutoService.Services.Supplies
         /// <returns>False (nothing changes) when the box does not fit or is of another consumable.</returns>
         bool TryDeliver(in SupplyBox box, string pointId, bool byPlayer);
 
-        /// <summary>The storekeeper carries <paramref name="units"/> to the point (counted by <see cref="FindHungriest"/>).</summary>
+        /// <summary>A storekeeper is going to bring <paramref name="units"/> to the point (counted by <see cref="FindHungriest"/>).</summary>
         void MarkIncoming(string pointId, int units);
 
         /// <summary>Removes a reservation of <see cref="MarkIncoming"/> (delivered, redirected or dropped).</summary>

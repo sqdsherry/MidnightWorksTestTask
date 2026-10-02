@@ -18,11 +18,20 @@ namespace AutoService.Domain.Staff
             return new StaffMember(id, StaffRole.PointWorker, locationId, pointId, StaffState.WalkingToSpot);
         }
 
-        /// <summary>Creates the storekeeper of a location; it starts idle.</summary>
+        /// <summary>Creates a storekeeper of a location; it starts walking from the staff room to its waiting spot.</summary>
+        /// <param name="id">Runtime id.</param>
+        /// <param name="locationId">Location it works in.</param>
+        /// <param name="homeIndex">Index of its waiting spot at the warehouse (= hiring order in the location, &gt;= 0).</param>
         /// <exception cref="ArgumentException">Thrown for an empty location id.</exception>
-        public static StaffMember CreateStorekeeper(int id, string locationId)
+        /// <exception cref="ArgumentOutOfRangeException">Thrown for a negative spot index.</exception>
+        public static StaffMember CreateStorekeeper(int id, string locationId, int homeIndex)
         {
-            return new StaffMember(id, StaffRole.Storekeeper, locationId, null, StaffState.Idle);
+            if (homeIndex < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(homeIndex), homeIndex, "Home spot index must be non-negative.");
+            }
+
+            return new StaffMember(id, StaffRole.Storekeeper, locationId, null, StaffState.ReturningHome) { HomeIndex = homeIndex };
         }
 
         private StaffMember(int id, StaffRole role, string locationId, string assignedPointId, StaffState state)
@@ -54,8 +63,11 @@ namespace AutoService.Domain.Staff
         /// <summary>Box the storekeeper carries, or <see cref="SupplyBox.None"/>.</summary>
         public SupplyBox CarriedBox { get; private set; }
 
-        /// <summary>Point the storekeeper carries its box to; null without a box.</summary>
+        /// <summary>Point the storekeeper restocks (from the decision to go to the warehouse until the delivery); null otherwise.</summary>
         public string TargetPointId { get; private set; }
+
+        /// <summary>Index of the storekeeper's waiting spot at the warehouse; 0 for workers.</summary>
+        public int HomeIndex { get; private set; }
 
         /// <summary>Worker reached the work spot: <see cref="StaffState.WalkingToSpot"/> → Working, or WaitingForSpot if it is taken.</summary>
         /// <param name="tookSpot">True when the work spot could be occupied.</param>
@@ -74,12 +86,47 @@ namespace AutoService.Domain.Staff
             State = StaffState.Working;
         }
 
-        /// <summary>A point needs restocking: <see cref="StaffState.Idle"/> → <see cref="StaffState.ToWarehouse"/>.</summary>
-        /// <exception cref="InvalidOperationException">Thrown when not idle.</exception>
-        public void GoToWarehouse()
+        /// <summary>
+        /// A point needs restocking: <see cref="StaffState.Idle"/> or <see cref="StaffState.ReturningHome"/> →
+        /// <see cref="StaffState.ToWarehouse"/>, with the point it will buy the box for.
+        /// </summary>
+        /// <exception cref="ArgumentException">Thrown for an empty target.</exception>
+        /// <exception cref="InvalidOperationException">Thrown in any other state.</exception>
+        public void GoToWarehouse(string targetPointId)
         {
-            Require(StaffState.Idle);
+            if (State != StaffState.Idle && State != StaffState.ReturningHome)
+            {
+                throw InvalidTransition(nameof(GoToWarehouse));
+            }
+
+            RequireId(targetPointId, nameof(targetPointId));
+            TargetPointId = targetPointId;
             State = StaffState.ToWarehouse;
+        }
+
+        /// <summary>
+        /// At the warehouse the target changed (the old one was restocked meanwhile): stays in
+        /// <see cref="StaffState.ToWarehouse"/> / <see cref="StaffState.WaitingForMoney"/> with the new target.
+        /// </summary>
+        /// <exception cref="ArgumentException">Thrown for an empty target.</exception>
+        /// <exception cref="InvalidOperationException">Thrown in any other state.</exception>
+        public void Retarget(string targetPointId)
+        {
+            if (State != StaffState.ToWarehouse && State != StaffState.WaitingForMoney)
+            {
+                throw InvalidTransition(nameof(Retarget));
+            }
+
+            RequireId(targetPointId, nameof(targetPointId));
+            TargetPointId = targetPointId;
+        }
+
+        /// <summary>Reached the waiting spot: <see cref="StaffState.ReturningHome"/> → <see cref="StaffState.Idle"/>.</summary>
+        /// <exception cref="InvalidOperationException">Thrown when not returning home.</exception>
+        public void ArriveHome()
+        {
+            Require(StaffState.ReturningHome);
+            State = StaffState.Idle;
         }
 
         /// <summary>At the warehouse without money: <see cref="StaffState.ToWarehouse"/> → <see cref="StaffState.WaitingForMoney"/>.</summary>
@@ -92,7 +139,7 @@ namespace AutoService.Domain.Staff
 
         /// <summary>
         /// Nothing to restock any more (the player did it): <see cref="StaffState.ToWarehouse"/> or
-        /// <see cref="StaffState.WaitingForMoney"/> → <see cref="StaffState.Idle"/>.
+        /// <see cref="StaffState.WaitingForMoney"/> → <see cref="StaffState.ReturningHome"/>, without a target.
         /// </summary>
         /// <exception cref="InvalidOperationException">Thrown in any other state.</exception>
         public void CancelRestock()
@@ -102,7 +149,8 @@ namespace AutoService.Domain.Staff
                 throw InvalidTransition(nameof(CancelRestock));
             }
 
-            State = StaffState.Idle;
+            TargetPointId = null;
+            State = StaffState.ReturningHome;
         }
 
         /// <summary>Bought a box: <see cref="StaffState.ToWarehouse"/> or <see cref="StaffState.WaitingForMoney"/> → <see cref="StaffState.ToPoint"/>.</summary>
@@ -138,7 +186,7 @@ namespace AutoService.Domain.Staff
             TargetPointId = targetPointId;
         }
 
-        /// <summary>The box is delivered (or dropped): <see cref="StaffState.ToPoint"/> → <see cref="StaffState.Idle"/>, hands empty.</summary>
+        /// <summary>The box is delivered (or dropped): <see cref="StaffState.ToPoint"/> → <see cref="StaffState.ReturningHome"/>, hands empty.</summary>
         /// <returns>The box that was carried.</returns>
         /// <exception cref="InvalidOperationException">Thrown when not carrying a box.</exception>
         public SupplyBox ReleaseBox()
@@ -147,7 +195,7 @@ namespace AutoService.Domain.Staff
             SupplyBox box = CarriedBox;
             CarriedBox = SupplyBox.None;
             TargetPointId = null;
-            State = StaffState.Idle;
+            State = StaffState.ReturningHome;
             return box;
         }
 

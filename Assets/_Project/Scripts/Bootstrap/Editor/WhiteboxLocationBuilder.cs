@@ -216,6 +216,12 @@ namespace AutoService.Bootstrap.Editor
         private const string WarehouseObjectName = "Warehouse_1";
         private static readonly Vector3 WarehousePosition = new Vector3(4f, 0f, -6f);
         private static readonly Vector3 WarehouseSize = new Vector3(4f, 2.5f, 3f);
+        // Storekeeper waiting spots: a row along the warehouse's south wall, facing away from it; the warehouse pad stands
+        // one more step south, so a storekeeper waiting there never covers it.
+        private const int StorekeeperSpotCount = 3;
+        private const float StorekeeperSpotStep = 1.2f;
+        private const float StorekeeperSpotFromWall = 0.8f;
+        private const float WarehousePadFromWall = 2.4f;
         private const string StaffRoomObjectName = "StaffRoom_1";
         private static readonly Vector3 StaffRoomPosition = new Vector3(4f, 0f, 2f);
         private static readonly Vector3 StaffRoomSize = new Vector3(3f, 2.5f, 3f);
@@ -239,7 +245,13 @@ namespace AutoService.Bootstrap.Editor
         private const float PadTop = 0.07f;
         private static readonly Vector3 PadColliderCenter = new Vector3(0f, 0.25f, 0f);
         private static readonly Vector3 PadColliderSize = new Vector3(1.2f, 0.5f, 1.2f);
-        private const float PadCanvasHeight = 1.2f;
+        // Why (playtest): the ring stands above the head of a character on the pad (~1.8 m) and a bit towards the camera,
+        // so the character standing there never hides it.
+        private const float PadCanvasHeight = 2.6f;
+        private const float PadCanvasTowardsCamera = 0.6f;
+        private const float PadRingDiameter = 0.9f;
+        private static readonly Color PadRingBackground = new Color32(0x1E, 0x24, 0x30, 153);
+        private static readonly Color PadRingFill = new Color32(0x4F, 0xC3, 0xF7, 0xFF);
         private const float PanelAnchorHeight = 1f;
         private static readonly Vector2 PadCanvasSize = new Vector2(200f, 200f);
         private const float PadArrowSize = 80f;
@@ -323,12 +335,13 @@ namespace AutoService.Bootstrap.Editor
                 pads.Add(AddEntrancePads(layout.transform, service, ServiceEntrancePad, workPadMaterial, managePadMaterial, referenceHud));
             }
 
-            WarehouseView warehouse = CreateWarehouse(layout, managePadMaterial, referenceHud, out ManagePadView warehousePad);
+            WarehouseView warehouse = CreateWarehouse(
+                layout, managePadMaterial, referenceHud, out ManagePadView warehousePad, out List<Transform> storekeeperSpots);
             Transform staffRoomDoor = CreateStaffRoom(layout.transform);
 
             LinkNodes(nodes);
             FillLayout(layout, nodes, main, service, bays, plots);
-            FillStaffSupplies(layout, warehouse, warehousePad, staffRoomDoor, pads);
+            FillStaffSupplies(layout, warehouse, warehousePad, staffRoomDoor, pads, storekeeperSpots);
 
             Undo.CollapseUndoOperations(undoGroup);
             EditorSceneManager.MarkSceneDirty(layout.gameObject.scene);
@@ -1059,7 +1072,7 @@ namespace AutoService.Bootstrap.Editor
             approach.SetPositionAndRotation(ground, rotation);
             Transform anchor = CreateChild("PanelAnchor", root.transform).transform;
             anchor.position = ground + Vector3.up * PanelAnchorHeight;
-            DwellRingView ring = CreatePadCanvas(root.transform, ground + Vector3.up * PadCanvasHeight, referenceHud);
+            DwellRingView ring = CreatePadCanvas(root.transform, ground, referenceHud);
 
             var highlight = root.AddComponent<InteractableHighlight>();
             var highlightObject = new SerializedObject(highlight);
@@ -1080,58 +1093,98 @@ namespace AutoService.Bootstrap.Editor
             return pad;
         }
 
-        /// <summary>World-space canvas above a pad: the ⬆ "buy" icon and the dwell ring around it.</summary>
-        private static DwellRingView CreatePadCanvas(Transform parent, Vector3 position, ServicePointHud referenceHud)
+        /// <summary>
+        /// World-space canvas high above a pad, shifted towards the camera and facing it: a dark ring background with the ⬆
+        /// "buy" icon (always visible, so the pad reads as a purchase spot) and the dwell fill on top of the background.
+        /// </summary>
+        private static DwellRingView CreatePadCanvas(Transform parent, Vector3 padGround, ServicePointHud referenceHud)
         {
-            RectTransform canvas = CreateWorldCanvas("Tag", parent, position, PadCanvasSize, referenceHud);
+            Quaternion facing = CameraFacing(referenceHud);
+            Vector3 towardsCamera = -(facing * Vector3.forward);
+            towardsCamera.y = 0f;
+            towardsCamera = towardsCamera.sqrMagnitude > 0.0001f ? towardsCamera.normalized : Vector3.back;
+            Vector3 position = padGround + Vector3.up * PadCanvasHeight + towardsCamera * PadCanvasTowardsCamera;
+            RectTransform canvas = CreateWorldCanvas("Tag", parent, position, PadCanvasSize, facing, PadRingDiameter / PadCanvasSize.x);
 
+            Image background = CreateRingImage(canvas, "Background", PadRingBackground);
+            Image fill = CreateRingImage(canvas, "Fill", PadRingFill);
+            fill.type = Image.Type.Filled;
+            fill.fillMethod = Image.FillMethod.Radial360;
+            fill.fillOrigin = (int)Image.Origin360.Top;
+            fill.fillClockwise = true;
+            fill.fillAmount = 0f;
+            fill.gameObject.SetActive(false);
+
+            // Why: last child, so the icon stays visible on top of the fill; the built-in dropdown arrow points down,
+            // turned over it is the "upgrade" arrow.
             var arrowObject = new GameObject("Arrow", typeof(RectTransform));
             arrowObject.transform.SetParent(canvas, false);
             var arrowRect = (RectTransform)arrowObject.transform;
             arrowRect.sizeDelta = new Vector2(PadArrowSize, PadArrowSize);
-
-            // Why: the built-in dropdown arrow points down; turned over it is the "upgrade" arrow.
             arrowRect.localRotation = Quaternion.Euler(0f, 0f, 180f);
             var arrow = arrowObject.AddComponent<Image>();
             arrow.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>(ArrowSpritePath);
             arrow.color = Color.white;
             arrow.raycastTarget = false;
 
-            var ringObject = new GameObject("Ring", typeof(RectTransform));
-            ringObject.transform.SetParent(canvas, false);
-            ((RectTransform)ringObject.transform).sizeDelta = new Vector2(PadCanvasSize.x * 0.8f, PadCanvasSize.y * 0.8f);
-            var ring = ringObject.AddComponent<Image>();
-            ring.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>(RingSpritePath);
-            ring.type = Image.Type.Filled;
-            ring.fillMethod = Image.FillMethod.Radial360;
-            ring.fillOrigin = (int)Image.Origin360.Top;
-            ring.fillClockwise = true;
-            ring.fillAmount = 0f;
-            ring.color = new Color(1f, 1f, 1f, 0.8f);
-            ring.raycastTarget = false;
-
             var ringView = canvas.gameObject.AddComponent<DwellRingView>();
             var serialized = new SerializedObject(ringView);
-            serialized.FindProperty("_fill").objectReferenceValue = ring;
-            serialized.FindProperty("_root").objectReferenceValue = ringObject;
+            serialized.FindProperty("_fill").objectReferenceValue = fill;
+            serialized.FindProperty("_root").objectReferenceValue = fill.gameObject;
+            serialized.FindProperty("_background").objectReferenceValue = background.gameObject;
             serialized.ApplyModifiedPropertiesWithoutUndo();
             return ringView;
+        }
+
+        private static Image CreateRingImage(RectTransform canvas, string name, Color color)
+        {
+            var imageObject = new GameObject(name, typeof(RectTransform));
+            imageObject.transform.SetParent(canvas, false);
+            ((RectTransform)imageObject.transform).sizeDelta = PadCanvasSize;
+            var image = imageObject.AddComponent<Image>();
+            image.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>(RingSpritePath);
+            image.color = color;
+            image.raycastTarget = false;
+            return image;
+        }
+
+        // Why: the gameplay camera angle is fixed, so turning the canvas once here is enough (no billboard at runtime).
+        private static Quaternion CameraFacing(ServicePointHud referenceHud)
+        {
+            Camera camera = Camera.main != null ? Camera.main : Object.FindFirstObjectByType<Camera>();
+            if (camera != null)
+            {
+                return camera.transform.rotation;
+            }
+
+            return referenceHud != null ? referenceHud.transform.rotation : Quaternion.identity;
         }
 
         /// <summary>World-space canvas tilted and scaled like the reference HUD, so it faces the fixed camera the same way.</summary>
         private static RectTransform CreateWorldCanvas(string name, Transform parent, Vector3 position, Vector2 size, ServicePointHud referenceHud)
         {
+            Transform reference = referenceHud != null ? referenceHud.transform : null;
+            return CreateWorldCanvas(
+                name,
+                parent,
+                position,
+                size,
+                reference != null ? reference.rotation : Quaternion.identity,
+                reference != null ? reference.lossyScale.x : DefaultCanvasScale);
+        }
+
+        /// <summary>World-space canvas with an explicit rotation and world scale (world meters per canvas unit).</summary>
+        private static RectTransform CreateWorldCanvas(string name, Transform parent, Vector3 position, Vector2 size, Quaternion rotation, float worldScale)
+        {
             var canvasObject = new GameObject(name, typeof(RectTransform), typeof(Canvas));
             canvasObject.transform.SetParent(parent, false);
             canvasObject.GetComponent<Canvas>().renderMode = RenderMode.WorldSpace;
 
-            Transform reference = referenceHud != null ? referenceHud.transform : null;
             var rect = (RectTransform)canvasObject.transform;
             rect.sizeDelta = size;
-            rect.SetPositionAndRotation(position, reference != null ? reference.rotation : Quaternion.identity);
-            float scale = reference != null ? reference.lossyScale.x : DefaultCanvasScale;
+            rect.SetPositionAndRotation(position, rotation);
             Vector3 parentScale = parent.lossyScale;
-            rect.localScale = new Vector3(scale / parentScale.x, scale / parentScale.y, scale / parentScale.z);
+            rect.localScale = new Vector3(worldScale / parentScale.x, worldScale / parentScale.y, worldScale / parentScale.z);
             return rect;
         }
 
@@ -1140,7 +1193,8 @@ namespace AutoService.Bootstrap.Editor
             LocationLayout layout,
             Material padMaterial,
             ServicePointHud referenceHud,
-            out ManagePadView pad)
+            out ManagePadView pad,
+            out List<Transform> storekeeperSpots)
         {
             GameObject root = CreateChild(WarehouseObjectName, layout.transform);
             root.transform.SetPositionAndRotation(WarehousePosition, Quaternion.identity);
@@ -1184,7 +1238,17 @@ namespace AutoService.Bootstrap.Editor
             serialized.ApplyModifiedPropertiesWithoutUndo();
             Undo.RegisterCreatedObjectUndo(root, "Create warehouse");
 
-            Vector3 padPosition = WarehousePosition + Vector3.back * (WarehouseSize.z * 0.5f + StandOffWall);
+            storekeeperSpots = new List<Transform>(StorekeeperSpotCount);
+            Vector3 rowCenter = WarehousePosition + Vector3.back * (WarehouseSize.z * 0.5f + StorekeeperSpotFromWall);
+            for (int i = 0; i < StorekeeperSpotCount; i++)
+            {
+                Transform spot = CreateChild("StorekeeperSpot_" + i, root.transform).transform;
+                float x = (i - (StorekeeperSpotCount - 1) * 0.5f) * StorekeeperSpotStep;
+                spot.SetPositionAndRotation(rowCenter + Vector3.right * x, Quaternion.LookRotation(Vector3.back));
+                storekeeperSpots.Add(spot);
+            }
+
+            Vector3 padPosition = WarehousePosition + Vector3.back * (WarehouseSize.z * 0.5f + WarehousePadFromWall);
             pad = CreateManagePad(layout.transform, layout.LocationId, ManagePadTarget.Warehouse, padPosition, WarehousePosition, padMaterial, referenceHud);
             return warehouse;
         }
@@ -1240,9 +1304,11 @@ namespace AutoService.Bootstrap.Editor
             WarehouseView warehouse,
             ManagePadView warehousePad,
             Transform staffRoomDoor,
-            List<ManagePadView> pads)
+            List<ManagePadView> pads,
+            List<Transform> storekeeperSpots)
         {
             var serialized = new SerializedObject(layout);
+            SetArray(serialized.FindProperty("_storekeeperSpots"), storekeeperSpots);
             serialized.FindProperty("_warehouse").objectReferenceValue = warehouse;
             serialized.FindProperty("_warehousePad").objectReferenceValue = warehousePad;
             serialized.FindProperty("_staffRoom").objectReferenceValue = staffRoomDoor;

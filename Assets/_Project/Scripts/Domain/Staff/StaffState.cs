@@ -2,7 +2,9 @@ namespace AutoService.Domain.Staff
 {
     /// <summary>
     /// What a hired NPC is doing. Workers: <see cref="WalkingToSpot"/> → (<see cref="WaitingForSpot"/>) → <see cref="Working"/>.
-    /// Storekeeper: <see cref="Idle"/> → <see cref="ToWarehouse"/> → (<see cref="WaitingForMoney"/>) → <see cref="ToPoint"/> → <see cref="Idle"/>.
+    /// Storekeeper: (<see cref="ReturningHome"/> →) <see cref="Idle"/> → <see cref="ToWarehouse"/> → (<see cref="WaitingForMoney"/>) →
+    /// <see cref="ToPoint"/> → <see cref="ReturningHome"/> → <see cref="Idle"/>; a hungry point turns a returning storekeeper
+    /// straight back to the warehouse.
     /// </summary>
     public enum StaffState
     {
@@ -15,7 +17,7 @@ namespace AutoService.Domain.Staff
         /// <summary>Worker: holds the work spot (final state).</summary>
         Working = 2,
 
-        /// <summary>Storekeeper: nothing needs restocking.</summary>
+        /// <summary>Storekeeper: waits at its spot by the warehouse; nothing needs restocking.</summary>
         Idle = 3,
 
         /// <summary>Storekeeper: walks to the warehouse for a box.</summary>
@@ -26,5 +28,8 @@ namespace AutoService.Domain.Staff
 
         /// <summary>Storekeeper: carries a box to its target point.</summary>
         ToPoint = 6,
+
+        /// <summary>Storekeeper: walks to its waiting spot at the warehouse (after hiring, a delivery or a cancelled run).</summary>
+        ReturningHome = 7,
     }
 }

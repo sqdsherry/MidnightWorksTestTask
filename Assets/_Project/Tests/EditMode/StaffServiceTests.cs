@@ -49,7 +49,7 @@ namespace AutoService.Tests.EditMode
             _agents = new FakeStaffAgents();
             _config = new FakeConfigProvider
             {
-                Staff = new StaffSettings("Storekeeper", "Carries boxes", new Money(StorekeeperCost), 3, 0.5f),
+                Staff = new StaffSettings("Storekeeper", "Carries boxes", new Money(StorekeeperCost), 3, 5, 3, 1.5),
             };
             _config.SupplyTypeList.Add(new SupplyTypeSettings("shampoo", "Shampoo", new Money(BoxPrice), 5));
             var wash = new ServiceTypeSettings("wash", "Wash", PointKind.Service, new Money(12), 0.0, 1f, 0f, 0f, "shampoo", 10,
@@ -155,44 +155,83 @@ namespace AutoService.Tests.EditMode
             Assert.AreEqual(0, _hired.Count, "A restore is not a hire.");
         }
 
-        // ── Storekeeper ──────────────────────────────────────────────────────────────────────────────────────────
+        // ── Storekeepers ─────────────────────────────────────────────────────────────────────────────────────────
 
         [Test]
-        public void Storekeeper_CarriesABoxFromTheWarehouseToTheHungriestPoint()
+        public void Storekeeper_WalksHomeAfterHiring_ThenWaitsThere()
         {
             Assert.IsTrue(_service.TryHireStorekeeper(LocationId));
             int keeper = _agents.Spawned[0].Key;
+
             Assert.AreEqual(StaffRole.Storekeeper, _agents.Spawned[0].Value);
             Assert.AreEqual(new Money(2000 - StorekeeperCost), _wallet.Balance);
+            Assert.AreEqual(StaffState.ReturningHome, Keeper().State);
+            Assert.AreEqual(StaffDestination.Home(LocationId, 0), _agents.Destinations[keeper]);
 
+            _agents.Arrive(keeper);
             _service.Tick(1f);
             Assert.AreEqual(StaffState.Idle, Keeper().State, "Every stock is full.");
+        }
 
+        [Test]
+        public void Storekeeper_CarriesABoxToTheHungriestPoint_AndReturnsHome()
+        {
+            int keeper = HireStorekeeperAtHome();
             Consume(Wash2, 6);
+
             _service.Tick(0.1f);
             Assert.AreEqual(StaffState.ToWarehouse, Keeper().State);
+            Assert.AreEqual(Wash2, Keeper().TargetPointId);
             Assert.AreEqual(StaffDestination.Warehouse(LocationId), _agents.Destinations[keeper]);
+            Assert.IsNull(_supplies.FindHungriest(LocationId), "The point is reserved as soon as the storekeeper decides.");
 
             _agents.Arrive(keeper);
             Assert.AreEqual(StaffState.ToPoint, Keeper().State);
-            Assert.AreEqual(Wash2, Keeper().TargetPointId);
             Assert.AreEqual("shampoo", _agents.Carried[keeper]);
             Assert.AreEqual(StaffDestination.SupplyDrop(Wash2), _agents.Destinations[keeper]);
             Assert.AreEqual(new Money(2000 - StorekeeperCost - BoxPrice), _wallet.Balance);
-            Assert.IsNull(_supplies.FindHungriest(LocationId), "The box on its way counts as stock.");
 
             _agents.Arrive(keeper);
             Assert.AreEqual(9, Point(Wash2).Supply.Current);
-            Assert.AreEqual(StaffState.Idle, Keeper().State);
-            Assert.IsTrue(Keeper().CarriedBox.IsNone);
+            Assert.AreEqual(StaffState.ReturningHome, Keeper().State);
+            Assert.AreEqual(StaffDestination.Home(LocationId, 0), _agents.Destinations[keeper]);
             Assert.AreEqual(string.Empty, _agents.Carried[keeper]);
+            Assert.AreEqual(0, _supplies.GetIncoming(Wash2));
+
+            _agents.Arrive(keeper);
+            Assert.AreEqual(StaffState.Idle, Keeper().State);
+        }
+
+        [Test]
+        public void Storekeeper_ReturningHome_TurnsBackForAHungryPoint()
+        {
+            _service.TryHireStorekeeper(LocationId);
+            int keeper = _agents.Spawned[0].Key;
+            Consume(Wash1, 6);
+
+            _service.Tick(0.1f);
+
+            Assert.AreEqual(StaffState.ToWarehouse, Keeper().State, "Straight to the warehouse, not home first.");
+            Assert.AreEqual(StaffDestination.Warehouse(LocationId), _agents.Destinations[keeper]);
+        }
+
+        [Test]
+        public void Storekeeper_GoesAtFiveUnits_NotAtSix()
+        {
+            HireStorekeeperAtHome();
+            Consume(Wash1, 4);
+            _service.Tick(1f);
+            Assert.AreEqual(StaffState.Idle, Keeper().State, "6/10 is above the restock level.");
+
+            Consume(Wash1, 1);
+            _service.Tick(1f);
+            Assert.AreEqual(StaffState.ToWarehouse, Keeper().State, "5/10 is at the restock level.");
         }
 
         [Test]
         public void Storekeeper_WithoutMoney_WaitsAndThenContinues()
         {
-            _service.TryHireStorekeeper(LocationId);
-            int keeper = _agents.Spawned[0].Key;
+            int keeper = HireStorekeeperAtHome();
             _wallet.TrySpend(_wallet.Balance);
             Consume(Wash1, 6);
             _service.Tick(0.1f);
@@ -212,8 +251,7 @@ namespace AutoService.Tests.EditMode
         [Test]
         public void Storekeeper_TargetFilledMeanwhile_GoesToAnotherPoint()
         {
-            _service.TryHireStorekeeper(LocationId);
-            int keeper = _agents.Spawned[0].Key;
+            int keeper = HireStorekeeperAtHome();
             Consume(Wash1, 8);
             Consume(Wash2, 6);
             _service.Tick(0.1f);
@@ -230,43 +268,33 @@ namespace AutoService.Tests.EditMode
 
             _agents.Arrive(keeper);
             Assert.AreEqual(9, Point(Wash2).Supply.Current);
-            Assert.AreEqual(StaffState.Idle, Keeper().State);
+            Assert.AreEqual(StaffState.ReturningHome, Keeper().State);
         }
 
         [Test]
-        public void Storekeeper_AtExactlyTheThreshold_StaysIdle()
+        public void Storekeeper_PointRestockedWhileWalking_ReturnsHomeWithoutBuying()
         {
-            _service.TryHireStorekeeper(LocationId);
-            Consume(Wash1, 5);
-
-            _service.Tick(1f);
-
-            Assert.AreEqual(StaffState.Idle, Keeper().State, "5/10 is not below the 0.5 threshold.");
-        }
-
-        [Test]
-        public void Storekeeper_PointRestockedWhileWalking_ReturnsIdleWithoutBuying()
-        {
-            _service.TryHireStorekeeper(LocationId);
-            int keeper = _agents.Spawned[0].Key;
+            int keeper = HireStorekeeperAtHome();
             Consume(Wash1, 6);
             _service.Tick(0.1f);
-            Assert.AreEqual(StaffState.ToWarehouse, Keeper().State);
             Money before = _wallet.Balance;
 
             _supplies.TryDeliver(new SupplyBox("shampoo", 5), Wash1, true);
             _agents.Arrive(keeper);
 
-            Assert.AreEqual(StaffState.Idle, Keeper().State);
+            Assert.AreEqual(StaffState.ReturningHome, Keeper().State);
             Assert.AreEqual(before, _wallet.Balance, "No box for a point that is 9/10 now.");
             Assert.IsTrue(Keeper().CarriedBox.IsNone);
+            Assert.AreEqual(0, _supplies.GetIncoming(Wash1));
+
+            _agents.Arrive(keeper);
+            Assert.AreEqual(StaffState.Idle, Keeper().State);
         }
 
         [Test]
         public void Storekeeper_WithNowhereToPutTheBox_DropsIt_AndCanDeliverThereAgain()
         {
-            _service.TryHireStorekeeper(LocationId);
-            int keeper = _agents.Spawned[0].Key;
+            int keeper = HireStorekeeperAtHome();
             Consume(Wash1, 6);
             _service.Tick(0.1f);
             _agents.Arrive(keeper);
@@ -276,9 +304,10 @@ namespace AutoService.Tests.EditMode
             _supplies.TryDeliver(new SupplyBox("shampoo", 5), Wash1, true);
             _agents.Arrive(keeper);
 
-            Assert.AreEqual(StaffState.Idle, Keeper().State);
+            Assert.AreEqual(StaffState.ReturningHome, Keeper().State);
             Assert.IsTrue(Keeper().CarriedBox.IsNone);
             Assert.AreEqual(string.Empty, _agents.Carried[keeper]);
+            Assert.AreEqual(0, _supplies.GetIncoming(Wash1));
 
             // Incoming was cleared: once wash 1 is hungry again, the storekeeper delivers there.
             Consume(Wash1, 5);
@@ -295,15 +324,77 @@ namespace AutoService.Tests.EditMode
             var bought = new List<BoxBoughtEvent>();
             Action<BoxBoughtEvent> onBought = bought.Add;
             _bus.Subscribe(onBought);
-            _service.TryHireStorekeeper(LocationId);
+            int keeper = HireStorekeeperAtHome();
             Consume(Wash1, 6);
             _service.Tick(0.1f);
 
-            _agents.Arrive(_agents.Spawned[0].Key);
+            _agents.Arrive(keeper);
             _bus.Unsubscribe(onBought);
 
             Assert.AreEqual(1, bought.Count);
             Assert.IsFalse(bought[0].ByPlayer);
+        }
+
+        [Test]
+        public void TwoStorekeepers_TwoHungryPoints_GoToDifferentPoints()
+        {
+            _wallet.Add(new Money(10000));
+            HireStorekeeperAtHome();
+            HireStorekeeperAtHome();
+            Consume(Wash1, 6);
+            Consume(Wash2, 6);
+
+            _service.Tick(0.1f);
+
+            Assert.AreEqual(StaffState.ToWarehouse, Keeper(0).State);
+            Assert.AreEqual(StaffState.ToWarehouse, Keeper(1).State);
+            Assert.AreNotEqual(Keeper(0).TargetPointId, Keeper(1).TargetPointId);
+        }
+
+        [Test]
+        public void TwoStorekeepers_OneHungryPoint_OnlyOneGoes()
+        {
+            _wallet.Add(new Money(10000));
+            HireStorekeeperAtHome();
+            HireStorekeeperAtHome();
+            Consume(Wash1, 6);
+
+            _service.Tick(0.1f);
+
+            Assert.AreEqual(StaffState.ToWarehouse, Keeper(0).State);
+            Assert.AreEqual(StaffState.Idle, Keeper(1).State, "The first one's box already counts for wash 1.");
+        }
+
+        [Test]
+        public void StorekeeperPrice_Grows_UpToTheMaximum()
+        {
+            _wallet.Add(new Money(10000));
+            Assert.AreEqual(new Money(600), _service.GetStorekeeperCost(LocationId));
+            Assert.IsTrue(_service.TryHireStorekeeper(LocationId));
+            Assert.AreEqual(new Money(900), _service.GetStorekeeperCost(LocationId));
+            Assert.IsTrue(_service.TryHireStorekeeper(LocationId));
+            Assert.AreEqual(new Money(1350), _service.GetStorekeeperCost(LocationId));
+            Assert.IsTrue(_service.TryHireStorekeeper(LocationId));
+
+            Assert.AreEqual(3, _service.StorekeeperCount(LocationId));
+            Assert.AreEqual(HireAvailability.Hired, _service.GetStorekeeperAvailability(LocationId));
+            Assert.IsFalse(_service.TryHireStorekeeper(LocationId));
+            Assert.AreEqual(new Money(12000 - 600 - 900 - 1350), _wallet.Balance);
+            Assert.AreEqual(StaffDestination.Home(LocationId, 2), _agents.Destinations[_agents.Spawned[2].Key]);
+        }
+
+        [Test]
+        public void RestoreStorekeeper_AddsOneEachTime_UpToTheMaximum()
+        {
+            for (int i = 0; i < 4; i++)
+            {
+                _service.RestoreStorekeeper(LocationId);
+            }
+
+            Assert.AreEqual(3, _service.StorekeeperCount(LocationId));
+            Assert.AreEqual(3, _agents.Spawned.Count);
+            Assert.AreEqual(new Money(2000), _wallet.Balance);
+            Assert.AreEqual(0, _hired.Count, "A restore is not a hire.");
         }
 
         [Test]
@@ -318,16 +409,6 @@ namespace AutoService.Tests.EditMode
         }
 
         [Test]
-        public void SecondStorekeeper_IsNotHired()
-        {
-            Assert.IsTrue(_service.TryHireStorekeeper(LocationId));
-
-            Assert.AreEqual(HireAvailability.Hired, _service.GetStorekeeperAvailability(LocationId));
-            Assert.IsFalse(_service.TryHireStorekeeper(LocationId));
-            Assert.AreEqual(new Money(2000 - StorekeeperCost), _wallet.Balance);
-        }
-
-        [Test]
         public void Dispose_Unsubscribes()
         {
             Assert.AreEqual(1, _agents.SubscriberCount);
@@ -337,17 +418,27 @@ namespace AutoService.Tests.EditMode
             Assert.AreEqual(0, _agents.SubscriberCount);
         }
 
-        private StaffMember Keeper()
+        /// <summary>Hires the next storekeeper and lets it reach its waiting spot.</summary>
+        private int HireStorekeeperAtHome()
         {
+            Assert.IsTrue(_service.TryHireStorekeeper(LocationId));
+            int keeper = _agents.Spawned[_agents.Spawned.Count - 1].Key;
+            _agents.Arrive(keeper);
+            return keeper;
+        }
+
+        private StaffMember Keeper(int index = 0)
+        {
+            int found = 0;
             for (int i = 0; i < _service.Staff.Count; i++)
             {
-                if (_service.Staff[i].Role == StaffRole.Storekeeper)
+                if (_service.Staff[i].Role == StaffRole.Storekeeper && found++ == index)
                 {
                     return _service.Staff[i];
                 }
             }
 
-            throw new InvalidOperationException("No storekeeper hired.");
+            throw new InvalidOperationException("No storekeeper " + index + " hired.");
         }
 
         private ServicePoint Point(string pointId)

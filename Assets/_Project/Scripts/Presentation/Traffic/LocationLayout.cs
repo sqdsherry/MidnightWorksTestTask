@@ -83,6 +83,10 @@ namespace AutoService.Presentation.Traffic
         private Transform _staffRoom;
 
         [SerializeField]
+        [Tooltip("Waiting spots of the storekeepers at the warehouse, one per storekeeper in hiring order (at least Max Storekeepers).")]
+        private Transform[] _storekeeperSpots = new Transform[0];
+
+        [SerializeField]
         [Tooltip("Blue manage pads, exactly one per point (both entrances and every service point, built or not).")]
         private ManagePadView[] _managePads = new ManagePadView[0];
 
@@ -127,6 +131,9 @@ namespace AutoService.Presentation.Traffic
 
         /// <summary>Door of the staff room (may be null if not assigned).</summary>
         public Transform StaffRoom => _staffRoom;
+
+        /// <summary>Waiting spots of the storekeepers, in hiring order.</summary>
+        public Transform[] StorekeeperSpots => _storekeeperSpots;
 
         /// <summary>Manage pads of the points (elements may be null if left empty).</summary>
         public ManagePadView[] ManagePads => _managePads;
@@ -367,6 +374,24 @@ namespace AutoService.Presentation.Traffic
             return false;
         }
 
+        /// <summary>Checks the staff markup against the config: there is a waiting spot for every storekeeper that can be hired.</summary>
+        /// <param name="config">Staff settings.</param>
+        /// <param name="problem">Description of the problem, or null.</param>
+        /// <returns>True when the markup is enough.</returns>
+        public bool ValidateStaff(IConfigProvider config, out string problem)
+        {
+            if (config == null)
+            {
+                throw new ArgumentNullException(nameof(config));
+            }
+
+            int needed = config.Staff != null ? config.Staff.MaxStorekeepers : 0;
+            problem = _storekeeperSpots.Length < needed
+                ? "Storekeeper Spots has " + _storekeeperSpots.Length + " spot(s), but up to " + needed + " storekeepers can be hired"
+                : null;
+            return problem == null;
+        }
+
         /// <summary>Resolves a destination into the road node the car should stop at (position + heading).</summary>
         /// <returns>False when the destination does not exist in this layout (bad index, unknown point, unassigned reference).</returns>
         public bool TryResolveNode(in CarDestination destination, out RoadNode node)
@@ -536,6 +561,19 @@ namespace AutoService.Presentation.Traffic
             if (_staffRoom == null)
             {
                 return "Staff Room is not assigned";
+            }
+
+            if (_storekeeperSpots.Length == 0)
+            {
+                return "Storekeeper Spots is empty";
+            }
+
+            for (int i = 0; i < _storekeeperSpots.Length; i++)
+            {
+                if (_storekeeperSpots[i] == null)
+                {
+                    return "Storekeeper Spots element " + i + " is empty";
+                }
             }
 
             for (int i = 0; i < _managePads.Length; i++)

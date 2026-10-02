@@ -46,7 +46,7 @@ namespace AutoService.Presentation.Panels
         private Button _closeButton;
 
         [SerializeField, FormerlySerializedAs("_buildLabelFormat")]
-        [Tooltip("Action button label when affordable; {0} = price. E.g. \"Build {0}\", \"Hire {0}\".")]
+        [Tooltip("Action button label when affordable; {0} = price, {1} = name. E.g. \"Build {0}\", \"Hire {1} {0}\".")]
         private string _actionLabelFormat = "Build {0}";
 
         [SerializeField]
@@ -60,6 +60,14 @@ namespace AutoService.Presentation.Panels
         [SerializeField]
         [Tooltip("Action button label once the offer was taken (e.g. \"Hired\").")]
         private string _completedLabel = "Done";
+
+        [SerializeField]
+        [Tooltip("Action button label when no more can be taken (e.g. every storekeeper is hired).")]
+        private string _maxLabel = "Max staff";
+
+        [SerializeField]
+        [Tooltip("Title of an offer taken several times; {0} = name, {1} = taken, {2} = maximum. E.g. \"Storekeepers 1/3\".")]
+        private string _countTitleFormat = "{0}s {1}/{2}";
 
         [SerializeField]
         [Tooltip("Requirement text when locked; {0} = level.")]
@@ -84,7 +92,7 @@ namespace AutoService.Presentation.Panels
         /// <summary>Raised when the Close button is clicked.</summary>
         public event Action CloseClicked;
 
-        /// <summary>Action button label when affordable; {0} = price.</summary>
+        /// <summary>Action button label when affordable; {0} = price, {1} = name (optional).</summary>
         public string ActionLabelFormat => _actionLabelFormat;
 
         /// <summary>Action button label when the balance is too low; {0} = price.</summary>
@@ -95,6 +103,12 @@ namespace AutoService.Presentation.Panels
 
         /// <summary>Action button label once the offer was taken.</summary>
         public string CompletedLabel => _completedLabel;
+
+        /// <summary>Action button label when no more can be taken.</summary>
+        public string MaxLabel => _maxLabel;
+
+        /// <summary>Title of an offer taken several times; {0} = name, {1} = taken, {2} = maximum.</summary>
+        public string CountTitleFormat => _countTitleFormat;
 
         /// <summary>Requirement text when locked; {0} = level.</summary>
         public string RequirementFormat => _requirementFormat;

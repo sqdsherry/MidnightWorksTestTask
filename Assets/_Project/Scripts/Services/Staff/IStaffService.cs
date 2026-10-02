@@ -6,8 +6,9 @@ using AutoService.Domain.Staff;
 namespace AutoService.Services.Staff
 {
     /// <summary>
-    /// Hiring and running the staff: one worker per point (takes its work spot for good) and one storekeeper per location
-    /// (carries boxes from the warehouse to the hungriest point).
+    /// Hiring and running the staff: one worker per point (takes its work spot for good) and up to
+    /// <c>StaffSettings.MaxStorekeepers</c> storekeepers per location (carry boxes from the warehouse to the hungriest points;
+    /// two storekeepers never restock the same point at once).
     /// </summary>
     /// <remarks>
     /// Kept asymmetry (GDD 2026-09-30): the player never helps a worker on its spot, and workers never carry boxes.
@@ -33,20 +34,26 @@ namespace AutoService.Services.Staff
         /// <summary>True from the moment of hiring (also while the worker still walks to the spot).</summary>
         bool HasWorker(string pointId);
 
-        /// <summary>Whether the storekeeper of <paramref name="locationId"/> can be hired now.</summary>
+        /// <summary>Whether the next storekeeper of <paramref name="locationId"/> can be hired now; <see cref="HireAvailability.Hired"/> at the maximum.</summary>
         HireAvailability GetStorekeeperAvailability(string locationId);
 
-        /// <summary>Hiring price of the storekeeper.</summary>
+        /// <summary>Hiring price of the next storekeeper (it grows with every storekeeper hired); zero when not supported.</summary>
         Money GetStorekeeperCost(string locationId);
 
-        /// <summary>Pays for and hires the storekeeper of the location if it is <see cref="HireAvailability.Available"/>.</summary>
+        /// <summary>Storekeepers hired in <paramref name="locationId"/>.</summary>
+        int StorekeeperCount(string locationId);
+
+        /// <summary>Pays for and hires the next storekeeper of the location if it is <see cref="HireAvailability.Available"/>.</summary>
         /// <returns>False (nothing changes) otherwise.</returns>
         bool TryHireStorekeeper(string locationId);
 
         /// <summary>Spawns the saved worker of a point without payment. Ignored when not supported or already hired.</summary>
         void RestoreWorker(string pointId);
 
-        /// <summary>Spawns the saved storekeeper of a location without payment. Ignored when already hired.</summary>
+        /// <summary>
+        /// Spawns one saved storekeeper of a location without payment (call it once per saved storekeeper).
+        /// Ignored at the maximum or without staff settings.
+        /// </summary>
         void RestoreStorekeeper(string locationId);
     }
 }

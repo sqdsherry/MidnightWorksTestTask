@@ -16,7 +16,8 @@ namespace AutoService.Presentation.Staff
     /// </summary>
     /// <remarks>
     /// Destinations: work spot = the point view's work spot, warehouse = the warehouse's approach point, supply drop = the
-    /// approach point of the point's blue pad (next to the point, never on its work spot).
+    /// approach point of the point's blue pad (next to the point, never on its work spot), home = the storekeeper's own
+    /// waiting spot along the warehouse wall.
     /// <para>Arrivals are collected during the tick and raised after the pass over the NPCs (handlers react with
     /// <see cref="MoveTo"/>), never synchronously. Without a prefab the NPCs are invisible "ghosts" (the installer warns
     /// once); an unresolvable destination is logged. Both are reported as reached on the next tick, so the staff logic
@@ -198,6 +199,12 @@ namespace AutoService.Presentation.Staff
                     return _layout.TryGetPointView(destination.Id, out ServicePointView point) ? point.WorkSpot : null;
                 case StaffDestinationKind.SupplyDrop:
                     return _layout.TryGetManagePad(destination.Id, out ManagePadView pad) ? pad.ApproachPoint : null;
+                case StaffDestinationKind.Home:
+                    Transform[] spots = _layout.StorekeeperSpots;
+                    return string.Equals(destination.Id, _layout.LocationId, StringComparison.Ordinal)
+                        && destination.Index >= 0 && destination.Index < spots.Length
+                        ? spots[destination.Index]
+                        : null;
                 case StaffDestinationKind.Warehouse:
                     return string.Equals(destination.Id, _layout.LocationId, StringComparison.Ordinal) && _layout.Warehouse != null
                         ? _layout.Warehouse.ApproachPoint

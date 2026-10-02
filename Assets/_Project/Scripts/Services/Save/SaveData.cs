@@ -39,7 +39,7 @@ namespace AutoService.Services.Save
         /// <summary>Per-point upgrades, supplies and staff.</summary>
         public PointSaveData[] points;
 
-        /// <summary>Ids of locations with a hired storekeeper.</summary>
+        /// <summary>Location id of every hired storekeeper — once per storekeeper, so a location with three is listed three times.</summary>
         public string[] storekeeperLocationIds;
 
         /// <summary>Ids of unlocked locations.</summary>

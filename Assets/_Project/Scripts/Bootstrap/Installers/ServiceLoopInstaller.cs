@@ -55,7 +55,7 @@ namespace AutoService.Bootstrap.Installers
                 return false;
             }
 
-            if (!layout.Validate(out string problem) || !layout.ValidateBuildPlots(config, out problem))
+            if (!layout.Validate(out string problem) || !layout.ValidateBuildPlots(config, out problem) || !layout.ValidateStaff(config, out problem))
             {
                 context.Logger.Error("[Gameplay] Service loop skipped: LocationLayout '" + layout.name + "': " + problem + ".");
                 return false;

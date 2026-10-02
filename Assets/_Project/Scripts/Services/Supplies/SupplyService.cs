@@ -88,6 +88,29 @@ namespace AutoService.Services.Supplies
         }
 
         /// <inheritdoc />
+        public bool TryBuyBoxFor(string pointId, bool byPlayer, out SupplyBox box)
+        {
+            box = SupplyBox.None;
+            if (pointId == null
+                || !_entriesByPoint.TryGetValue(pointId, out StockEntry entry)
+                || !_config.TryGetSupplyType(entry.Stock.SupplyTypeId, out SupplyTypeSettings settings)
+                || !_wallet.TrySpend(settings.BoxPrice))
+            {
+                return false;
+            }
+
+            box = new SupplyBox(settings.Id, settings.UnitsPerBox);
+            _eventBus.Publish(new BoxBoughtEvent(entry.Point.Definition.LocationId, settings.Id, settings.BoxPrice, byPlayer));
+            return true;
+        }
+
+        /// <inheritdoc />
+        public int GetIncoming(string pointId)
+        {
+            return pointId != null && _entriesByPoint.TryGetValue(pointId, out StockEntry entry) ? entry.Incoming : 0;
+        }
+
+        /// <inheritdoc />
         public bool CanDeliver(in SupplyBox box, string pointId)
         {
             return !box.IsNone

@@ -326,7 +326,9 @@ namespace AutoService.Infrastructure.Config
                     section.StorekeeperDescription,
                     new Money(section.StorekeeperCost),
                     section.StorekeeperRequiredLevel,
-                    section.RestockThreshold);
+                    section.RestockAtOrBelow,
+                    section.MaxStorekeepers,
+                    section.StorekeeperCostGrowth);
             }
             catch (ArgumentException exception)
             {
