@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using AutoService.Domain.Staff;
+using AutoService.Presentation.Characters;
 using AutoService.Presentation.Points;
 using AutoService.Presentation.Supplies;
 using AutoService.Presentation.Traffic;
@@ -82,10 +83,16 @@ namespace AutoService.Presentation.Staff
                 view.name = _prefab.name + "_" + role + "_" + staffId;
                 view.Place(position, rotation);
                 view.SetBodyMaterial(_staffVisuals != null ? _staffVisuals.MaterialOf(role) : null);
+                view.SetRole(role);
             }
 
             // Without a prefab the NPC is a ghost: the installer already warned once that NPCs will be invisible.
-            _bodies.Add(staffId, new Body(view));
+            CharacterAnimator animator = null;
+            if (view != null)
+            {
+                animator = new CharacterAnimator(view.GetComponentInChildren<Animator>(), view.Agent);
+            }
+            _bodies.Add(staffId, new Body(view, animator));
             _ids.Add(staffId);
         }
 
@@ -149,10 +156,19 @@ namespace AutoService.Presentation.Staff
             for (int i = 0; i < _ids.Count; i++)
             {
                 int staffId = _ids[i];
-                StaffView view = _bodies[staffId].View;
-                if (view != null && view.TickArrival(deltaTime))
+                Body body = _bodies[staffId];
+                StaffView view = body.View;
+                
+                if (view != null)
                 {
-                    _pendingArrivals.Add(staffId);
+                    if (view.TickArrival(deltaTime))
+                    {
+                        _pendingArrivals.Add(staffId);
+                    }
+                    if (body.Animator != null)
+                    {
+                        body.Animator.Tick(deltaTime, body.Box != null && body.Box.IsVisible);
+                    }
                 }
             }
 
@@ -217,13 +233,15 @@ namespace AutoService.Presentation.Staff
         /// <summary>A spawned NPC: its body (null when there is no prefab) and the box in its hands.</summary>
         private readonly struct Body
         {
-            public Body(StaffView view)
+            public Body(StaffView view, CharacterAnimator animator)
             {
                 View = view;
+                Animator = animator;
                 Box = view != null ? new CarriedBoxView(view.BoxRenderer) : null;
             }
 
             public StaffView View { get; }
+            public CharacterAnimator Animator { get; }
 
             public CarriedBoxView Box { get; }
         }

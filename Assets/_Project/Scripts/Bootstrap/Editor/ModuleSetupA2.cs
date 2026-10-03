@@ -773,7 +773,7 @@ namespace AutoService.Bootstrap.Editor
         /// Bakes every NavMesh surface synchronously and stores the data where the previous bake was (or next to the
         /// scene, like the surface inspector does).
         /// </summary>
-        private static int BakeNavMeshes(List<string> problems)
+        internal static int BakeNavMeshes(List<string> problems)
         {
             NavMeshSurface[] surfaces = Object.FindObjectsByType<NavMeshSurface>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
             if (surfaces.Length == 0)
@@ -815,7 +815,7 @@ namespace AutoService.Bootstrap.Editor
         /// builder replaces the nodes — the scene object would then keep validating against destroyed nodes.
         /// </remarks>
         /// <returns>The first problem, or null.</returns>
-        private static string ValidateLayout(LocationLayout layout)
+        internal static string ValidateLayout(LocationLayout layout)
         {
             string[] guids = AssetDatabase.FindAssets("t:" + nameof(GameConfig));
             if (guids.Length == 0)

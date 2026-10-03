@@ -16,6 +16,7 @@ namespace AutoService.Presentation.Points
         private readonly ServicePoint _point;
         private readonly ServicePointHud _hud;
         private readonly BarrierArm _barrierArm;
+        private readonly ServiceFx _serviceFx;
         private bool _disposed;
 
         /// <summary>Creates the presenter and listens to the point's state.</summary>
@@ -32,6 +33,7 @@ namespace AutoService.Presentation.Points
 
             // Why: optional component on the same object; looked up once here, never per frame.
             view.TryGetComponent(out _barrierArm);
+            view.TryGetComponent(out _serviceFx);
 
             _point.StateChanged += OnStateChanged;
             OnStateChanged(_point);
@@ -58,6 +60,11 @@ namespace AutoService.Presentation.Points
             {
                 // Why: the arm is cosmetic and should finish moving even if the game gets paused mid-animation.
                 _barrierArm.Animate(Time.unscaledDeltaTime);
+            }
+
+            if (_serviceFx != null)
+            {
+                _serviceFx.Render(_point.State, _point.Progress, deltaTime);
             }
         }
 
