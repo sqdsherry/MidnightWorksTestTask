@@ -32,14 +32,14 @@ namespace AutoService.Tests.EditMode
         [Test]
         public void ServiceCompletedEvent_WithXpReward_AddsXp()
         {
-            _eventBus.Publish(new ServiceCompletedEvent("point1", "wash"));
+            _eventBus.Publish(new ServiceCompletedEvent("point1", "wash", PointKind.Service, 1, "car"));
             Assert.AreEqual(2, _service.Xp);
         }
 
         [Test]
         public void ServiceCompletedEvent_UnknownType_AddsNoXp()
         {
-            _eventBus.Publish(new ServiceCompletedEvent("point1", "unknown"));
+            _eventBus.Publish(new ServiceCompletedEvent("point1", "unknown", PointKind.Service, 1, "car"));
             Assert.AreEqual(0, _service.Xp);
         }
 
@@ -60,7 +60,7 @@ namespace AutoService.Tests.EditMode
         {
             _service.Dispose();
             
-            _eventBus.Publish(new ServiceCompletedEvent("point1", "wash"));
+            _eventBus.Publish(new ServiceCompletedEvent("point1", "wash", PointKind.Service, 1, "car"));
             Assert.AreEqual(0, _service.Xp);
 
             var events = new List<LevelUpEvent>();

@@ -1,4 +1,5 @@
 using AutoService.Infrastructure.Services.Audio;
+using AutoService.Services.Events;
 using UnityEngine;
 
 namespace AutoService.Bootstrap.Installers
