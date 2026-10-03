@@ -517,7 +517,7 @@ namespace AutoService.Bootstrap.Editor
                 ServicePointView bay = CloneBay(wash, spec, shift, nodes);
                 nodes[BaySpot(spec.X)] = GetOrAddNode(bay.CarSpot.gameObject);
                 bays.Add(bay);
-                plots.Add(CreateBayGhost(wash, bay, spec, shift, ghostMaterial));
+                plots.Add(CreateBayGhost(wash, bay, spec.PlotId, spec.PointId, shift, ghostMaterial, wash.Hud));
 
                 // Why: the bay is the plot's target — it only appears (and registers as a point) once built.
                 bay.gameObject.SetActive(false);
@@ -611,10 +611,10 @@ namespace AutoService.Bootstrap.Editor
         }
 
         /// <summary>Translucent copy of the bay (renderers only) with a clickable collider, price tag, ring and plot view.</summary>
-        private static BuildPlotView CreateBayGhost(ServicePointView wash, ServicePointView bay, BaySpec spec, Vector3 shift, Material material)
+        internal static BuildPlotView CreateBayGhost(ServicePointView wash, ServicePointView bay, string plotId, string pointId, Vector3 shift, Material material, ServicePointHud referenceHud)
         {
             Transform bayRoot = bay.transform;
-            GameObject ghostRoot = CreateChild("Ghost_" + spec.PointId, bayRoot.parent);
+            GameObject ghostRoot = CreateChild("Ghost_" + pointId, bayRoot.parent);
             ghostRoot.transform.SetPositionAndRotation(bayRoot.position, bayRoot.rotation);
             ghostRoot.AddComponent<WhiteboxGenerated>();
 
@@ -633,10 +633,10 @@ namespace AutoService.Bootstrap.Editor
             anchor.position = new Vector3(bounds.center.x, bounds.max.y, bounds.center.z);
 
             Vector3 tagPosition = new Vector3(bounds.center.x, bounds.max.y + TagHeightAboveGhost, bounds.center.z);
-            GhostTag ghostTag = CreateTag(visual.transform, tagPosition, wash.Hud, spec.PlotId);
+            GhostTag ghostTag = CreateTag(visual.transform, tagPosition, referenceHud, plotId);
 
-            BuildPlotView plot = AddPlotView(ghostRoot, spec.PlotId, visual, bay.gameObject, approach, anchor, ghostTag);
-            Undo.RegisterCreatedObjectUndo(ghostRoot, "Create ghost " + spec.PointId);
+            BuildPlotView plot = AddPlotView(ghostRoot, plotId, visual, bay.gameObject, approach, anchor, ghostTag);
+            Undo.RegisterCreatedObjectUndo(ghostRoot, "Create ghost " + pointId);
             return plot;
         }
 
@@ -849,7 +849,7 @@ namespace AutoService.Bootstrap.Editor
             return view.FindProperty("_approachPoint").objectReferenceValue is Transform work ? work : point.transform;
         }
 
-        private static Material GetOrCreateGhostMaterial()
+        internal static Material GetOrCreateGhostMaterial()
         {
             var existing = AssetDatabase.LoadAssetAtPath<Material>(GhostMaterialPath);
             if (existing != null)
