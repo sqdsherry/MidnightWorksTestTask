@@ -9,11 +9,11 @@ namespace AutoService.Bootstrap.Editor
     {
         private static void CreateWrappers()
         {
-            string searchDir = ""Assets/_Project/Art/Kenney"";
-            string outDir = ""Assets/_Project/Prefabs/Art"";
+            string searchDir = "Assets/_Project/Art/Kenney";
+            string outDir = "Assets/_Project/Prefabs/Art";
             Directory.CreateDirectory(outDir);
 
-            string[] guids = AssetDatabase.FindAssets(""t:Model"", new[] { searchDir });
+            string[] guids = AssetDatabase.FindAssets("t:Model", new[] { searchDir });
             foreach (string guid in guids)
             {
                 string path = AssetDatabase.GUIDToAssetPath(guid);
@@ -24,30 +24,30 @@ namespace AutoService.Bootstrap.Editor
 
                 GameObject wrapper = new GameObject(name);
                 GameObject inst = (GameObject)PrefabUtility.InstantiatePrefab(model, wrapper.transform);
-                inst.name = ""Model"";
+                inst.name = "Model";
                 inst.transform.localPosition = Vector3.zero;
                 
                 // Fit to size
-                if (path.Contains(""kenney_car-kit"") && (name.Contains(""sedan"") || name.Contains(""suv"")))
+                if (path.Contains("kenney_car-kit") && (name.Contains("sedan") || name.Contains("suv")))
                 {
                     inst.transform.localRotation = Quaternion.Euler(0, 180, 0); // Kenney cars face -Z
-                    float targetZ = name.Contains(""suv"") ? 4.3f : (name.Contains(""sports"") ? 4.2f : 4.0f);
+                    float targetZ = name.Contains("suv") ? 4.3f : (name.Contains("sports") ? 4.2f : 4.0f);
                     FitToSize(inst, new Vector3(0, 0, targetZ), 2);
                 }
-                else if (path.Contains(""kenney_mini-characters""))
+                else if (path.Contains("kenney_mini-characters"))
                 {
                     FitToSize(inst, new Vector3(0, 1.8f, 0), 1);
                 }
-                else if (path.Contains(""kenney_cityKitRoads""))
+                else if (path.Contains("kenney_cityKitRoads"))
                 {
                     FitToSize(inst, new Vector3(4f, 0, 4f), 0); // approx
                 }
-                else if (path.Contains(""kenney_conveyor-kit"") && name.Contains(""structure""))
+                else if (path.Contains("kenney_conveyor-kit") && name.Contains("structure"))
                 {
                     FitToSize(inst, new Vector3(0, 3f, 0), 1);
                 }
 
-                PrefabUtility.SaveAsPrefabAsset(wrapper, Path.Combine(outDir, name + "".prefab""));
+                PrefabUtility.SaveAsPrefabAsset(wrapper, Path.Combine(outDir, name + ".prefab"));
                 Object.DestroyImmediate(wrapper);
             }
         }
@@ -67,7 +67,7 @@ namespace AutoService.Bootstrap.Editor
             {
                 float scale = target / currentSize;
                 inst.transform.localScale = Vector3.one * scale;
-                Debug.Log($""[KenneyImporter] FitToSize {inst.transform.parent.name} axis {axis}: coeff {scale}"");
+                Debug.Log($"[KenneyImporter] FitToSize {inst.transform.parent.name} axis {axis}: coeff {scale}");
             }
         }
     }

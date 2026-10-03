@@ -20,6 +20,9 @@ namespace AutoService.Presentation.Supplies
             Hide();
         }
 
+        /// <summary>True if the box is currently being shown.</summary>
+        public bool IsVisible => _renderer != null && _renderer.gameObject.activeSelf;
+
         /// <summary>Shows the box in <paramref name="color"/>.</summary>
         public void Show(Color color)
         {

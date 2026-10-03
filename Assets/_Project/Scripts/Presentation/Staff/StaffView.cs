@@ -82,17 +82,17 @@ namespace AutoService.Presentation.Staff
 
         public void SetRole(AutoService.Domain.Staff.StaffRole role)
         {
-            Transform vis = transform.Find(""Visual"");
+            Transform vis = transform.Find("Visual");
             if (vis == null) return;
             
-            Transform worker = vis.Find(""Worker"");
-            Transform storekeeper = vis.Find(""Storekeeper"");
+            Transform worker = vis.Find("Worker");
+            Transform storekeeper = vis.Find("Storekeeper");
             
             if (worker != null && storekeeper != null)
             {
-                worker.gameObject.SetActive(role == AutoService.Domain.Staff.StaffRole.Worker);
+                worker.gameObject.SetActive(role == AutoService.Domain.Staff.StaffRole.PointWorker);
                 storekeeper.gameObject.SetActive(role == AutoService.Domain.Staff.StaffRole.Storekeeper);
-                _body = role == AutoService.Domain.Staff.StaffRole.Worker ? worker.GetComponentInChildren<Renderer>() : storekeeper.GetComponentInChildren<Renderer>();
+                _body = role == AutoService.Domain.Staff.StaffRole.PointWorker ? worker.GetComponentInChildren<Renderer>() : storekeeper.GetComponentInChildren<Renderer>();
             }
         }
 

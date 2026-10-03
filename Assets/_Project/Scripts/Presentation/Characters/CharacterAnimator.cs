@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEngine.AI;
 using AutoService.Services.Core;
 
@@ -6,8 +6,8 @@ namespace AutoService.Presentation.Characters
 {
     public sealed class CharacterAnimator
     {
-        private static readonly int SpeedHash = Animator.StringToHash(""Speed"");
-        private static readonly int CarryingHash = Animator.StringToHash(""Carrying"");
+        private static readonly int SpeedHash = Animator.StringToHash("Speed");
+        private static readonly int CarryingHash = Animator.StringToHash("Carrying");
 
         private readonly Animator _animator;
         private readonly NavMeshAgent _agent;

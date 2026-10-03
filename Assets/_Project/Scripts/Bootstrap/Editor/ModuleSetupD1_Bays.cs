@@ -21,19 +21,19 @@ namespace AutoService.Bootstrap.Editor
             
             foreach (var bay in bays)
             {
-                if (!bay.name.StartsWith(""Bay_"") && bay.PointId != ""loc1_wash_1"") continue;
+                if (!bay.name.StartsWith("Bay_") && bay.PointId != "loc1_wash_1") continue;
 
                 // Rebuild visuals
-                Transform oldVisual = bay.transform.Find(""Visual"");
+                Transform oldVisual = bay.transform.Find("Visual");
                 if (oldVisual != null) Object.DestroyImmediate(oldVisual.gameObject);
 
-                GameObject visual = new GameObject(""Visual"");
+                GameObject visual = new GameObject("Visual");
                 visual.transform.SetParent(bay.transform, false);
                 visual.transform.localPosition = Vector3.zero;
 
-                GameObject wallPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(""Assets/_Project/Prefabs/Art/structure-wall.prefab"");
-                GameObject doorwayPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(""Assets/_Project/Prefabs/Art/structure-doorway-wide.prefab"");
-                GameObject roofPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(""Assets/_Project/Prefabs/Art/top-large.prefab"");
+                GameObject wallPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Art/structure-wall.prefab");
+                GameObject doorwayPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Art/structure-doorway-wide.prefab");
+                GameObject roofPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Art/top-large.prefab");
 
                 if (doorwayPrefab != null)
                 {
@@ -45,7 +45,7 @@ namespace AutoService.Bootstrap.Editor
                     back.transform.localRotation = Quaternion.Euler(0, 180, 0);
 
                     // Add TMP Sign
-                    var signObj = new GameObject(""Sign"");
+                    var signObj = new GameObject("Sign");
                     signObj.transform.SetParent(front.transform, false);
                     signObj.transform.localPosition = new Vector3(0, 3.5f, 0);
                     var txt = signObj.AddComponent<TextMeshPro>();
@@ -82,15 +82,15 @@ namespace AutoService.Bootstrap.Editor
                 }
 
                 // Add Fx
-                var fxObj = new GameObject(""Fx"");
+                var fxObj = new GameObject("Fx");
                 fxObj.transform.SetParent(visual.transform, false);
 
-                if (bay.ServiceTypeId == ""wash"")
+                if (bay.ServiceTypeId == "wash")
                 {
                     var washFx = bay.GetComponent<WashFx>();
                     if (washFx == null) washFx = bay.gameObject.AddComponent<WashFx>();
 
-                    var foamObj = new GameObject(""Foam"");
+                    var foamObj = new GameObject("Foam");
                     foamObj.transform.SetParent(fxObj.transform, false);
                     foamObj.transform.localPosition = new Vector3(0, 2f, 0);
                     var ps = foamObj.AddComponent<ParticleSystem>();
@@ -104,10 +104,10 @@ namespace AutoService.Bootstrap.Editor
                     shape.shapeType = ParticleSystemShapeType.Box;
                     shape.scale = new Vector3(3f, 1f, 3f);
                     
-                    GameObject scanner = AssetDatabase.LoadAssetAtPath<GameObject>(""Assets/_Project/Prefabs/Art/scanner-high.prefab"");
+                    GameObject scanner = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Art/scanner-high.prefab");
                     if (scanner != null) PrefabUtility.InstantiatePrefab(scanner, fxObj.transform);
 
-                    var bMat = AssetDatabase.LoadAssetAtPath<Material>(""Assets/_Project/Art/Generated/M_Brush.mat"");
+                    var bMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/_Project/Art/Generated/M_Brush.mat");
                     var bl = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
                     bl.transform.SetParent(fxObj.transform, false);
                     bl.transform.localPosition = new Vector3(-1.5f, 1f, 0);
@@ -123,16 +123,16 @@ namespace AutoService.Bootstrap.Editor
                     Object.DestroyImmediate(br.GetComponent<Collider>());
 
                     var serialized = new SerializedObject(washFx);
-                    serialized.FindProperty(""_leftBrush"").objectReferenceValue = bl.transform;
-                    serialized.FindProperty(""_rightBrush"").objectReferenceValue = br.transform;
-                    serialized.FindProperty(""_foam"").objectReferenceValue = ps;
+                    serialized.FindProperty("_leftBrush").objectReferenceValue = bl.transform;
+                    serialized.FindProperty("_rightBrush").objectReferenceValue = br.transform;
+                    serialized.FindProperty("_foam").objectReferenceValue = ps;
                     serialized.ApplyModifiedProperties();
                 }
-                else if (bay.ServiceTypeId == ""oil"")
+                else if (bay.ServiceTypeId == "oil")
                 {
                     var liftFx = bay.GetComponent<LiftFx>();
                     if (liftFx == null) liftFx = bay.gameObject.AddComponent<LiftFx>();
-                    var mMat = AssetDatabase.LoadAssetAtPath<Material>(""Assets/_Project/Art/Generated/M_Metal.mat"");
+                    var mMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/_Project/Art/Generated/M_Metal.mat");
                     
                     var pl = GameObject.CreatePrimitive(PrimitiveType.Cube);
                     pl.transform.SetParent(fxObj.transform, false);
@@ -146,7 +146,7 @@ namespace AutoService.Bootstrap.Editor
                     pr.transform.localScale = new Vector3(0.5f, 0.15f, 3f);
                     pr.GetComponent<Renderer>().sharedMaterial = mMat;
 
-                    GameObject cover = AssetDatabase.LoadAssetAtPath<GameObject>(""Assets/_Project/Prefabs/Art/cover-hopper.prefab"");
+                    GameObject cover = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Art/cover-hopper.prefab");
                     if (cover != null)
                     {
                         var c = (GameObject)PrefabUtility.InstantiatePrefab(cover, fxObj.transform);
@@ -154,17 +154,17 @@ namespace AutoService.Bootstrap.Editor
                     }
 
                     var serialized = new SerializedObject(liftFx);
-                    serialized.FindProperty(""_plates"").arraySize = 2;
-                    serialized.FindProperty(""_plates"").GetArrayElementAtIndex(0).objectReferenceValue = pl.transform;
-                    serialized.FindProperty(""_plates"").GetArrayElementAtIndex(1).objectReferenceValue = pr.transform;
+                    serialized.FindProperty("_plates").arraySize = 2;
+                    serialized.FindProperty("_plates").GetArrayElementAtIndex(0).objectReferenceValue = pl.transform;
+                    serialized.FindProperty("_plates").GetArrayElementAtIndex(1).objectReferenceValue = pr.transform;
                     serialized.ApplyModifiedProperties();
                 }
-                else if (bay.ServiceTypeId == ""tires"")
+                else if (bay.ServiceTypeId == "tires")
                 {
                     var tireFx = bay.GetComponent<TireFx>();
                     if (tireFx == null) tireFx = bay.gameObject.AddComponent<TireFx>();
-                    GameObject arm = AssetDatabase.LoadAssetAtPath<GameObject>(""Assets/_Project/Prefabs/Art/robot-arm-a.prefab"");
-                    GameObject tirePref = AssetDatabase.LoadAssetAtPath<GameObject>(""Assets/_Project/Prefabs/Art/wheel-dark.prefab"");
+                    GameObject arm = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Art/robot-arm-a.prefab");
+                    GameObject tirePref = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Art/wheel-dark.prefab");
                     
                     Transform rArm = null;
                     if (arm != null)
@@ -174,7 +174,7 @@ namespace AutoService.Bootstrap.Editor
                         rArm = a.transform;
                     }
 
-                    var stack = new GameObject(""TireStack"");
+                    var stack = new GameObject("TireStack");
                     stack.transform.SetParent(fxObj.transform, false);
                     stack.transform.localPosition = new Vector3(2f, 0, 0);
                     
@@ -189,23 +189,26 @@ namespace AutoService.Bootstrap.Editor
                     }
 
                     var serialized = new SerializedObject(tireFx);
-                    serialized.FindProperty(""_robotArm"").objectReferenceValue = rArm;
-                    serialized.FindProperty(""_tires"").objectReferenceValue = stack.transform;
+                    serialized.FindProperty("_robotArm").objectReferenceValue = rArm;
+                    serialized.FindProperty("_tires").objectReferenceValue = stack.transform;
                     serialized.ApplyModifiedProperties();
                 }
 
                 // If ghost exists, rebuild it
-                string ghostName = ""Ghost_"" + bay.PointId;
+                string ghostName = "Ghost_" + bay.PointId;
                 Transform ghost = layout.transform.Find(ghostName);
                 if (ghost != null)
                 {
                     string plotId = ghost.GetComponent<BuildPlotView>().PlotId;
-                    ServicePointView washBay = layout.transform.Find(""Bay_loc1_wash_1"").GetComponent<ServicePointView>();
+                    ServicePointView washBay = null;
+                    foreach (var b in bays) if (b.PointId == "loc1_wash_1") { washBay = b; break; }
                     
-                    Vector3 shift = bay.transform.position - washBay.transform.position;
-                    
-                    Object.DestroyImmediate(ghost.gameObject);
-                    WhiteboxLocationBuilder.CreateBayGhost(bay, bay, plotId, bay.PointId, Vector3.zero, ghostMat, washBay.Hud);
+                    if (washBay != null)
+                    {
+                        Vector3 shift = bay.transform.position - washBay.transform.position;
+                        Object.DestroyImmediate(ghost.gameObject);
+                        WhiteboxLocationBuilder.CreateBayGhost(washBay, bay, plotId, bay.PointId, shift, ghostMat, washBay.Hud);
+                    }
                 }
             }
         }
