@@ -255,19 +255,18 @@ EditMode: `Wallet`, `PriceFormula`, `ServicePoint` (прогресс тольк�
 | R1 | — | Рефакторинг: `GameplayEntryPoint` → инсталлеры по модулям — **шаг 0 модуля 05** | 2 | S | ↪ в 05 |
 | 04 | `feature/04-build` | **A1** Стройка: ряд 4 боксов с буферами, места парковки, рост потока, панель постройки — [промпт](Prompts/04-a1-build.md), [фикс](Prompts/04c-a1-setup-tools.md) | Д1 | M | ✔️ смержен |
 | 05 | `feature/05-staff-supplies` | **A2** R1-инсталлеры + персонал (работник точки, кладовщик), склад/расходники/перенос, ManagePad + панель точки + апгрейды — [промпт](Prompts/05-a2-staff-supplies.md), фиксы [05b](Prompts/05b-a2-review-fixes.md), [05c](Prompts/05c-a2-playtest-fixes.md) | Д2 | M | ✔️ смержен |
-| 07 | `feature/07-progression` | **B1** Прогрессия: XP, уровни, `LevelUnlockGate` — **пишет пользователь** — [промпт](Prompts/07-progression.md) | Д2 | M | 🔨 в работе |
+| 07 | `feature/07-progression` | **B1** Прогрессия: XP, уровни, `LevelUnlockGate` — [промпт](Prompts/07-progression.md) | Д2 | M | ✔️ смержен |
 | 09a | `feature/09a-shell` | **C1** Оболочка: сцены, загрузка, меню, настройки, пауза, Esc-роутер — [промпт](Prompts/09a-shell.md), [фикс](Prompts/09b-shell-review-fixes.md) | Д2 | M | ✔️ смержен |
 | 08a | `feature/08a-save-core` | Ядро сейва (SaveData, атомарная запись, SaveCoordinator, автосейв) + Settings — [промпт](Prompts/08a-save-core.md) | Д1 | M | ✔️ смержен |
 | 08b | `feature/08b-save-wiring` | Подключение сервисов к сейву (`ISaveable`), загрузка на старте, сейв при выходе — [промпт](Prompts/08b-save-wiring.md) | Д3 | M | ✔️ смержен |
-| 09 | `feature/09-scenes-ui` | Scene Flow + Loading + MainMenu + Settings + HUD + панели/попапы | 3 | M | ⏳ |
-| 10 | `feature/10-onboarding` | Onboarding | 3 | M | ⏳ |
-| 11 | `feature/11-location2` | 2-я локация + переключение камеры | 3 | M | ⏳ |
-| 12a | `feature/12a-visual-world` | **D1** Визуал мира: Kenney-импорт, дороги, боксы, анимации услуг, персонажи, декор, свет — [промпт](Prompts/12a-visual-world.md) | Д3 | M | 🔨 в работе |
-| 12b | `feature/12b-ui-audio` | UI-скин (Kenney UI, иконки, шрифт), звук, «+$», juice | Д3 | M | ⏳ |
-| 13 | `feature/13-vip` | VIP + Negotiation | 4 | S | ⏳ |
-| 14 | `feature/14-incidents` | Инциденты «удержи, чтобы решить»: поломки точек + мусор на парковке + уборщик; терпение/уход злых | 4 | S | ⏳ |
-| 15 | `feature/15-debug-bubbles` | **Debug-панель F1 [M]** (+$, +уровень, спавн VIP, сброс сейва); облачки-реплики [C] | 3–4 | M/C | ⏳ |
-| 16 | `feature/16-release` | README, чек-лист TZ.md, багфикс | 4 | M | ⏳ |
+| 12a | `feature/12a-visual-world` | **D1** Визуал мира: Kenney-импорт, дороги, боксы, анимации услуг, персонажи, декор, свет — [промпт](Prompts/12a-visual-world.md) | Д3 | M | ✔️ смержен |
+| 12b | `feature/12b-ui-audio` | UI-анимации (нативные корутины), звук, «+$», juice — [промпт](Prompts/12b-ui-audio.md) | Д3 | M | ✔️ смержен |
+| 13a | `feature/13a-bays-layout-rebalance` | Ребаланс: 2 мойки + 2 масла на Лок. 1, старт с парковки, мойка 1 за $200 — [промпт](Prompts/13a-bays-layout-rebalance.md) | Д3 | M | 🔨 в работе |
+| 13b | `feature/13b-context-popups-reskin` | Рескин контекстных всплывающих окон под стиль Kenney UI — [промпт](Prompts/13b-context-popups-reskin.md) | Д3 | M | ⏳ |
+| 10 | `feature/10-onboarding` | Onboarding (стрелки, стартовые подсказки) | 3 | M | ⏳ |
+| 11 | `feature/11-location2` | 2-я локация + переезд + сохранение кошелька (шиномонтаж, тюнинг, покраска) | 3–4 | M | ⏳ |
+| 15 | `feature/15-debug-bubbles` | **Debug-панель F1 [M]** (+$, +уровень, сброс сейва) | 4 | M | ⏳ |
+| 16 | `feature/16-release` | README, чек-лист TZ.md, финальный билд | 4 | M | ⏳ |
 
 > Урезание под срок: тесты — только ключевой домен (Wallet, ServicePoint, ParkingLot, Save round-trip). Терпение как счётчик заложить в 03, уход злых — в 14.
 
