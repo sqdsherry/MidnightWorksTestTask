@@ -20,12 +20,23 @@ namespace AutoService.Presentation.Ui
                 return;
             }
 
-            for (Transform current = target.transform; current != null; current = current.parent)
+            // Show parents first without animation
+            for (Transform current = target.transform.parent; current != null; current = current.parent)
             {
                 if (!current.gameObject.activeSelf)
                 {
                     current.gameObject.SetActive(true);
                 }
+            }
+
+            var animator = target.GetComponent<UiWindowAnimator>();
+            if (animator != null)
+            {
+                animator.Show();
+            }
+            else if (!target.activeSelf)
+            {
+                target.SetActive(true);
             }
         }
 
@@ -34,7 +45,16 @@ namespace AutoService.Presentation.Ui
         {
             if (target != null && target.activeSelf)
             {
-                target.SetActive(false);
+                var animator = target.GetComponent<UiWindowAnimator>();
+                if (animator != null)
+                {
+                    // Animator will deactivate it upon completion
+                    animator.Hide();
+                }
+                else
+                {
+                    target.SetActive(false);
+                }
             }
         }
     }

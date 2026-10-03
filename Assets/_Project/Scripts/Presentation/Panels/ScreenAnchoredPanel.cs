@@ -43,10 +43,9 @@ namespace AutoService.Presentation.Panels
             ActivateChainToRoot();
         }
 
-        /// <summary>Hides the panel (only its root; the container stays active so its components keep working).</summary>
         public void Hide()
         {
-            Root.gameObject.SetActive(false);
+            UiVisibility.Hide(Root.gameObject);
         }
 
         /// <summary>Places the panel next to <paramref name="worldAnchor"/>; hides it while the point is behind the camera.</summary>
@@ -116,8 +115,6 @@ namespace AutoService.Presentation.Panels
             root.localPosition = new Vector3(position.x, position.y, 0f);
         }
 
-        // Why: the panel must show however the objects were left in the scene — this container, the root and every object
-        // between them are switched on (activating the container first also runs the Awake of its views).
         private void ActivateChainToRoot()
         {
             if (!gameObject.activeSelf)
@@ -125,13 +122,8 @@ namespace AutoService.Presentation.Panels
                 gameObject.SetActive(true);
             }
 
-            for (Transform current = Root; current != null && current != transform; current = current.parent)
-            {
-                if (!current.gameObject.activeSelf)
-                {
-                    current.gameObject.SetActive(true);
-                }
-            }
+            // Let UiVisibility handle the animation if present
+            UiVisibility.ShowChain(Root.gameObject);
         }
     }
 }

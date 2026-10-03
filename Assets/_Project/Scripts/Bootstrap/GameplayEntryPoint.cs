@@ -171,6 +171,8 @@ namespace AutoService.Bootstrap
             {
                 new EconomyInstaller(),
                 new ProgressionInstaller(),
+                new AudioInstaller(),
+                new JuiceInstaller(),
                 player,
                 serviceLoop,
                 building,
