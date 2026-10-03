@@ -40,10 +40,10 @@ namespace AutoService.Bootstrap.Installers
             IWalletService wallet = context.Resolve<IWalletService>();
             GameplaySceneRefs scene = context.Scene;
 
-            // TODO(07-progression): replace with the level-based gate.
-            var gate = new AlwaysUnlockedGate();
+            var gate = new AutoService.Services.Progression.LevelUnlockGate(context.Resolve<AutoService.Services.Progression.IProgressionService>());
             var build = new BuildService(wallet, gate, context.Resolve<IEventBus>());
             context.Register<IUnlockGate>(gate);
+            context.Track(gate);
             context.Register<IBuildService>(build);
             Gate = gate;
 

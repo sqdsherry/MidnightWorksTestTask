@@ -153,6 +153,7 @@ namespace AutoService.Bootstrap
             IGameplayInstaller[] installers =
             {
                 new EconomyInstaller(),
+                new ProgressionInstaller(),
                 player,
                 serviceLoop,
                 building,
