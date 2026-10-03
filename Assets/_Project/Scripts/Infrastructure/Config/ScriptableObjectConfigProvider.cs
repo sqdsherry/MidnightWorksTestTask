@@ -50,6 +50,7 @@ namespace AutoService.Infrastructure.Config
             MapBuildables(config);
             MapUpgrades(config);
             Staff = MapStaff(config);
+            Progression = MapProgression(config);
         }
 
         /// <inheritdoc />
@@ -75,6 +76,9 @@ namespace AutoService.Infrastructure.Config
 
         /// <inheritdoc />
         public StaffSettings Staff { get; }
+
+        /// <inheritdoc />
+        public ProgressionSettings Progression { get; }
 
         /// <inheritdoc />
         public bool TryGetSupplyType(string id, out SupplyTypeSettings settings)
@@ -163,7 +167,8 @@ namespace AutoService.Infrastructure.Config
                         asset.ClearDelay,
                         asset.SupplyTypeId,
                         asset.SupplyCapacity,
-                        worker);
+                        worker,
+                        asset.XpReward);
                 }
                 catch (ArgumentException exception)
                 {
@@ -360,6 +365,18 @@ namespace AutoService.Infrastructure.Config
         private static InvalidOperationException Error(GameConfig config, string message, Exception inner = null)
         {
             return new InvalidOperationException("GameConfig '" + config.name + "': " + message, inner);
+        }
+
+        private static ProgressionSettings MapProgression(GameConfig config)
+        {
+            try
+            {
+                return new ProgressionSettings(config.Progression.LevelThresholds, config.Progression.XpPerLevelAfterTable);
+            }
+            catch (ArgumentException exception)
+            {
+                throw Error(config, "Progression section is invalid: " + exception.Message, exception);
+            }
         }
     }
 }

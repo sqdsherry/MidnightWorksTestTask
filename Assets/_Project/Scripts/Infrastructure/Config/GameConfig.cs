@@ -42,8 +42,15 @@ namespace AutoService.Infrastructure.Config
         [Tooltip("Location-wide staff: the storekeeper offer and its restocking rule.")]
         private StaffSection _staff = new StaffSection();
 
+        [SerializeField]
+        [Tooltip("Player progression table.")]
+        private ProgressionSection _progression = new ProgressionSection();
+
         /// <summary>Global economy settings.</summary>
         public EconomySection Economy => _economy;
+
+        /// <summary>Progression settings.</summary>
+        public ProgressionSection Progression => _progression;
 
         /// <summary>Service type assets (may contain nulls if left empty in the inspector).</summary>
         public ServiceTypeConfig[] ServiceTypes => _serviceTypes;

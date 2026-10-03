@@ -53,8 +53,8 @@ namespace AutoService.Tests.EditMode
             };
             _config.SupplyTypeList.Add(new SupplyTypeSettings("shampoo", "Shampoo", new Money(BoxPrice), 5));
             var wash = new ServiceTypeSettings("wash", "Wash", PointKind.Service, new Money(12), 0.0, 1f, 0f, 0f, "shampoo", 10,
-                new PointWorkerSettings("Washer", new Money(WasherCost), WasherLevel));
-            var oil = new ServiceTypeSettings("oil", "Oil", PointKind.Service, new Money(25), 0.0, 1f, 0f, 0f);
+                new PointWorkerSettings("Washer", new Money(WasherCost), WasherLevel), 0);
+            var oil = new ServiceTypeSettings("oil", "Oil", PointKind.Service, new Money(25), 0.0, 1f, 0f, 0f, "", 0, null, 0);
             _config.ServiceTypeList.Add(wash);
             _config.ServiceTypeList.Add(oil);
 

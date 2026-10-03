@@ -76,8 +76,8 @@ namespace AutoService.Tests.EditMode
             UseTraffic(0, 1, 0);
 
             var parking = new ServiceTypeSettings(
-                ParkingType, "Parking", PointKind.Barrier, new Money(EntranceBasePrice), EntrancePricePerSecond, EntranceDuration, 0f, 0f);
-            var wash = new ServiceTypeSettings(WashType, "Wash", PointKind.Service, new Money(12), 0.0, WashDuration, 0f, 0f);
+                ParkingType, "Parking", PointKind.Barrier, new Money(EntranceBasePrice), EntrancePricePerSecond, EntranceDuration, 0f, 0f, "", 0, null, 0);
+            var wash = new ServiceTypeSettings(WashType, "Wash", PointKind.Service, new Money(12), 0.0, WashDuration, 0f, 0f, "", 0, null, 0);
             _config.ServiceTypeList.Add(parking);
             _config.ServiceTypeList.Add(wash);
             _config.CarTypeList.Add(new CarType("sedan", 1, 1.0, 60f));
@@ -614,7 +614,7 @@ namespace AutoService.Tests.EditMode
         {
             CreateTraffic();
             ServicePoint foreign = _points.Register(
-                new ServiceTypeSettings(OilType, "Oil", PointKind.Service, new Money(25), 0.0, 9f, 0f, 0f)
+                new ServiceTypeSettings(OilType, "Oil", PointKind.Service, new Money(25), 0.0, 9f, 0f, 0f, "", 0, null, 0)
                     .CreatePointDefinition("loc2_oil", "loc2"));
 
             Assert.Throws<ArgumentException>(() => _traffic.AddServicePoint(_main, 2));
@@ -669,7 +669,7 @@ namespace AutoService.Tests.EditMode
 
         private ServicePoint RegisterOil()
         {
-            var oil = new ServiceTypeSettings(OilType, "Oil Change", PointKind.Service, new Money(25), 0.0, 9f, 0f, 0f);
+            var oil = new ServiceTypeSettings(OilType, "Oil Change", PointKind.Service, new Money(25), 0.0, 9f, 0f, 0f, "", 0, null, 0);
             _config.ServiceTypeList.Add(oil);
             return _points.Register(oil.CreatePointDefinition(OilId, LocationId));
         }
