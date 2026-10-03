@@ -262,7 +262,8 @@ EditMode: `Wallet`, `PriceFormula`, `ServicePoint` (прогресс тольк�
 | 09 | `feature/09-scenes-ui` | Scene Flow + Loading + MainMenu + Settings + HUD + панели/попапы | 3 | M | ⏳ |
 | 10 | `feature/10-onboarding` | Onboarding | 3 | M | ⏳ |
 | 11 | `feature/11-location2` | 2-я локация + переключение камеры | 3 | M | ⏳ |
-| 12 | `feature/12-visual` | Ассеты, стиль, звук, juice | 3 | M | ⏳ |
+| 12a | `feature/12a-visual-world` | **D1** Визуал мира: Kenney-импорт, дороги, боксы, анимации услуг, персонажи, декор, свет — [промпт](Prompts/12a-visual-world.md) | Д3 | M | 🔨 в работе |
+| 12b | `feature/12b-ui-audio` | UI-скин (Kenney UI, иконки, шрифт), звук, «+$», juice | Д3 | M | ⏳ |
 | 13 | `feature/13-vip` | VIP + Negotiation | 4 | S | ⏳ |
 | 14 | `feature/14-incidents` | Инциденты «удержи, чтобы решить»: поломки точек + мусор на парковке + уборщик; терпение/уход злых | 4 | S | ⏳ |
 | 15 | `feature/15-debug-bubbles` | **Debug-панель F1 [M]** (+$, +уровень, спавн VIP, сброс сейва); облачки-реплики [C] | 3–4 | M/C | ⏳ |
