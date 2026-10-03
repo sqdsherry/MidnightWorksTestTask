@@ -50,6 +50,8 @@ namespace AutoService.Presentation.Staff
             Turning,
         }
 
+        public NavMeshAgent Agent => _agent;
+
         /// <summary>Renderer of the carried box (may be null).</summary>
         public Renderer BoxRenderer => _boxRenderer;
 
@@ -70,12 +72,27 @@ namespace AutoService.Presentation.Staff
             }
         }
 
-        /// <summary>Sets the body material (null keeps the prefab's).</summary>
         public void SetBodyMaterial(Material material)
         {
             if (_body != null && material != null)
             {
                 _body.sharedMaterial = material;
+            }
+        }
+
+        public void SetRole(AutoService.Domain.Staff.StaffRole role)
+        {
+            Transform vis = transform.Find(""Visual"");
+            if (vis == null) return;
+            
+            Transform worker = vis.Find(""Worker"");
+            Transform storekeeper = vis.Find(""Storekeeper"");
+            
+            if (worker != null && storekeeper != null)
+            {
+                worker.gameObject.SetActive(role == AutoService.Domain.Staff.StaffRole.Worker);
+                storekeeper.gameObject.SetActive(role == AutoService.Domain.Staff.StaffRole.Storekeeper);
+                _body = role == AutoService.Domain.Staff.StaffRole.Worker ? worker.GetComponentInChildren<Renderer>() : storekeeper.GetComponentInChildren<Renderer>();
             }
         }
 

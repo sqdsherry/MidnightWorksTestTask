@@ -1,8 +1,11 @@
 using System;
+using AutoService.Presentation.Characters;
 using AutoService.Presentation.Controls;
 using AutoService.Presentation.Interaction;
 using AutoService.Presentation.Player;
 using AutoService.Services.Core;
+using AutoService.Services.Supplies;
+using UnityEngine;
 
 namespace AutoService.Bootstrap.Installers
 {
@@ -78,6 +81,14 @@ namespace AutoService.Bootstrap.Installers
             context.Register(
                 new PlayerInputPresenter(input, raycaster, scene.Player, context.Resolve<IPauseService>(), scene.ClickMarker),
                 TickPhase.Input);
+
+            var animator = scene.Player.GetComponentInChildren<Animator>();
+            if (animator != null)
+            {
+                var charAnim = new CharacterAnimator(animator, scene.Player.Agent);
+                context.Register(new PlayerAnimatorPresenter(charAnim, context.Resolve<IPlayerCarry>()), TickPhase.Presentation);
+            }
+
             scene.CameraRig.Construct(input, scene.Player);
         }
     }
