@@ -34,6 +34,9 @@ namespace AutoService.Services.Config
         /// <summary>Location-wide staff settings (storekeeper).</summary>
         StaffSettings Staff { get; }
 
+        /// <summary>Player progression settings.</summary>
+        ProgressionSettings Progression { get; }
+
         /// <summary>Looks up a service type by id.</summary>
         /// <returns>False (and null) when no type has this id.</returns>
         bool TryGetServiceType(string id, out ServiceTypeSettings settings);

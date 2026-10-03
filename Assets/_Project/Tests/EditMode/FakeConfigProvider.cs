@@ -47,6 +47,9 @@ namespace AutoService.Tests.EditMode
         public StaffSettings Staff { get; set; } = new StaffSettings("Storekeeper", "Carries boxes", new Money(600), 3, 5, 3, 1.5);
 
         /// <inheritdoc />
+        public ProgressionSettings Progression { get; set; } = new ProgressionSettings(new[] { 0, 15, 35, 70, 110 }, 50);
+
+        /// <inheritdoc />
         public TrafficSettings Traffic { get; set; } = new TrafficSettings(7f, 0f, 12, 35, 35, 30, 0f, 0f);
 
         /// <inheritdoc />

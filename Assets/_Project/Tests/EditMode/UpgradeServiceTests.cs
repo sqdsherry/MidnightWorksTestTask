@@ -44,7 +44,7 @@ namespace AutoService.Tests.EditMode
                 UpgradeKind.Speed, "Speed", "-10% service time", new Money(100), 1.35, MaxLevel, 0.10, RequiredLevel));
             _config.UpgradeList.Add(new UpgradeSettings(
                 UpgradeKind.Price, "Price", "+15% price", new Money(100), 1.35, MaxLevel, 0.15, RequiredLevel));
-            _washType = new ServiceTypeSettings("wash", "Wash", PointKind.Service, new Money(12), 0.0, 6f, 0f, 0f);
+            _washType = new ServiceTypeSettings("wash", "Wash", PointKind.Service, new Money(12), 0.0, 6f, 0f, 0f, "", 0, null, 0);
 
             _wash = _points.Register(_washType.CreatePointDefinition(Wash, "loc1"));
             _service = new UpgradeService(_points, _wallet, _gate, _config, _bus);

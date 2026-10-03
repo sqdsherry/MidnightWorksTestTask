@@ -64,6 +64,10 @@ namespace AutoService.Infrastructure.Config
         [Tooltip("Player level needed to hire the worker.")]
         private int _workerRequiredLevel = 1;
 
+        [SerializeField, Min(0)]
+        [Tooltip("XP granted to the player when this service is completed.")]
+        private int _xpReward;
+
         /// <summary>Unique id.</summary>
         public string Id => _id;
 
@@ -103,6 +107,9 @@ namespace AutoService.Infrastructure.Config
         /// <summary>Player level needed to hire the worker.</summary>
         public int WorkerRequiredLevel => _workerRequiredLevel;
 
+        /// <summary>XP granted to the player when this service is completed.</summary>
+        public int XpReward => _xpReward;
+
         private void OnValidate()
         {
             _id = _id == null ? string.Empty : _id.Trim();
@@ -116,6 +123,7 @@ namespace AutoService.Infrastructure.Config
             _workerTitle = _workerTitle == null ? string.Empty : _workerTitle.Trim();
             _workerHireCost = _workerHireCost < 0 ? 0 : _workerHireCost;
             _workerRequiredLevel = Mathf.Max(0, _workerRequiredLevel);
+            _xpReward = Mathf.Max(0, _xpReward);
         }
     }
 }

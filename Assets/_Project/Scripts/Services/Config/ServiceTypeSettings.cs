@@ -35,7 +35,8 @@ namespace AutoService.Services.Config
             float clearDelay,
             string supplyTypeId = "",
             int supplyCapacity = 0,
-            PointWorkerSettings worker = null)
+            PointWorkerSettings worker = null,
+            int xpReward = 0)
         {
             if (string.IsNullOrWhiteSpace(id))
             {
@@ -58,6 +59,11 @@ namespace AutoService.Services.Config
                     "Supply capacity must be positive for supply type '" + supplyTypeId + "', got " + supplyCapacity + ".", nameof(supplyCapacity));
             }
 
+            if (xpReward < 0)
+            {
+                throw new ArgumentException("XP reward must be non-negative.", nameof(xpReward));
+            }
+
             Id = id;
             DisplayName = displayName ?? string.Empty;
             Kind = kind;
@@ -69,6 +75,7 @@ namespace AutoService.Services.Config
             SupplyTypeId = needsSupply ? supplyTypeId : string.Empty;
             SupplyCapacity = needsSupply ? supplyCapacity : 0;
             Worker = worker;
+            XpReward = xpReward;
         }
 
         /// <summary>Unique id referenced by scene points.</summary>
@@ -103,6 +110,9 @@ namespace AutoService.Services.Config
 
         /// <summary>Hiring settings of the point worker, or null when points of this type cannot hire one.</summary>
         public PointWorkerSettings Worker { get; }
+
+        /// <summary>XP granted to the player when this service is completed.</summary>
+        public int XpReward { get; }
 
         /// <summary>Builds the definition of a concrete point of this type.</summary>
         /// <param name="pointId">Unique point id from the scene.</param>

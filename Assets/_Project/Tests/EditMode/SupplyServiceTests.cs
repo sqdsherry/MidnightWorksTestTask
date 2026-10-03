@@ -43,9 +43,9 @@ namespace AutoService.Tests.EditMode
             _config = new FakeConfigProvider();
             _config.SupplyTypeList.Add(new SupplyTypeSettings("shampoo", "Shampoo", new Money(5), UnitsPerBox));
             _config.SupplyTypeList.Add(new SupplyTypeSettings("oil", "Oil", new Money(15), UnitsPerBox));
-            var wash = new ServiceTypeSettings("wash", "Wash", PointKind.Service, new Money(12), 0.0, 1f, 0f, 0f, "shampoo", Capacity);
-            var oil = new ServiceTypeSettings("oil", "Oil", PointKind.Service, new Money(25), 0.0, 1f, 0f, 0f, "oil", Capacity);
-            var parking = new ServiceTypeSettings("parking", "Parking", PointKind.Barrier, new Money(2), 0.0, 1f, 0f, 0f);
+            var wash = new ServiceTypeSettings("wash", "Wash", PointKind.Service, new Money(12), 0.0, 1f, 0f, 0f, "shampoo", Capacity, null, 0);
+            var oil = new ServiceTypeSettings("oil", "Oil", PointKind.Service, new Money(25), 0.0, 1f, 0f, 0f, "oil", Capacity, null, 0);
+            var parking = new ServiceTypeSettings("parking", "Parking", PointKind.Barrier, new Money(2), 0.0, 1f, 0f, 0f, "", 0, null, 0);
             _config.ServiceTypeList.Add(wash);
             _config.ServiceTypeList.Add(oil);
             _config.ServiceTypeList.Add(parking);

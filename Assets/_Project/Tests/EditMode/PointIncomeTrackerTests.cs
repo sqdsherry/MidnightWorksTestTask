@@ -27,7 +27,7 @@ namespace AutoService.Tests.EditMode
             _bus = new EventBus(new FakeGameLogger());
             _wallet = new WalletService(new Wallet(Money.Zero), _bus);
             _points = new ServicePointService(_wallet, _bus);
-            _type = new ServiceTypeSettings("wash", "Wash", PointKind.Service, new Money(12), 0.0, 1f, 0f, 0f);
+            _type = new ServiceTypeSettings("wash", "Wash", PointKind.Service, new Money(12), 0.0, 1f, 0f, 0f, "", 0, null, 0);
             _points.Register(_type.CreatePointDefinition(Wash, "loc1"));
             _tracker = new PointIncomeTracker(_points, _bus);
         }
