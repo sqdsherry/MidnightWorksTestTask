@@ -3,7 +3,7 @@ using AutoService.Domain.Common;
 using AutoService.Domain.Points;
 using AutoService.Domain.Progression;
 using AutoService.Services.Config;
-using AutoService.Services.EventBus;
+using AutoService.Services.Events;
 using AutoService.Services.Points;
 using AutoService.Services.Progression;
 using NUnit.Framework;
