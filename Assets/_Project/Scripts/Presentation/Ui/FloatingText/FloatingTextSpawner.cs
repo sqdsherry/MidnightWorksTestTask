@@ -82,13 +82,13 @@ namespace AutoService.Presentation.Ui.FloatingText
             if (_pool.Count > 0)
             {
                 instance = _pool.Dequeue();
-                instance.gameObject.SetActive(true);
             }
             else
             {
                 instance = Instantiate(_prefab, transform);
             }
 
+            instance.gameObject.SetActive(true);
             _active.Add(instance);
             instance.Play(text, position, OnTextComplete);
         }
