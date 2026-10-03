@@ -31,7 +31,7 @@ namespace AutoService.Infrastructure.Services.Audio
             _eventBus.Subscribe(_onBalanceChanged);
             _eventBus.Subscribe(_onServiceCompleted);
 
-            AutoService.Presentation.Ui.ButtonAnimator.OnAnyButtonClicked += OnButtonClicked;
+            UiEvents.OnAnyButtonClicked += OnButtonClicked;
         }
 
         public void Dispose()
@@ -42,7 +42,7 @@ namespace AutoService.Infrastructure.Services.Audio
                 if (_onServiceCompleted != null) _eventBus.Unsubscribe(_onServiceCompleted);
             }
             
-            AutoService.Presentation.Ui.ButtonAnimator.OnAnyButtonClicked -= OnButtonClicked;
+            UiEvents.OnAnyButtonClicked -= OnButtonClicked;
         }
 
         private void OnButtonClicked()

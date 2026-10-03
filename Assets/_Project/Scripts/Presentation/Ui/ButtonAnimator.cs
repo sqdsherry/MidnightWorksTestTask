@@ -9,8 +9,6 @@ namespace AutoService.Presentation.Ui
     {
         [SerializeField] private float _pressedScale = 0.95f;
         
-        public static event Action OnAnyButtonClicked;
-        
         private Vector3 _originalScale;
 
         private void Awake()
@@ -23,7 +21,7 @@ namespace AutoService.Presentation.Ui
             if (GetComponent<Button>().interactable)
             {
                 transform.localScale = _originalScale * _pressedScale;
-                OnAnyButtonClicked?.Invoke();
+                AutoService.Services.Events.UiEvents.OnAnyButtonClicked?.Invoke();
             }
         }
 
