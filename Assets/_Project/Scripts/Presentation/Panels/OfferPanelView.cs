@@ -81,9 +81,6 @@ namespace AutoService.Presentation.Panels
         [SerializeField, HideInInspector]
         private Vector2 _screenOffset = new Vector2(40f, 40f);
 
-        [SerializeField, HideInInspector]
-        private float _screenMargin = 16f;
-
         private bool _anchorResolved;
 
         /// <summary>Raised when the action button is clicked.</summary>
