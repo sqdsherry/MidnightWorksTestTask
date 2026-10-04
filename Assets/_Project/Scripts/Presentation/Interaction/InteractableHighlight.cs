@@ -98,7 +98,9 @@ namespace AutoService.Presentation.Interaction
                     else
                     {
                         Color baseCol = _overrideBaseColor ?? _baseColors[i];
-                        _block.SetColor(BaseColorId, Color.Lerp(baseCol, color, _intensity));
+                        // Если объект заблокирован (желтый), при наведении он будет становиться ярче (тянуться к белому), а не к зеленому
+                        Color highlightCol = _overrideBaseColor.HasValue ? Color.white : color;
+                        _block.SetColor(BaseColorId, Color.Lerp(baseCol, highlightCol, _intensity));
                     }
                 }
                 else if (_overrideBaseColor.HasValue)
