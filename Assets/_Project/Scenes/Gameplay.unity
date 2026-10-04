@@ -1,4 +1,4 @@
-%YAML 1.1
+﻿%YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
 --- !u!29 &1
 OcclusionCullingSettings:
@@ -2184,7 +2184,7 @@ MonoBehaviour:
   - {fileID: 1981580443}
   - {fileID: 1192652400}
   - {fileID: 1039895880}
-  _highlightColor: {r: 1, g: 0.85, b: 0.3, a: 1}
+  _highlightColor: {r: 0.6, g: 1, b: 0.4, a: 1}
   _intensity: 0.6
   _property: 1
 --- !u!114 &100081446
@@ -2883,7 +2883,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: AutoService.Presentation::AutoService.Presentation.Interaction.InteractableHighlight
   _renderers:
   - {fileID: 1898562527}
-  _highlightColor: {r: 1, g: 0.85, b: 0.3, a: 1}
+  _highlightColor: {r: 0.6, g: 1, b: 0.4, a: 1}
   _intensity: 0.6
   _property: 1
 --- !u!65 &142812679
@@ -9754,7 +9754,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: AutoService.Presentation::AutoService.Presentation.Interaction.InteractableHighlight
   _renderers:
   - {fileID: 478669064}
-  _highlightColor: {r: 1, g: 0.85, b: 0.3, a: 1}
+  _highlightColor: {r: 0.6, g: 1, b: 0.4, a: 1}
   _intensity: 0.6
   _property: 1
 --- !u!65 &252935324
@@ -12130,7 +12130,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: AutoService.Presentation::AutoService.Presentation.Interaction.InteractableHighlight
   _renderers:
   - {fileID: 1815777182}
-  _highlightColor: {r: 1, g: 0.85, b: 0.3, a: 1}
+  _highlightColor: {r: 0.6, g: 1, b: 0.4, a: 1}
   _intensity: 0.6
   _property: 1
 --- !u!114 &401804745
@@ -12269,7 +12269,7 @@ MonoBehaviour:
   - {fileID: 1721902414}
   - {fileID: 740725957}
   - {fileID: 507703329}
-  _highlightColor: {r: 1, g: 0.85, b: 0.3, a: 1}
+  _highlightColor: {r: 0.6, g: 1, b: 0.4, a: 1}
   _intensity: 0.6
   _property: 1
 --- !u!114 &408613054
@@ -14228,7 +14228,7 @@ MonoBehaviour:
   - {fileID: 784118644}
   - {fileID: 1632789250}
   - {fileID: 1427201945}
-  _highlightColor: {r: 1, g: 0.85, b: 0.3, a: 1}
+  _highlightColor: {r: 0.6, g: 1, b: 0.4, a: 1}
   _intensity: 0.6
   _property: 1
 --- !u!114 &499836779
@@ -19171,7 +19171,7 @@ MonoBehaviour:
   - {fileID: 1616442199}
   - {fileID: 271779117}
   - {fileID: 202807261}
-  _highlightColor: {r: 1, g: 0.85, b: 0.3, a: 1}
+  _highlightColor: {r: 0.6, g: 1, b: 0.4, a: 1}
   _intensity: 0.6
   _property: 1
 --- !u!114 &750698776
@@ -23698,7 +23698,7 @@ MonoBehaviour:
   _renderers:
   - {fileID: 967228709}
   - {fileID: 1318027949}
-  _highlightColor: {r: 1, g: 0.85, b: 0.3, a: 1}
+  _highlightColor: {r: 0.6, g: 1, b: 0.4, a: 1}
   _intensity: 0.6
   _property: 1
 --- !u!114 &967228713
@@ -25218,7 +25218,7 @@ MonoBehaviour:
   - {fileID: 1792364545}
   - {fileID: 886835749}
   - {fileID: 1533642468}
-  _highlightColor: {r: 1, g: 0.85, b: 0.3, a: 1}
+  _highlightColor: {r: 0.6, g: 1, b: 0.4, a: 1}
   _intensity: 0.6
   _property: 1
 --- !u!114 &1027639660
@@ -25407,7 +25407,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: AutoService.Presentation::AutoService.Presentation.Interaction.InteractableHighlight
   _renderers:
   - {fileID: 489601197}
-  _highlightColor: {r: 1, g: 0.85, b: 0.3, a: 1}
+  _highlightColor: {r: 0.6, g: 1, b: 0.4, a: 1}
   _intensity: 0.6
   _property: 1
 --- !u!65 &1038250139
@@ -30281,7 +30281,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: AutoService.Presentation::AutoService.Presentation.Interaction.InteractableHighlight
   _renderers:
   - {fileID: 680612801}
-  _highlightColor: {r: 1, g: 0.85, b: 0.3, a: 1}
+  _highlightColor: {r: 0.6, g: 1, b: 0.4, a: 1}
   _intensity: 0.6
   _property: 1
 --- !u!65 &1424598634
@@ -31514,7 +31514,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: AutoService.Presentation::AutoService.Presentation.Interaction.InteractableHighlight
   _renderers:
   - {fileID: 1056476020}
-  _highlightColor: {r: 1, g: 0.85, b: 0.3, a: 1}
+  _highlightColor: {r: 0.6, g: 1, b: 0.4, a: 1}
   _intensity: 0.6
   _property: 1
 --- !u!65 &1478276835
@@ -36931,7 +36931,7 @@ MonoBehaviour:
   - {fileID: 215733339}
   - {fileID: 2054984861}
   - {fileID: 1606945293}
-  _highlightColor: {r: 1, g: 0.85, b: 0.3, a: 1}
+  _highlightColor: {r: 0.6, g: 1, b: 0.4, a: 1}
   _intensity: 0.6
   _property: 1
 --- !u!114 &1529970514
@@ -40193,7 +40193,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: AutoService.Presentation::AutoService.Presentation.Interaction.InteractableHighlight
   _renderers:
   - {fileID: 2106743327}
-  _highlightColor: {r: 1, g: 0.85, b: 0.3, a: 1}
+  _highlightColor: {r: 0.6, g: 1, b: 0.4, a: 1}
   _intensity: 0.6
   _property: 1
 --- !u!114 &1730571360
@@ -40836,7 +40836,7 @@ MonoBehaviour:
   _renderers:
   - {fileID: 1747433159}
   - {fileID: 1996022857}
-  _highlightColor: {r: 1, g: 0.85, b: 0.3, a: 1}
+  _highlightColor: {r: 0.6, g: 1, b: 0.4, a: 1}
   _intensity: 0.6
   _property: 1
 --- !u!23 &1747433159
@@ -42589,7 +42589,7 @@ MonoBehaviour:
   - {fileID: 1955926441}
   - {fileID: 790694503}
   - {fileID: 1975989000}
-  _highlightColor: {r: 1, g: 0.85, b: 0.3, a: 1}
+  _highlightColor: {r: 0.6, g: 1, b: 0.4, a: 1}
   _intensity: 0.6
   _property: 1
 --- !u!4 &1846355572
@@ -42828,7 +42828,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: AutoService.Presentation::AutoService.Presentation.Interaction.InteractableHighlight
   _renderers:
   - {fileID: 1203757114}
-  _highlightColor: {r: 1, g: 0.85, b: 0.3, a: 1}
+  _highlightColor: {r: 0.6, g: 1, b: 0.4, a: 1}
   _intensity: 0.6
   _property: 1
 --- !u!65 &1850389995
@@ -44522,7 +44522,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: AutoService.Presentation::AutoService.Presentation.Interaction.InteractableHighlight
   _renderers:
   - {fileID: 716290808}
-  _highlightColor: {r: 1, g: 0.85, b: 0.3, a: 1}
+  _highlightColor: {r: 0.6, g: 1, b: 0.4, a: 1}
   _intensity: 0.6
   _property: 1
 --- !u!65 &1908396061
@@ -45706,7 +45706,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: AutoService.Presentation::AutoService.Presentation.Interaction.InteractableHighlight
   _renderers:
   - {fileID: 1057853716}
-  _highlightColor: {r: 1, g: 0.85, b: 0.3, a: 1}
+  _highlightColor: {r: 0.6, g: 1, b: 0.4, a: 1}
   _intensity: 0.6
   _property: 1
 --- !u!65 &1959759464
@@ -48800,7 +48800,7 @@ MonoBehaviour:
   - {fileID: 1482701939}
   - {fileID: 765793799}
   - {fileID: 418078618}
-  _highlightColor: {r: 1, g: 0.85, b: 0.3, a: 1}
+  _highlightColor: {r: 0.6, g: 1, b: 0.4, a: 1}
   _intensity: 0.6
   _property: 1
 --- !u!114 &2146692104
