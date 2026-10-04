@@ -231,17 +231,13 @@ namespace AutoService.Presentation.Building
 
         private void RefreshParkingOffers()
         {
-            bool nextOffered = false;
             for (int i = 0; i < _parkingViews.Count; i++)
             {
                 BuildPlotView view = _parkingViews[i];
-                if (view.IsBuilt)
+                if (!view.IsBuilt)
                 {
-                    continue;
+                    view.SetOffered(true);
                 }
-
-                view.SetOffered(!nextOffered);
-                nextOffered = true;
             }
         }
 
