@@ -50,4 +50,9 @@ MonoBehaviour:
     _storekeeperDescription: Carries boxes to the hungriest bay
     _storekeeperCost: 600
     _storekeeperRequiredLevel: 3
-    _restockThreshold: 0.5
+    _restockAtOrBelow: 5
+    _maxStorekeepers: 3
+    _storekeeperCostGrowth: 1.5
+  _progression:
+    _levelThresholds: 000000000f00000023000000460000006e000000
+    _xpPerLevelAfterTable: 50

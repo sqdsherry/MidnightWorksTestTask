@@ -27,7 +27,7 @@ namespace AutoService.Bootstrap.Editor
                 layout.gameObject.AddComponent<ArtD1Generated>();
 
             EnsureMaterials();
-            SetupRoads(layout.transform);
+            // SetupRoads(layout.transform);
             SetupBays(layout);
             SetupBarriers(layout);
             SetupBuildings(layout);
