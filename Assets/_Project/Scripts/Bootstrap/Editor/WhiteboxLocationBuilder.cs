@@ -712,6 +712,15 @@ namespace AutoService.Bootstrap.Editor
                 Object.DestroyImmediate(colliders[i]);
             }
 
+            ParticleSystem[] particles = copy.GetComponentsInChildren<ParticleSystem>(true);
+            for (int i = 0; i < particles.Length; i++)
+            {
+                if (particles[i] != null) 
+                {
+                    Object.DestroyImmediate(particles[i].gameObject);
+                }
+            }
+
             // Why: not a MonoBehaviour, so it survives the loop above; a ghost must not carve the NavMesh.
             NavMeshObstacle[] obstacles = copy.GetComponentsInChildren<NavMeshObstacle>(true);
             for (int i = 0; i < obstacles.Length; i++)
