@@ -21,7 +21,7 @@ namespace AutoService.Tests.EditMode
         private const string LocationId = "loc1";
         private const string Wash1 = "loc1_wash_1";
         private const string Wash2 = "loc1_wash_2";
-        private const string Oil = "loc1_oil";
+        private const string Oil = "loc1_oil_1";
         private const long WasherCost = 300;
         private const int WasherLevel = 2;
         private const long StorekeeperCost = 600;

@@ -161,37 +161,7 @@ namespace AutoService.Bootstrap.Editor
                 }
                 else if (bay.ServiceTypeId == "tires")
                 {
-                    var tireFx = bay.GetComponent<TireFx>();
-                    if (tireFx == null) tireFx = bay.gameObject.AddComponent<TireFx>();
-                    GameObject arm = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Art/robot-arm-a.prefab");
-                    GameObject tirePref = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Art/wheel-dark.prefab");
-                    
-                    Transform rArm = null;
-                    if (arm != null)
-                    {
-                        var a = (GameObject)PrefabUtility.InstantiatePrefab(arm, fxObj.transform);
-                        a.transform.localPosition = new Vector3(-2f, 0, 0);
-                        rArm = a.transform;
-                    }
-
-                    var stack = new GameObject("TireStack");
-                    stack.transform.SetParent(fxObj.transform, false);
-                    stack.transform.localPosition = new Vector3(2f, 0, 0);
-                    
-                    if (tirePref != null)
-                    {
-                        for (int i=0; i<3; i++)
-                        {
-                            var t = (GameObject)PrefabUtility.InstantiatePrefab(tirePref, stack.transform);
-                            t.transform.localPosition = new Vector3(0, i * 0.3f, 0);
-                            t.transform.localRotation = Quaternion.Euler(90, 0, 0);
-                        }
-                    }
-
-                    var serialized = new SerializedObject(tireFx);
-                    serialized.FindProperty("_robotArm").objectReferenceValue = rArm;
-                    serialized.FindProperty("_tires").objectReferenceValue = stack.transform;
-                    serialized.ApplyModifiedProperties();
+                    // Tires removed to second location.
                 }
 
                 // If ghost exists, rebuild it
@@ -210,6 +180,24 @@ namespace AutoService.Bootstrap.Editor
                         WhiteboxLocationBuilder.CreateBayGhost(washBay, bay, plotId, bay.PointId, shift, ghostMat, washBay.Hud);
                     }
                 }
+            }
+
+            // Add visual separator between washes and oil bays (X = -12)
+            GameObject fencePrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Art/fenceStraight.prefab");
+            if (fencePrefab != null)
+            {
+                var fenceObj = new GameObject("SeparatorFence");
+                fenceObj.transform.SetParent(layout.transform, false);
+                fenceObj.transform.position = new Vector3(-12f, 0, -2f);
+                var f1 = (GameObject)PrefabUtility.InstantiatePrefab(fencePrefab, fenceObj.transform);
+                f1.transform.localPosition = new Vector3(0, 0, 0);
+                f1.transform.localRotation = Quaternion.Euler(0, 90, 0);
+                var f2 = (GameObject)PrefabUtility.InstantiatePrefab(fencePrefab, fenceObj.transform);
+                f2.transform.localPosition = new Vector3(0, 0, 3f);
+                f2.transform.localRotation = Quaternion.Euler(0, 90, 0);
+                var f3 = (GameObject)PrefabUtility.InstantiatePrefab(fencePrefab, fenceObj.transform);
+                f3.transform.localPosition = new Vector3(0, 0, -3f);
+                f3.transform.localRotation = Quaternion.Euler(0, 90, 0);
             }
         }
     }
