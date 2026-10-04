@@ -52,6 +52,23 @@ namespace AutoService.Bootstrap.Editor
                     EditorUtility.SetDirty(bay);
                 }
             }
+
+            // Also remap stale ManagePad targetIds so the runtime validator doesn't reject them
+            var managePads = layout.GetComponentsInChildren<ManagePadView>(true);
+            foreach (var pad in managePads)
+            {
+                string remapped = null;
+                if (pad.TargetId == "loc1_oil") remapped = "loc1_oil_1";
+                else if (pad.TargetId == "loc1_tires") remapped = "loc1_oil_2";
+                if (remapped != null)
+                {
+                    var sv = new SerializedObject(pad);
+                    sv.FindProperty("_targetId").stringValue = remapped;
+                    sv.ApplyModifiedProperties();
+                    pad.gameObject.name = "ManagePad_" + remapped;
+                    EditorUtility.SetDirty(pad);
+                }
+            }
             
             // Re-fetch bays after renaming
             bays = layout.GetComponentsInChildren<ServicePointView>(true);
