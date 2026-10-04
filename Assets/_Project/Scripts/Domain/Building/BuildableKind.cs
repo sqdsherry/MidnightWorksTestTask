@@ -8,5 +8,8 @@ namespace AutoService.Domain.Building
 
         /// <summary>One extra parking slot; the plot's target is the slot index.</summary>
         ParkingSlot = 1,
+
+        /// <summary>A point to travel to another location.</summary>
+        TravelPoint = 2,
     }
 }
