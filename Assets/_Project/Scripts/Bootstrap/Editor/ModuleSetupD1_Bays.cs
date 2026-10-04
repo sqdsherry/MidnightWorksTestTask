@@ -35,51 +35,15 @@ namespace AutoService.Bootstrap.Editor
                 GameObject doorwayPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Art/structure-doorway-wide.prefab");
                 GameObject roofPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Art/top-large.prefab");
 
-                if (doorwayPrefab != null)
-                {
-                    var front = (GameObject)PrefabUtility.InstantiatePrefab(doorwayPrefab, visual.transform);
-                    front.transform.localPosition = new Vector3(0, 0, 3f);
-                    
-                    var back = (GameObject)PrefabUtility.InstantiatePrefab(doorwayPrefab, visual.transform);
-                    back.transform.localPosition = new Vector3(0, 0, -3f);
-                    back.transform.localRotation = Quaternion.Euler(0, 180, 0);
-
-                    // Add TMP Sign
-                    var signObj = new GameObject("Sign");
-                    signObj.transform.SetParent(front.transform, false);
-                    signObj.transform.localPosition = new Vector3(0, 3.5f, 0);
-                    var txt = signObj.AddComponent<TextMeshPro>();
-                    txt.text = bay.ServiceTypeId.ToUpper();
-                    txt.fontSize = 5;
-                    txt.alignment = TextAlignmentOptions.Center;
-                    txt.color = Color.white;
-                }
-
-                if (wallPrefab != null)
-                {
-                    var left1 = (GameObject)PrefabUtility.InstantiatePrefab(wallPrefab, visual.transform);
-                    left1.transform.localPosition = new Vector3(-2.5f, 0, 1.5f);
-                    left1.transform.localRotation = Quaternion.Euler(0, -90, 0);
-                    
-                    var left2 = (GameObject)PrefabUtility.InstantiatePrefab(wallPrefab, visual.transform);
-                    left2.transform.localPosition = new Vector3(-2.5f, 0, -1.5f);
-                    left2.transform.localRotation = Quaternion.Euler(0, -90, 0);
-
-                    var right1 = (GameObject)PrefabUtility.InstantiatePrefab(wallPrefab, visual.transform);
-                    right1.transform.localPosition = new Vector3(2.5f, 0, 1.5f);
-                    right1.transform.localRotation = Quaternion.Euler(0, 90, 0);
-
-                    var right2 = (GameObject)PrefabUtility.InstantiatePrefab(wallPrefab, visual.transform);
-                    right2.transform.localPosition = new Vector3(2.5f, 0, -1.5f);
-                    right2.transform.localRotation = Quaternion.Euler(0, 90, 0);
-                }
-
-                if (roofPrefab != null)
-                {
-                    var roof = (GameObject)PrefabUtility.InstantiatePrefab(roofPrefab, visual.transform);
-                    roof.transform.localPosition = new Vector3(0, 3f, 0);
-                    roof.transform.localScale = new Vector3(1.2f, 1f, 1.2f);
-                }
+                // Add TMP Sign
+                var signObj = new GameObject("Sign");
+                signObj.transform.SetParent(visual.transform, false);
+                signObj.transform.localPosition = new Vector3(0, 3.5f, 3f);
+                var txt = signObj.AddComponent<TextMeshPro>();
+                txt.text = bay.ServiceTypeId.ToUpper();
+                txt.fontSize = 5;
+                txt.alignment = TextAlignmentOptions.Center;
+                txt.color = Color.white;
 
                 // Add Fx
                 var fxObj = new GameObject("Fx");
@@ -180,24 +144,6 @@ namespace AutoService.Bootstrap.Editor
                         WhiteboxLocationBuilder.CreateBayGhost(washBay, bay, plotId, bay.PointId, shift, ghostMat, washBay.Hud);
                     }
                 }
-            }
-
-            // Add visual separator between washes and oil bays (X = -12)
-            GameObject fencePrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Art/fenceStraight.prefab");
-            if (fencePrefab != null)
-            {
-                var fenceObj = new GameObject("SeparatorFence");
-                fenceObj.transform.SetParent(layout.transform, false);
-                fenceObj.transform.position = new Vector3(-12f, 0, -2f);
-                var f1 = (GameObject)PrefabUtility.InstantiatePrefab(fencePrefab, fenceObj.transform);
-                f1.transform.localPosition = new Vector3(0, 0, 0);
-                f1.transform.localRotation = Quaternion.Euler(0, 90, 0);
-                var f2 = (GameObject)PrefabUtility.InstantiatePrefab(fencePrefab, fenceObj.transform);
-                f2.transform.localPosition = new Vector3(0, 0, 3f);
-                f2.transform.localRotation = Quaternion.Euler(0, 90, 0);
-                var f3 = (GameObject)PrefabUtility.InstantiatePrefab(fencePrefab, fenceObj.transform);
-                f3.transform.localPosition = new Vector3(0, 0, -3f);
-                f3.transform.localRotation = Quaternion.Euler(0, 90, 0);
             }
         }
     }

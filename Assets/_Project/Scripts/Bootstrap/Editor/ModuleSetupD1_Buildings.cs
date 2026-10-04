@@ -14,9 +14,6 @@ namespace AutoService.Bootstrap.Editor
         {
             var barriers = layout.GetComponentsInChildren<BarrierArm>(true);
             Material stripeMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/_Project/Art/Generated/M_ArmStripe.mat");
-            GameObject basePrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Art/structure-yellow-high.prefab");
-            GameObject awningPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Art/detail-awning.prefab");
-            GameObject windowPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Art/cover-window.prefab");
 
             foreach (var b in barriers)
             {
@@ -36,24 +33,6 @@ namespace AutoService.Bootstrap.Editor
                 // Clear old visual (Post)
                 Transform oldPost = b.transform.Find("Post");
                 if (oldPost != null) Object.DestroyImmediate(oldPost.gameObject);
-
-                if (basePrefab != null)
-                {
-                    var p = (GameObject)PrefabUtility.InstantiatePrefab(basePrefab, visual);
-                    p.transform.localPosition = Vector3.zero;
-                }
-
-                if (windowPrefab != null)
-                {
-                    var w = (GameObject)PrefabUtility.InstantiatePrefab(windowPrefab, visual);
-                    w.transform.localPosition = new Vector3(-2f, 0, 0);
-                    
-                    if (awningPrefab != null)
-                    {
-                        var aw = (GameObject)PrefabUtility.InstantiatePrefab(awningPrefab, w.transform);
-                        aw.transform.localPosition = new Vector3(0, 1.5f, 1f);
-                    }
-                }
             }
         }
 
