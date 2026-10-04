@@ -624,8 +624,8 @@ namespace AutoService.Bootstrap.Editor
             ghostRoot.transform.SetPositionAndRotation(bayRoot.position, bayRoot.rotation);
             ghostRoot.AddComponent<WhiteboxGenerated>();
 
-            Transform source = wash.transform;
-            GameObject visual = Object.Instantiate(source.gameObject, source.position + shift, source.rotation, ghostRoot.transform);
+            Transform source = bay.transform;
+            GameObject visual = Object.Instantiate(source.gameObject, source.position, source.rotation, ghostRoot.transform);
             visual.name = "Visual";
             StripToRenderers(visual);
             Bounds bounds = ApplyGhostLook(visual, material);
