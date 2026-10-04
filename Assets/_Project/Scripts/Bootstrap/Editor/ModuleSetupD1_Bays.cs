@@ -131,7 +131,13 @@ namespace AutoService.Bootstrap.Editor
                 // If ghost exists, rebuild it
                 string ghostName = "Ghost_" + bay.PointId;
                 Transform ghost = layout.transform.Find(ghostName);
-                if (ghost != null)
+                
+                if (ghost == null && bay.PointId == "loc1_wash_1")
+                {
+                    WhiteboxLocationBuilder.CreateBayGhost(bay, bay, "loc1_build_wash_1", bay.PointId, Vector3.zero, ghostMat, bay.Hud);
+                    bay.gameObject.SetActive(false);
+                }
+                else if (ghost != null)
                 {
                     string plotId = ghost.GetComponent<BuildPlotView>().PlotId;
                     ServicePointView washBay = null;
@@ -143,8 +149,31 @@ namespace AutoService.Bootstrap.Editor
                         Object.DestroyImmediate(ghost.gameObject);
                         WhiteboxLocationBuilder.CreateBayGhost(washBay, bay, plotId, bay.PointId, shift, ghostMat, washBay.Hud);
                     }
+
+                    if (bay.PointId == "loc1_wash_1")
+                    {
+                        bay.gameObject.SetActive(false);
+                    }
                 }
             }
+
+            // Sync build plots on LocationLayout to avoid null references
+            var allPlots = layout.GetComponentsInChildren<BuildPlotView>(true);
+            var validPlots = new List<BuildPlotView>();
+            foreach (var p in allPlots)
+            {
+                if (p != null) validPlots.Add(p);
+            }
+            
+            var serializedLayout = new SerializedObject(layout);
+            var plotsProp = serializedLayout.FindProperty("_buildPlots");
+            plotsProp.arraySize = validPlots.Count;
+            for (int i = 0; i < validPlots.Count; i++)
+            {
+                plotsProp.GetArrayElementAtIndex(i).objectReferenceValue = validPlots[i];
+            }
+            serializedLayout.ApplyModifiedProperties();
+            EditorUtility.SetDirty(layout);
         }
     }
 }
