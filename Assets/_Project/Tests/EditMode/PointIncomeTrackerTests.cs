@@ -13,7 +13,7 @@ namespace AutoService.Tests.EditMode
     public sealed class PointIncomeTrackerTests
     {
         private const string Wash = "loc1_wash_1";
-        private const string Oil = "loc1_oil";
+        private const string Oil = "loc1_oil_1";
 
         private EventBus _bus;
         private WalletService _wallet;

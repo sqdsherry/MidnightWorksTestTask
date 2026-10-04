@@ -58,7 +58,7 @@ namespace AutoService.Bootstrap.Installers
             }
 
             // Restored by SaveInstaller (see its order).
-            context.Track(new BuildableBinder(build, config, _serviceLoop.Registrar, _serviceLoop.Traffic, scene.Location1, context.Logger));
+            context.Track(new BuildableBinder(build, config, _serviceLoop.Registrar, _serviceLoop.Traffic, scene.Location1, context.Logger, context.Resolve<AutoService.Services.Progression.IProgressionService>(), wallet));
 
             if (scene.BuildPanel == null || scene.Camera == null)
             {

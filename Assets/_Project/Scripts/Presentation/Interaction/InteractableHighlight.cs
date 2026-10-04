@@ -21,7 +21,7 @@ namespace AutoService.Presentation.Interaction
 
         [SerializeField]
         [Tooltip("Default highlight color (hover).")]
-        private Color _highlightColor = new Color(1f, 0.85f, 0.3f, 1f);
+        private Color _highlightColor = new Color(0.6f, 1f, 0.4f, 1f);
 
         [SerializeField]
         [Range(0f, 1f)]
@@ -36,9 +36,17 @@ namespace AutoService.Presentation.Interaction
 
         // Why: cached once — the tint lerps from the material's own base color, and reading it per call would touch materials.
         private Color[] _baseColors;
+        private Color? _overrideBaseColor;
+        private bool _isHighlighted;
 
         /// <summary>The default highlight color used by <see cref="SetHighlighted(bool)"/>.</summary>
         public Color HighlightColor => _highlightColor;
+
+        public void SetOverrideBaseColor(Color? color)
+        {
+            _overrideBaseColor = color;
+            SetHighlighted(_isHighlighted); // Переотрисовать текущее состояние
+        }
 
         private void Awake()
         {
@@ -63,6 +71,8 @@ namespace AutoService.Presentation.Interaction
                 return;
             }
 
+            _isHighlighted = highlighted;
+
             for (int i = 0; i < _renderers.Length; i++)
             {
                 Renderer target = _renderers[i];
@@ -71,21 +81,32 @@ namespace AutoService.Presentation.Interaction
                     continue;
                 }
 
-                if (!highlighted)
+                if (!highlighted && _overrideBaseColor == null)
                 {
-                    // Why: clearing the block restores the shared material exactly, without remembering previous values.
+                    // Если нет ховера и нет переопределения цвета — сбрасываем в дефолтный мат
                     target.SetPropertyBlock(null);
                     continue;
                 }
 
                 _block.Clear();
-                if (_property == HighlightProperty.Emission)
+                if (highlighted)
                 {
-                    _block.SetColor(EmissionColorId, color * _intensity);
+                    if (_property == HighlightProperty.Emission)
+                    {
+                        _block.SetColor(EmissionColorId, color * _intensity);
+                    }
+                    else
+                    {
+                        Color baseCol = _overrideBaseColor ?? _baseColors[i];
+                        // Если объект заблокирован (желтый), при наведении он будет становиться ярче (тянуться к белому), а не к зеленому
+                        Color highlightCol = _overrideBaseColor.HasValue ? Color.white : color;
+                        _block.SetColor(BaseColorId, Color.Lerp(baseCol, highlightCol, _intensity));
+                    }
                 }
-                else
+                else if (_overrideBaseColor.HasValue)
                 {
-                    _block.SetColor(BaseColorId, Color.Lerp(_baseColors[i], color, _intensity));
+                    // Если ховера нет, но есть переопределенный цвет (желтый призрак)
+                    _block.SetColor(BaseColorId, _overrideBaseColor.Value);
                 }
 
                 target.SetPropertyBlock(_block);

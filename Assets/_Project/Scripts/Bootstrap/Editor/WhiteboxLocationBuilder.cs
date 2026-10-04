@@ -143,10 +143,10 @@ namespace AutoService.Bootstrap.Editor
         private const float BaySpotYaw = 0f;
         private static readonly BaySpec[] Bays =
         {
-            new BaySpec(-3f, WashPointId, "wash", null),
+            new BaySpec(-3f, WashPointId, "wash", "loc1_build_wash_1"),
             new BaySpec(-9f, "loc1_wash_2", "wash", "loc1_build_wash_2"),
-            new BaySpec(-15f, "loc1_oil", "oil", "loc1_build_oil"),
-            new BaySpec(-21f, "loc1_tires", "tires", "loc1_build_tires"),
+            new BaySpec(-15f, "loc1_oil_1", "oil", "loc1_build_oil_1"),
+            new BaySpec(-21f, "loc1_oil_2", "oil", "loc1_build_oil_2"),
         };
 
         // Parking slots that are bought later: index into ParkingSlotNames → plot id.
@@ -522,6 +522,12 @@ namespace AutoService.Bootstrap.Editor
                 // Why: the bay is the plot's target — it only appears (and registers as a point) once built.
                 bay.gameObject.SetActive(false);
             }
+
+            if (!string.IsNullOrEmpty(first.PlotId))
+            {
+                plots.Add(CreateBayGhost(wash, wash, first.PlotId, first.PointId, Vector3.zero, ghostMaterial, wash.Hud));
+                wash.gameObject.SetActive(false);
+            }
         }
 
         private static void PlaceWash(ServicePointView wash, BaySpec spec, Dictionary<string, RoadNode> nodes)
@@ -618,8 +624,8 @@ namespace AutoService.Bootstrap.Editor
             ghostRoot.transform.SetPositionAndRotation(bayRoot.position, bayRoot.rotation);
             ghostRoot.AddComponent<WhiteboxGenerated>();
 
-            Transform source = wash.transform;
-            GameObject visual = Object.Instantiate(source.gameObject, source.position + shift, source.rotation, ghostRoot.transform);
+            Transform source = bay.transform;
+            GameObject visual = Object.Instantiate(source.gameObject, source.position, source.rotation, ghostRoot.transform);
             visual.name = "Visual";
             StripToRenderers(visual);
             Bounds bounds = ApplyGhostLook(visual, material);
@@ -704,6 +710,15 @@ namespace AutoService.Bootstrap.Editor
             for (int i = 0; i < colliders.Length; i++)
             {
                 Object.DestroyImmediate(colliders[i]);
+            }
+
+            ParticleSystem[] particles = copy.GetComponentsInChildren<ParticleSystem>(true);
+            for (int i = 0; i < particles.Length; i++)
+            {
+                if (particles[i] != null) 
+                {
+                    Object.DestroyImmediate(particles[i].gameObject);
+                }
             }
 
             // Why: not a MonoBehaviour, so it survives the loop above; a ghost must not carve the NavMesh.

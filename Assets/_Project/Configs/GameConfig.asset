@@ -33,9 +33,10 @@ MonoBehaviour:
     _parkingStayMin: 6
     _parkingStayMax: 15
   _buildables:
+  - {fileID: 11400000, guid: b0f020ee8da168647b5603d8d1b6148a, type: 2}
   - {fileID: 11400000, guid: f64487a40e1e823449c7089522e40de5, type: 2}
-  - {fileID: 11400000, guid: 065374553529f9245b6612f9a5378d24, type: 2}
-  - {fileID: 11400000, guid: e0eaddf47ee0b1e4b9bac9e8c8caa7d4, type: 2}
+  - {fileID: 11400000, guid: 2cf684a44b8acba4b988937fd1846fdd, type: 2}
+  - {fileID: 11400000, guid: 009fb1df9d6ccc844a866af231cbb0bb, type: 2}
   - {fileID: 11400000, guid: 33946f25266d1a94fb2438d25f350434, type: 2}
   - {fileID: 11400000, guid: 5c1452170990a3b41bfadf69c6c2e538, type: 2}
   _supplyTypes:
@@ -50,4 +51,10 @@ MonoBehaviour:
     _storekeeperDescription: Carries boxes to the hungriest bay
     _storekeeperCost: 600
     _storekeeperRequiredLevel: 3
-    _restockThreshold: 0.5
+    _restockAtOrBelow: 5
+    _maxStorekeepers: 3
+    _storekeeperCostGrowth: 1.5
+  _progression:
+    _levelThresholds: 000000000f00000023000000460000006e000000
+    _xpPerLevelAfterTable: 50
+

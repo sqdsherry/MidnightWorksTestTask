@@ -75,7 +75,7 @@ namespace AutoService.Tests.EditMode
             Assert.AreEqual(1, _completed.Count);
             Assert.AreEqual(OilPlot, _completed[0].PlotId);
             Assert.AreEqual(BuildableKind.ServicePoint, _completed[0].Kind);
-            Assert.AreEqual("loc1_oil", _completed[0].TargetId);
+            Assert.AreEqual("loc1_oil_1", _completed[0].TargetId);
             CollectionAssert.AreEqual(new[] { OilPlot }, _service.BuiltPlotIds);
         }
 
@@ -179,7 +179,7 @@ namespace AutoService.Tests.EditMode
         }
 
         private static BuildPlotDefinition OilDefinition() =>
-            new BuildPlotDefinition(OilPlot, BuildableKind.ServicePoint, "loc1_oil", new Money(OilCost), OilLevel, 0.2);
+            new BuildPlotDefinition(OilPlot, BuildableKind.ServicePoint, "loc1_oil_1", new Money(OilCost), OilLevel, 0.2);
 
         private static BuildPlotDefinition ParkingDefinition() =>
             new BuildPlotDefinition(ParkingPlot, BuildableKind.ParkingSlot, "2", new Money(200), 2, 0.05);

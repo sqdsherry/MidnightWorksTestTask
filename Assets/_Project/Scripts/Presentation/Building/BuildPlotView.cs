@@ -194,6 +194,14 @@ namespace AutoService.Presentation.Building
 
         /// <summary>Hides the ghost and switches the real object on.</summary>
         /// <param name="animate">True for a fresh construction (grow + particles), false when restored from a save.</param>
+        public void SetGhostLockedVisual(bool isLocked)
+        {
+            if (_highlight != null)
+            {
+                _highlight.SetOverrideBaseColor(isLocked ? new Color(1f, 0.9f, 0.1f, 0.4f) : (Color?)null);
+            }
+        }
+
         public void SetBuilt(bool animate)
         {
             _built = true;

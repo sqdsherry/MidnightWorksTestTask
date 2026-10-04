@@ -19,6 +19,60 @@ namespace AutoService.Bootstrap.Editor
             var bays = layout.GetComponentsInChildren<ServicePointView>(true);
             Material ghostMat = WhiteboxLocationBuilder.GetOrCreateGhostMaterial();
             
+            // Clean up old ghosts
+            var childrenToDestroy = new List<Transform>();
+            foreach (Transform t in layout.transform)
+            {
+                if (t.name.StartsWith("Ghost_loc1_")) childrenToDestroy.Add(t);
+            }
+            foreach (Transform t in childrenToDestroy)
+            {
+                Object.DestroyImmediate(t.gameObject);
+            }
+            
+            // Remap stale PointIds from old layout to the new naming convention
+            foreach (var bay in bays)
+            {
+                if (bay.PointId == "loc1_oil")
+                {
+                    var sv = new SerializedObject(bay);
+                    sv.FindProperty("_pointId").stringValue = "loc1_oil_1";
+                    sv.FindProperty("_serviceTypeId").stringValue = "oil";
+                    sv.ApplyModifiedProperties();
+                    bay.gameObject.name = "Bay_loc1_oil_1";
+                    EditorUtility.SetDirty(bay);
+                }
+                else if (bay.PointId == "loc1_tires")
+                {
+                    var sv = new SerializedObject(bay);
+                    sv.FindProperty("_pointId").stringValue = "loc1_oil_2";
+                    sv.FindProperty("_serviceTypeId").stringValue = "oil";
+                    sv.ApplyModifiedProperties();
+                    bay.gameObject.name = "Bay_loc1_oil_2";
+                    EditorUtility.SetDirty(bay);
+                }
+            }
+
+            // Also remap stale ManagePad targetIds so the runtime validator doesn't reject them
+            var managePads = layout.GetComponentsInChildren<ManagePadView>(true);
+            foreach (var pad in managePads)
+            {
+                string remapped = null;
+                if (pad.TargetId == "loc1_oil") remapped = "loc1_oil_1";
+                else if (pad.TargetId == "loc1_tires") remapped = "loc1_oil_2";
+                if (remapped != null)
+                {
+                    var sv = new SerializedObject(pad);
+                    sv.FindProperty("_targetId").stringValue = remapped;
+                    sv.ApplyModifiedProperties();
+                    pad.gameObject.name = "ManagePad_" + remapped;
+                    EditorUtility.SetDirty(pad);
+                }
+            }
+            
+            // Re-fetch bays after renaming
+            bays = layout.GetComponentsInChildren<ServicePointView>(true);
+
             foreach (var bay in bays)
             {
                 if (!bay.name.StartsWith("Bay_") && bay.PointId != "loc1_wash_1") continue;
@@ -31,55 +85,16 @@ namespace AutoService.Bootstrap.Editor
                 visual.transform.SetParent(bay.transform, false);
                 visual.transform.localPosition = Vector3.zero;
 
-                GameObject wallPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Art/structure-wall.prefab");
-                GameObject doorwayPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Art/structure-doorway-wide.prefab");
-                GameObject roofPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Art/top-large.prefab");
 
-                if (doorwayPrefab != null)
-                {
-                    var front = (GameObject)PrefabUtility.InstantiatePrefab(doorwayPrefab, visual.transform);
-                    front.transform.localPosition = new Vector3(0, 0, 3f);
-                    
-                    var back = (GameObject)PrefabUtility.InstantiatePrefab(doorwayPrefab, visual.transform);
-                    back.transform.localPosition = new Vector3(0, 0, -3f);
-                    back.transform.localRotation = Quaternion.Euler(0, 180, 0);
-
-                    // Add TMP Sign
-                    var signObj = new GameObject("Sign");
-                    signObj.transform.SetParent(front.transform, false);
-                    signObj.transform.localPosition = new Vector3(0, 3.5f, 0);
-                    var txt = signObj.AddComponent<TextMeshPro>();
-                    txt.text = bay.ServiceTypeId.ToUpper();
-                    txt.fontSize = 5;
-                    txt.alignment = TextAlignmentOptions.Center;
-                    txt.color = Color.white;
-                }
-
-                if (wallPrefab != null)
-                {
-                    var left1 = (GameObject)PrefabUtility.InstantiatePrefab(wallPrefab, visual.transform);
-                    left1.transform.localPosition = new Vector3(-2.5f, 0, 1.5f);
-                    left1.transform.localRotation = Quaternion.Euler(0, -90, 0);
-                    
-                    var left2 = (GameObject)PrefabUtility.InstantiatePrefab(wallPrefab, visual.transform);
-                    left2.transform.localPosition = new Vector3(-2.5f, 0, -1.5f);
-                    left2.transform.localRotation = Quaternion.Euler(0, -90, 0);
-
-                    var right1 = (GameObject)PrefabUtility.InstantiatePrefab(wallPrefab, visual.transform);
-                    right1.transform.localPosition = new Vector3(2.5f, 0, 1.5f);
-                    right1.transform.localRotation = Quaternion.Euler(0, 90, 0);
-
-                    var right2 = (GameObject)PrefabUtility.InstantiatePrefab(wallPrefab, visual.transform);
-                    right2.transform.localPosition = new Vector3(2.5f, 0, -1.5f);
-                    right2.transform.localRotation = Quaternion.Euler(0, 90, 0);
-                }
-
-                if (roofPrefab != null)
-                {
-                    var roof = (GameObject)PrefabUtility.InstantiatePrefab(roofPrefab, visual.transform);
-                    roof.transform.localPosition = new Vector3(0, 3f, 0);
-                    roof.transform.localScale = new Vector3(1.2f, 1f, 1.2f);
-                }
+                // Add TMP Sign
+                var signObj = new GameObject("Sign");
+                signObj.transform.SetParent(visual.transform, false);
+                signObj.transform.localPosition = new Vector3(0, 3.5f, 3f);
+                var txt = signObj.AddComponent<TextMeshPro>();
+                txt.text = bay.ServiceTypeId.ToUpper();
+                txt.fontSize = 5;
+                txt.alignment = TextAlignmentOptions.Center;
+                txt.color = Color.white;
 
                 // Add Fx
                 var fxObj = new GameObject("Fx");
@@ -104,9 +119,6 @@ namespace AutoService.Bootstrap.Editor
                     shape.shapeType = ParticleSystemShapeType.Box;
                     shape.scale = new Vector3(3f, 1f, 3f);
                     
-                    GameObject scanner = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Art/scanner-high.prefab");
-                    if (scanner != null) PrefabUtility.InstantiatePrefab(scanner, fxObj.transform);
-
                     var bMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/_Project/Art/Generated/M_Brush.mat");
                     var bl = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
                     bl.transform.SetParent(fxObj.transform, false);
@@ -161,56 +173,43 @@ namespace AutoService.Bootstrap.Editor
                 }
                 else if (bay.ServiceTypeId == "tires")
                 {
-                    var tireFx = bay.GetComponent<TireFx>();
-                    if (tireFx == null) tireFx = bay.gameObject.AddComponent<TireFx>();
-                    GameObject arm = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Art/robot-arm-a.prefab");
-                    GameObject tirePref = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Art/wheel-dark.prefab");
-                    
-                    Transform rArm = null;
-                    if (arm != null)
-                    {
-                        var a = (GameObject)PrefabUtility.InstantiatePrefab(arm, fxObj.transform);
-                        a.transform.localPosition = new Vector3(-2f, 0, 0);
-                        rArm = a.transform;
-                    }
-
-                    var stack = new GameObject("TireStack");
-                    stack.transform.SetParent(fxObj.transform, false);
-                    stack.transform.localPosition = new Vector3(2f, 0, 0);
-                    
-                    if (tirePref != null)
-                    {
-                        for (int i=0; i<3; i++)
-                        {
-                            var t = (GameObject)PrefabUtility.InstantiatePrefab(tirePref, stack.transform);
-                            t.transform.localPosition = new Vector3(0, i * 0.3f, 0);
-                            t.transform.localRotation = Quaternion.Euler(90, 0, 0);
-                        }
-                    }
-
-                    var serialized = new SerializedObject(tireFx);
-                    serialized.FindProperty("_robotArm").objectReferenceValue = rArm;
-                    serialized.FindProperty("_tires").objectReferenceValue = stack.transform;
-                    serialized.ApplyModifiedProperties();
+                    // Tires removed to second location.
                 }
 
-                // If ghost exists, rebuild it
-                string ghostName = "Ghost_" + bay.PointId;
-                Transform ghost = layout.transform.Find(ghostName);
-                if (ghost != null)
+                ServicePointView washBay = null;
+                foreach (var b in bays) if (b.PointId == "loc1_wash_1") { washBay = b; break; }
+
+                string plotId = null;
+                if (bay.PointId == "loc1_wash_1") plotId = "loc1_build_wash_1";
+                else if (bay.PointId == "loc1_wash_2") plotId = "loc1_build_wash_2";
+                else if (bay.PointId == "loc1_oil_1") plotId = "loc1_build_oil_1";
+                else if (bay.PointId == "loc1_oil_2") plotId = "loc1_build_oil_2";
+
+                if (plotId != null && washBay != null)
                 {
-                    string plotId = ghost.GetComponent<BuildPlotView>().PlotId;
-                    ServicePointView washBay = null;
-                    foreach (var b in bays) if (b.PointId == "loc1_wash_1") { washBay = b; break; }
-                    
-                    if (washBay != null)
-                    {
-                        Vector3 shift = bay.transform.position - washBay.transform.position;
-                        Object.DestroyImmediate(ghost.gameObject);
-                        WhiteboxLocationBuilder.CreateBayGhost(washBay, bay, plotId, bay.PointId, shift, ghostMat, washBay.Hud);
-                    }
+                    Vector3 shift = bay.transform.position - washBay.transform.position;
+                    WhiteboxLocationBuilder.CreateBayGhost(washBay, bay, plotId, bay.PointId, shift, ghostMat, washBay.Hud);
+                    bay.gameObject.SetActive(false);
                 }
             }
+
+            // Sync build plots on LocationLayout to avoid null references
+            var allPlots = layout.GetComponentsInChildren<BuildPlotView>(true);
+            var validPlots = new List<BuildPlotView>();
+            foreach (var p in allPlots)
+            {
+                if (p != null) validPlots.Add(p);
+            }
+            
+            var serializedLayout = new SerializedObject(layout);
+            var plotsProp = serializedLayout.FindProperty("_buildPlots");
+            plotsProp.arraySize = validPlots.Count;
+            for (int i = 0; i < validPlots.Count; i++)
+            {
+                plotsProp.GetArrayElementAtIndex(i).objectReferenceValue = validPlots[i];
+            }
+            serializedLayout.ApplyModifiedProperties();
+            EditorUtility.SetDirty(layout);
         }
     }
 }

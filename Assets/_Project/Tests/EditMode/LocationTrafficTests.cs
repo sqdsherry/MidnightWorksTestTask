@@ -31,7 +31,7 @@ namespace AutoService.Tests.EditMode
         private const string ServiceId = "loc1_entrance_service";
         private const string WashId = "loc1_wash_1";
         private const string WashType = "wash";
-        private const string OilId = "loc1_oil";
+        private const string OilId = "loc1_oil_1";
         private const string OilType = "oil";
         private const string ParkingType = "parking";
         private const float SpawnInterval = 1000f;

@@ -9,6 +9,9 @@ using AutoService.Services.Config;
 using AutoService.Services.Core;
 using AutoService.Services.Formatting;
 using AutoService.Services.Traffic;
+using AutoService.Services.Economy;
+using AutoService.Services.Progression;
+using AutoService.Domain.Common;
 
 namespace AutoService.Presentation.Building
 {
@@ -30,6 +33,8 @@ namespace AutoService.Presentation.Building
         private readonly LocationTraffic _traffic;
         private readonly LocationLayout _layout;
         private readonly IGameLogger _logger;
+        private readonly IProgressionService _progression;
+        private readonly IWalletService _wallet;
 
         private readonly Dictionary<string, BuildPlotView> _views = new Dictionary<string, BuildPlotView>(StringComparer.Ordinal);
         private readonly List<BuildPlotView> _parkingViews = new List<BuildPlotView>();
@@ -46,7 +51,9 @@ namespace AutoService.Presentation.Building
             PointRegistrar registrar,
             LocationTraffic traffic,
             LocationLayout layout,
-            IGameLogger logger)
+            IGameLogger logger,
+            IProgressionService progression,
+            IWalletService wallet)
         {
             _build = build ?? throw new ArgumentNullException(nameof(build));
             _config = config ?? throw new ArgumentNullException(nameof(config));
@@ -54,13 +61,19 @@ namespace AutoService.Presentation.Building
             _traffic = traffic ?? throw new ArgumentNullException(nameof(traffic));
             _layout = layout != null ? layout : throw new ArgumentNullException(nameof(layout));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _progression = progression ?? throw new ArgumentNullException(nameof(progression));
+            _wallet = wallet ?? throw new ArgumentNullException(nameof(wallet));
 
             CollectViews();
 
             _build.Built += OnBuilt;
             _build.BuiltRestored += OnBuiltRestored;
+            _progression.Changed += UpdateTags;
+            _wallet.BalanceChanged += OnBalanceChanged;
             ShowCurrentState();
         }
+
+        private void OnBalanceChanged(Money _) => UpdateTags();
 
         /// <summary>Stops listening to the build service. Safe to call repeatedly.</summary>
         public void Dispose()
@@ -73,6 +86,8 @@ namespace AutoService.Presentation.Building
             _disposed = true;
             _build.Built -= OnBuilt;
             _build.BuiltRestored -= OnBuiltRestored;
+            _progression.Changed -= UpdateTags;
+            _wallet.BalanceChanged -= OnBalanceChanged;
         }
 
         private void CollectViews()
@@ -93,10 +108,6 @@ namespace AutoService.Presentation.Building
                 }
 
                 _views.Add(view.PlotId, view);
-                if (_config.TryGetBuildable(view.PlotId, out BuildableSettings settings))
-                {
-                    view.SetPriceTag(settings.DisplayName, MoneyFormatter.Format(settings.Cost));
-                }
 
                 if (plot.Definition.Kind == BuildableKind.ParkingSlot)
                 {
@@ -133,6 +144,7 @@ namespace AutoService.Presentation.Building
 
             RefreshParkingOffers();
             RefreshFlow();
+            UpdateTags();
         }
 
         private void OnBuilt(BuildPlot plot) => OnPlotBuilt(plot, animate: true);
@@ -219,17 +231,13 @@ namespace AutoService.Presentation.Building
 
         private void RefreshParkingOffers()
         {
-            bool nextOffered = false;
             for (int i = 0; i < _parkingViews.Count; i++)
             {
                 BuildPlotView view = _parkingViews[i];
-                if (view.IsBuilt)
+                if (!view.IsBuilt)
                 {
-                    continue;
+                    view.SetOffered(true);
                 }
-
-                view.SetOffered(!nextOffered);
-                nextOffered = true;
             }
         }
 
@@ -251,6 +259,33 @@ namespace AutoService.Presentation.Building
         {
             _build.TryGet(view.PlotId, out BuildPlot plot);
             return plot.Definition.ParkingSlotIndex;
+        }
+
+        private void UpdateTags()
+        {
+            foreach (KeyValuePair<string, BuildPlotView> pair in _views)
+            {
+                if (!_build.TryGet(pair.Key, out BuildPlot plot) || plot.IsBuilt || !_config.TryGetBuildable(pair.Key, out BuildableSettings settings))
+                {
+                    continue;
+                }
+
+                BuildAvailability availability = _build.GetAvailability(pair.Key);
+                string text = MoneyFormatter.Format(settings.Cost);
+                bool isLocked = availability == BuildAvailability.Locked;
+                
+                if (isLocked)
+                {
+                    text = $"<color=#FF4D4D>Lv {plot.Definition.RequiredLevel}</color>";
+                }
+                else if (availability == BuildAvailability.NotEnoughMoney)
+                {
+                    text = $"<color=#FF4D4D>{text}</color>";
+                }
+
+                pair.Value.SetPriceTag(settings.DisplayName, text);
+                pair.Value.SetGhostLockedVisual(isLocked);
+            }
         }
     }
 }

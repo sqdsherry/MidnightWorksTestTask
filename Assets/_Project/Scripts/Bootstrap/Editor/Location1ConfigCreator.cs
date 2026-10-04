@@ -68,12 +68,14 @@ namespace AutoService.Bootstrap.Editor
 
         private static readonly BuildableSpec[] Buildables =
         {
+            new BuildableSpec("B_Wash1", "loc1_build_wash_1", "Wash Bay 1", "First wash bay.",
+                BuildableKind.ServicePoint, "loc1_wash_1", 200, 1, 0.2f),
             new BuildableSpec("B_Wash2", "loc1_build_wash_2", "Wash Bay 2", "Second wash bay: serve two cars at once.",
                 BuildableKind.ServicePoint, "loc1_wash_2", 400, 2, 0.2f),
-            new BuildableSpec("B_Oil", "loc1_build_oil", "Oil Change", "Oil change bay: a new service, more customers.",
-                BuildableKind.ServicePoint, "loc1_oil", 500, 3, 0.2f),
-            new BuildableSpec("B_Tires", "loc1_build_tires", "Tire Service", "Tire bay: the priciest service in the garage.",
-                BuildableKind.ServicePoint, "loc1_tires", 900, 4, 0.2f),
+            new BuildableSpec("B_Oil1", "loc1_build_oil_1", "Oil Change 1", "Oil change bay: a new service, more customers.",
+                BuildableKind.ServicePoint, "loc1_oil_1", 500, 3, 0.2f),
+            new BuildableSpec("B_Oil2", "loc1_build_oil_2", "Oil Change 2", "Second oil change bay.",
+                BuildableKind.ServicePoint, "loc1_oil_2", 800, 4, 0.2f),
             new BuildableSpec("B_Parking3", "loc1_build_parking_3", "Parking Spot 3", "One more parking spot: more paying guests.",
                 BuildableKind.ParkingSlot, "2", 200, 2, 0.05f),
             new BuildableSpec("B_Parking4", "loc1_build_parking_4", "Parking Spot 4", "One more parking spot: more paying guests.",
