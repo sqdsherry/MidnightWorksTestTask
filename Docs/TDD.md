@@ -261,10 +261,11 @@ EditMode: `Wallet`, `PriceFormula`, `ServicePoint` (прогресс тольк�
 | 08b | `feature/08b-save-wiring` | Подключение сервисов к сейву (`ISaveable`), загрузка на старте, сейв при выходе — [промпт](Prompts/08b-save-wiring.md) | Д3 | M | ✔️ смержен |
 | 12a | `feature/12a-visual-world` | **D1** Визуал мира: Kenney-импорт, дороги, боксы, анимации услуг, персонажи, декор, свет — [промпт](Prompts/12a-visual-world.md) | Д3 | M | ✔️ смержен |
 | 12b | `feature/12b-ui-audio` | UI-анимации (нативные корутины), звук, «+$», juice — [промпт](Prompts/12b-ui-audio.md) | Д3 | M | ✔️ смержен |
-| 13a | `feature/13a-bays-layout-rebalance` | Ребаланс: 2 мойки + 2 масла на Лок. 1, старт с парковки, мойка 1 за $200 — [промпт](Prompts/13a-bays-layout-rebalance.md) | Д3 | M | 🔨 в работе |
+| 13a | `feature/13a-bays-layout-rebalance` | Ребаланс: 2 мойки + 2 масла на Лок. 1, старт с парковки, мойка 1 за $200 — [промпт](Prompts/13a-bays-layout-rebalance.md) | Д3 | M | ✔️ смержен |
+| 11a | `feature/11a-mini-fixes` | Мини-правки UX (парковка и желтые призраки) — [промпт](Prompts/11a-mini-fixes.md) | Д3 | M | ✔️ смержен |
 | 13b | `feature/13b-context-popups-reskin` | Рескин контекстных всплывающих окон под стиль Kenney UI — [промпт](Prompts/13b-context-popups-reskin.md) | Д3 | M | ⏳ |
 | 10 | `feature/10-onboarding` | Onboarding (стрелки, стартовые подсказки) | 3 | M | ⏳ |
-| 11 | `feature/11-location2` | 2-я локация + переезд + сохранение кошелька (шиномонтаж, тюнинг, покраска) | 3–4 | M | ⏳ |
+| 11 | `feature/11-location2` | 2-я локация + переезд + сохранение кошелька (шиномонтаж, тюнинг, покраска) — [промпт](Prompts/11-location2.md) | 3–4 | M | 🔨 в работе |
 | 15 | `feature/15-debug-bubbles` | **Debug-панель F1 [M]** (+$, +уровень, сброс сейва) | 4 | M | ⏳ |
 | 16 | `feature/16-release` | README, чек-лист TZ.md, финальный билд | 4 | M | ⏳ |
 
