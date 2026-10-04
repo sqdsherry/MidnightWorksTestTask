@@ -30,6 +30,32 @@ namespace AutoService.Bootstrap.Editor
                 Object.DestroyImmediate(t.gameObject);
             }
             
+            // Remap stale PointIds from old layout to the new naming convention
+            foreach (var bay in bays)
+            {
+                if (bay.PointId == "loc1_oil")
+                {
+                    var sv = new SerializedObject(bay);
+                    sv.FindProperty("_pointId").stringValue = "loc1_oil_1";
+                    sv.FindProperty("_serviceTypeId").stringValue = "oil";
+                    sv.ApplyModifiedProperties();
+                    bay.gameObject.name = "Bay_loc1_oil_1";
+                    EditorUtility.SetDirty(bay);
+                }
+                else if (bay.PointId == "loc1_tires")
+                {
+                    var sv = new SerializedObject(bay);
+                    sv.FindProperty("_pointId").stringValue = "loc1_oil_2";
+                    sv.FindProperty("_serviceTypeId").stringValue = "oil";
+                    sv.ApplyModifiedProperties();
+                    bay.gameObject.name = "Bay_loc1_oil_2";
+                    EditorUtility.SetDirty(bay);
+                }
+            }
+            
+            // Re-fetch bays after renaming
+            bays = layout.GetComponentsInChildren<ServicePointView>(true);
+
             foreach (var bay in bays)
             {
                 if (!bay.name.StartsWith("Bay_") && bay.PointId != "loc1_wash_1") continue;
@@ -42,9 +68,6 @@ namespace AutoService.Bootstrap.Editor
                 visual.transform.SetParent(bay.transform, false);
                 visual.transform.localPosition = Vector3.zero;
 
-                GameObject wallPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Art/structure-wall.prefab");
-                GameObject doorwayPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Art/structure-doorway-wide.prefab");
-                GameObject roofPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Art/top-large.prefab");
 
                 // Add TMP Sign
                 var signObj = new GameObject("Sign");
