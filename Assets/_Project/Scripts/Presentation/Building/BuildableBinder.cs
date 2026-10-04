@@ -276,8 +276,9 @@ namespace AutoService.Presentation.Building
 
                 BuildAvailability availability = _build.GetAvailability(pair.Key);
                 string text = MoneyFormatter.Format(settings.Cost);
+                bool isLocked = availability == BuildAvailability.Locked;
                 
-                if (availability == BuildAvailability.Locked)
+                if (isLocked)
                 {
                     text = $"<color=#FF4D4D>Lv {plot.Definition.RequiredLevel}</color>";
                 }
@@ -287,6 +288,7 @@ namespace AutoService.Presentation.Building
                 }
 
                 pair.Value.SetPriceTag(settings.DisplayName, text);
+                pair.Value.SetGhostLockedVisual(isLocked);
             }
         }
     }

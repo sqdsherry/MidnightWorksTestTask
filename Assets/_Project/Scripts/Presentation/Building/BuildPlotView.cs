@@ -194,6 +194,28 @@ namespace AutoService.Presentation.Building
 
         /// <summary>Hides the ghost and switches the real object on.</summary>
         /// <param name="animate">True for a fresh construction (grow + particles), false when restored from a save.</param>
+        public void SetGhostLockedVisual(bool isLocked)
+        {
+            if (_ghost == null) return;
+            var block = new MaterialPropertyBlock();
+            Renderer[] renderers = _ghost.GetComponentsInChildren<Renderer>(true);
+            
+            foreach (var r in renderers)
+            {
+                r.GetPropertyBlock(block);
+                if (isLocked)
+                {
+                    // Желтый полупрозрачный цвет для URP Lit
+                    block.SetColor("_BaseColor", new Color(1f, 0.9f, 0.1f, 0.4f)); 
+                }
+                else
+                {
+                    block.Clear();
+                }
+                r.SetPropertyBlock(block);
+            }
+        }
+
         public void SetBuilt(bool animate)
         {
             _built = true;
