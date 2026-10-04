@@ -19,6 +19,17 @@ namespace AutoService.Bootstrap.Editor
             var bays = layout.GetComponentsInChildren<ServicePointView>(true);
             Material ghostMat = WhiteboxLocationBuilder.GetOrCreateGhostMaterial();
             
+            // Clean up old ghosts
+            var childrenToDestroy = new List<Transform>();
+            foreach (Transform t in layout.transform)
+            {
+                if (t.name.StartsWith("Ghost_loc1_")) childrenToDestroy.Add(t);
+            }
+            foreach (Transform t in childrenToDestroy)
+            {
+                Object.DestroyImmediate(t.gameObject);
+            }
+            
             foreach (var bay in bays)
             {
                 if (!bay.name.StartsWith("Bay_") && bay.PointId != "loc1_wash_1") continue;
@@ -68,9 +79,6 @@ namespace AutoService.Bootstrap.Editor
                     shape.shapeType = ParticleSystemShapeType.Box;
                     shape.scale = new Vector3(3f, 1f, 3f);
                     
-                    GameObject scanner = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Art/scanner-high.prefab");
-                    if (scanner != null) PrefabUtility.InstantiatePrefab(scanner, fxObj.transform);
-
                     var bMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/_Project/Art/Generated/M_Brush.mat");
                     var bl = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
                     bl.transform.SetParent(fxObj.transform, false);
@@ -128,32 +136,20 @@ namespace AutoService.Bootstrap.Editor
                     // Tires removed to second location.
                 }
 
-                // If ghost exists, rebuild it
-                string ghostName = "Ghost_" + bay.PointId;
-                Transform ghost = layout.transform.Find(ghostName);
-                
-                if (ghost == null && bay.PointId == "loc1_wash_1")
-                {
-                    WhiteboxLocationBuilder.CreateBayGhost(bay, bay, "loc1_build_wash_1", bay.PointId, Vector3.zero, ghostMat, bay.Hud);
-                    bay.gameObject.SetActive(false);
-                }
-                else if (ghost != null)
-                {
-                    string plotId = ghost.GetComponent<BuildPlotView>().PlotId;
-                    ServicePointView washBay = null;
-                    foreach (var b in bays) if (b.PointId == "loc1_wash_1") { washBay = b; break; }
-                    
-                    if (washBay != null)
-                    {
-                        Vector3 shift = bay.transform.position - washBay.transform.position;
-                        Object.DestroyImmediate(ghost.gameObject);
-                        WhiteboxLocationBuilder.CreateBayGhost(washBay, bay, plotId, bay.PointId, shift, ghostMat, washBay.Hud);
-                    }
+                ServicePointView washBay = null;
+                foreach (var b in bays) if (b.PointId == "loc1_wash_1") { washBay = b; break; }
 
-                    if (bay.PointId == "loc1_wash_1")
-                    {
-                        bay.gameObject.SetActive(false);
-                    }
+                string plotId = null;
+                if (bay.PointId == "loc1_wash_1") plotId = "loc1_build_wash_1";
+                else if (bay.PointId == "loc1_wash_2") plotId = "loc1_build_wash_2";
+                else if (bay.PointId == "loc1_oil_1") plotId = "loc1_build_oil_1";
+                else if (bay.PointId == "loc1_oil_2") plotId = "loc1_build_oil_2";
+
+                if (plotId != null && washBay != null)
+                {
+                    Vector3 shift = bay.transform.position - washBay.transform.position;
+                    WhiteboxLocationBuilder.CreateBayGhost(washBay, bay, plotId, bay.PointId, shift, ghostMat, washBay.Hud);
+                    bay.gameObject.SetActive(false);
                 }
             }
 
