@@ -1,18 +1,20 @@
 using AutoService.Domain.Common;
+using AutoService.Presentation.Interaction;
+using AutoService.Presentation.Player;
 using UnityEngine;
 using UnityEngine.AI;
 
 namespace AutoService.Presentation.Interaction
 {
-    [RequireComponent(typeof(Collider))]
-    public class TravelPoint : MonoBehaviour
+    public class TravelPoint : MonoBehaviour, IInteractable
     {
         [SerializeField] private Transform _targetTransform;
         [SerializeField] private float _dwellSeconds = 1.5f;
         [SerializeField] private DwellRingView _ring;
+        [SerializeField] private InteractableHighlight _highlight;
 
         private DwellProgress _dwell;
-        private NavMeshAgent _playerInZone;
+        private bool _isInteracting;
 
         public Transform TargetTransform
         {
@@ -20,36 +22,42 @@ namespace AutoService.Presentation.Interaction
             set => _targetTransform = value;
         }
 
+        public Vector3 ApproachPosition => transform.position;
+        public Quaternion ApproachRotation => transform.rotation;
+        public bool IsInteractable => isActiveAndEnabled;
+
         private void OnEnable()
         {
             _dwell = new DwellProgress(_dwellSeconds);
         }
 
-        private void OnTriggerStay(Collider other)
+        public void SetHighlighted(bool highlighted)
         {
-            if (_playerInZone == null && other.TryGetComponent(out NavMeshAgent agent))
+            if (_highlight != null)
             {
-                _playerInZone = agent;
-                _dwell.Begin();
+                _highlight.SetHighlighted(highlighted);
             }
         }
 
-        private void OnTriggerExit(Collider other)
+        public void BeginInteraction()
         {
-            if (_playerInZone != null && other.gameObject == _playerInZone.gameObject)
+            _isInteracting = true;
+            _dwell.Begin();
+        }
+
+        public void EndInteraction()
+        {
+            _isInteracting = false;
+            _dwell.End();
+            if (_ring != null)
             {
-                _playerInZone = null;
-                _dwell.End();
-                if (_ring != null)
-                {
-                    _ring.Render(0f);
-                }
+                _ring.Render(0f);
             }
         }
 
         private void Update()
         {
-            if (_playerInZone == null)
+            if (!_isInteracting)
             {
                 if (_dwell != null && _dwell.Progress01 > 0f)
                 {
@@ -71,21 +79,19 @@ namespace AutoService.Presentation.Interaction
             if (completed)
             {
                 TeleportPlayer();
-                _dwell.End();
-                if (_ring != null)
-                {
-                    _ring.Render(0f);
-                }
+                EndInteraction();
             }
         }
 
         private void TeleportPlayer()
         {
-            if (_targetTransform == null || _playerInZone == null) return;
+            if (_targetTransform == null) return;
             
-            _playerInZone.Warp(_targetTransform.position);
-            
-            _playerInZone = null; 
+            var player = Object.FindFirstObjectByType<PlayerView>();
+            if (player != null && player.TryGetComponent(out NavMeshAgent agent))
+            {
+                agent.Warp(_targetTransform.position);
+            }
         }
     }
 }

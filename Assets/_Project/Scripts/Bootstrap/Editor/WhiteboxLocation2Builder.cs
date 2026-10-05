@@ -237,8 +237,21 @@ namespace AutoService.Bootstrap.Editor
             target.transform.SetParent(plotObj.transform, false);
             target.transform.localScale = new Vector3(2f, 0.1f, 2f);
             target.GetComponent<Collider>().isTrigger = true;
+            
+            var rb = target.AddComponent<Rigidbody>();
+            rb.isKinematic = true;
+            rb.useGravity = false;
+            
             var renderer = target.GetComponent<Renderer>();
             renderer.sharedMaterial = new Material(renderer.sharedMaterial) { color = Color.green };
+            target.layer = LayerMask.NameToLayer("Interactable");
+            
+            var targetHighlight = target.AddComponent<InteractableHighlight>();
+            var tHlSo = new SerializedObject(targetHighlight);
+            tHlSo.FindProperty("_renderers").InsertArrayElementAtIndex(0);
+            tHlSo.FindProperty("_renderers").GetArrayElementAtIndex(0).objectReferenceValue = renderer;
+            tHlSo.ApplyModifiedPropertiesWithoutUndo();
+
             target.SetActive(false);
 
             var tp = target.AddComponent<TravelPoint>();
@@ -247,6 +260,7 @@ namespace AutoService.Bootstrap.Editor
             var ring = CreateTravelRingCanvas(target.transform);
             var tpSo = new SerializedObject(tp);
             tpSo.FindProperty("_ring").objectReferenceValue = ring;
+            tpSo.FindProperty("_highlight").objectReferenceValue = targetHighlight;
             tpSo.ApplyModifiedPropertiesWithoutUndo();
 
             Transform approach = CreateChild("ApproachPoint", plotObj.transform).transform;
