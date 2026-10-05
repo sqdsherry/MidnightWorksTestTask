@@ -18,5 +18,5 @@ MonoBehaviour:
   _kind: 2
   _targetId: travel_to_loc1
   _cost: 0
-  _requiredLevel: 0
+  _requiredLevel: 1
   _flowBonus: 0
