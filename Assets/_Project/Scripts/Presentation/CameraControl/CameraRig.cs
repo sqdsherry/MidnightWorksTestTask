@@ -134,6 +134,23 @@ namespace AutoService.Presentation.CameraControl
             ApplyTransform();
         }
 
+        /// <summary>Instantly moves the pivot to the specified world position and optionally updates bounds.</summary>
+        public void SnapTo(Vector3 worldPosition, Vector2? newBoundsMin = null, Vector2? newBoundsMax = null)
+        {
+            if (newBoundsMin.HasValue && newBoundsMax.HasValue)
+            {
+                _boundsMin = Vector2.Min(newBoundsMin.Value, newBoundsMax.Value);
+                _boundsMax = Vector2.Max(newBoundsMin.Value, newBoundsMax.Value);
+            }
+            
+            _pivot = new Vector3(worldPosition.x, _pivot.y, worldPosition.z);
+            _pivot = ClampToBounds(_pivot);
+            ApplyTransform();
+            
+            // Re-enable follow mode seamlessly if they were moving
+            _isFollowing = true;
+        }
+
         private void Awake()
         {
             _pivot = transform.position;

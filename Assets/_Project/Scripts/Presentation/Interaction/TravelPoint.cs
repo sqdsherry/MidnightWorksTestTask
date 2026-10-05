@@ -1,6 +1,7 @@
 using AutoService.Domain.Common;
 using AutoService.Presentation.Interaction;
 using AutoService.Presentation.Player;
+using AutoService.Presentation.CameraControl;
 using UnityEngine;
 using UnityEngine.AI;
 
@@ -90,7 +91,25 @@ namespace AutoService.Presentation.Interaction
             var player = Object.FindFirstObjectByType<PlayerView>();
             if (player != null && player.TryGetComponent(out NavMeshAgent agent))
             {
-                agent.Warp(_targetTransform.position);
+                if (NavMesh.SamplePosition(_targetTransform.position, out NavMeshHit hit, 5.0f, NavMesh.AllAreas))
+                {
+                    agent.Warp(hit.position);
+                }
+                else
+                {
+                    agent.Warp(_targetTransform.position);
+                }
+                
+                var cameraRig = Object.FindFirstObjectByType<CameraRig>();
+                if (cameraRig != null)
+                {
+                    // If target X > 100, we are on Loc2, otherwise Loc1
+                    bool isLoc2 = _targetTransform.position.x > 100f;
+                    Vector2 minBounds = isLoc2 ? new Vector2(175f, -25f) : new Vector2(-25f, -25f);
+                    Vector2 maxBounds = isLoc2 ? new Vector2(225f, 25f) : new Vector2(25f, 25f);
+                    
+                    cameraRig.SnapTo(agent.transform.position, minBounds, maxBounds);
+                }
             }
         }
     }
