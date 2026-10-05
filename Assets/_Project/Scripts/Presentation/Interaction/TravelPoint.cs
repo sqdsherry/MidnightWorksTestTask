@@ -24,9 +24,9 @@ namespace AutoService.Presentation.Interaction
             _dwell = new DwellProgress(_dwellSeconds);
         }
 
-        private void OnTriggerEnter(Collider other)
+        private void OnTriggerStay(Collider other)
         {
-            if (other.TryGetComponent(out CharacterController cc))
+            if (_playerInZone == null && other.TryGetComponent(out CharacterController cc))
             {
                 _playerInZone = cc;
                 _dwell.Begin();

@@ -48,7 +48,7 @@ namespace AutoService.Bootstrap.Editor
             Transform travelSpawnLoc2 = CreateChild("SpawnLoc2", loc2.transform).transform;
             travelSpawnLoc2.position = loc2.transform.position + new Vector3(0, 0, -10f); // just a safe spot
 
-            BuildPlotView travel1To2 = CreateTravelPlot(loc1.transform, "b_travel_to_loc2", "Travel_To_Loc2", new Vector3(-35f, 0f, 0f), travelSpawnLoc2);
+            BuildPlotView travel1To2 = CreateTravelPlot(loc1.transform, "b_travel_to_loc2", "Travel_To_Loc2", new Vector3(-3f, 0f, 12f), travelSpawnLoc2);
 
             // Travel point on Loc 2 to Loc 1
             Transform travelSpawnLoc1 = CreateChild("SpawnLoc1", loc1.transform).transform;
@@ -244,6 +244,11 @@ namespace AutoService.Bootstrap.Editor
             var tp = target.AddComponent<TravelPoint>();
             tp.TargetTransform = teleportTarget;
 
+            var ring = CreateTravelRingCanvas(target.transform);
+            var tpSo = new SerializedObject(tp);
+            tpSo.FindProperty("_ring").objectReferenceValue = ring;
+            tpSo.ApplyModifiedPropertiesWithoutUndo();
+
             Transform approach = CreateChild("ApproachPoint", plotObj.transform).transform;
             approach.localPosition = new Vector3(0, 0, 0f);
 
@@ -261,6 +266,46 @@ namespace AutoService.Bootstrap.Editor
             so.ApplyModifiedPropertiesWithoutUndo();
             
             return view;
+        }
+
+        private static DwellRingView CreateTravelRingCanvas(Transform parent)
+        {
+            var canvasObj = new GameObject("RingCanvas", typeof(RectTransform), typeof(Canvas));
+            canvasObj.transform.SetParent(parent, false);
+            canvasObj.transform.localPosition = new Vector3(0, 1.5f, 0); // Above the cylinder
+            canvasObj.transform.localRotation = Quaternion.Euler(45f, 0, 0); // Tilted for top-down isometric view
+            
+            var canvas = canvasObj.GetComponent<Canvas>();
+            canvas.renderMode = RenderMode.WorldSpace;
+            var rect = canvas.GetComponent<RectTransform>();
+            rect.sizeDelta = new Vector2(1, 1);
+            
+            var bgObj = new GameObject("Background", typeof(RectTransform), typeof(UnityEngine.UI.Image));
+            bgObj.transform.SetParent(canvasObj.transform, false);
+            bgObj.GetComponent<RectTransform>().sizeDelta = new Vector2(1, 1);
+            var bgImg = bgObj.GetComponent<UnityEngine.UI.Image>();
+            bgImg.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Knob.psd");
+            bgImg.color = new Color(0, 0, 0, 0.5f);
+            
+            var fillObj = new GameObject("Fill", typeof(RectTransform), typeof(UnityEngine.UI.Image));
+            fillObj.transform.SetParent(canvasObj.transform, false);
+            fillObj.GetComponent<RectTransform>().sizeDelta = new Vector2(1, 1);
+            var fillImg = fillObj.GetComponent<UnityEngine.UI.Image>();
+            fillImg.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Knob.psd");
+            fillImg.color = Color.green;
+            fillImg.type = UnityEngine.UI.Image.Type.Filled;
+            fillImg.fillMethod = UnityEngine.UI.Image.FillMethod.Radial360;
+            fillImg.fillOrigin = (int)UnityEngine.UI.Image.Origin360.Top;
+            fillImg.fillAmount = 0;
+            
+            var ringView = canvasObj.AddComponent<DwellRingView>();
+            var so = new SerializedObject(ringView);
+            so.FindProperty("_fill").objectReferenceValue = fillImg;
+            so.FindProperty("_root").objectReferenceValue = fillObj;
+            so.FindProperty("_background").objectReferenceValue = bgObj;
+            so.ApplyModifiedPropertiesWithoutUndo();
+            
+            return ringView;
         }
 
         private static GameObject CreateChild(string name, Transform parent)
