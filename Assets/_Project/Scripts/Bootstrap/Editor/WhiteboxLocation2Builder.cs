@@ -38,6 +38,12 @@ namespace AutoService.Bootstrap.Editor
 
             BuildLoc2Whitebox(loc2);
 
+            // Cleanup existing
+            DestroyChildren(loc1.transform, "SpawnLoc1");
+            DestroyChildren(loc1.transform, "TravelPlot_Travel_To_Loc2");
+            DestroyChildren(loc2.transform, "SpawnLoc2");
+            DestroyChildren(loc2.transform, "TravelPlot_Travel_To_Loc1");
+
             // Travel point on Loc 1 to Loc 2
             Transform travelSpawnLoc2 = CreateChild("SpawnLoc2", loc2.transform).transform;
             travelSpawnLoc2.position = loc2.transform.position + new Vector3(0, 0, -10f); // just a safe spot
@@ -85,19 +91,33 @@ namespace AutoService.Bootstrap.Editor
         private static void AddPlotToLayout(SerializedObject layoutSo, BuildPlotView plot)
         {
             var buildPlotsProp = layoutSo.FindProperty("_buildPlots");
-            bool contains = false;
-            for (int i = 0; i < buildPlotsProp.arraySize; i++)
+            
+            // Clean up nulls and existing references with the same plot ID
+            for (int i = buildPlotsProp.arraySize - 1; i >= 0; i--)
             {
-                if (buildPlotsProp.GetArrayElementAtIndex(i).objectReferenceValue == plot)
+                var element = buildPlotsProp.GetArrayElementAtIndex(i).objectReferenceValue as BuildPlotView;
+                if (element == null || element.PlotId == plot.PlotId)
                 {
-                    contains = true;
-                    break;
+                    buildPlotsProp.DeleteArrayElementAtIndex(i);
+                    // Deleting an element that is NOT null actually sets it to null in Unity serialization first, so we delete again
+                    if (buildPlotsProp.arraySize > i && buildPlotsProp.GetArrayElementAtIndex(i).objectReferenceValue == null)
+                        buildPlotsProp.DeleteArrayElementAtIndex(i);
                 }
             }
-            if (!contains)
+            
+            buildPlotsProp.InsertArrayElementAtIndex(buildPlotsProp.arraySize);
+            buildPlotsProp.GetArrayElementAtIndex(buildPlotsProp.arraySize - 1).objectReferenceValue = plot;
+        }
+
+        private static void DestroyChildren(Transform parent, string namePrefix)
+        {
+            for (int i = parent.childCount - 1; i >= 0; i--)
             {
-                buildPlotsProp.InsertArrayElementAtIndex(buildPlotsProp.arraySize);
-                buildPlotsProp.GetArrayElementAtIndex(buildPlotsProp.arraySize - 1).objectReferenceValue = plot;
+                Transform child = parent.GetChild(i);
+                if (child.name.StartsWith(namePrefix))
+                {
+                    Undo.DestroyObjectImmediate(child.gameObject);
+                }
             }
         }
 
@@ -157,18 +177,18 @@ namespace AutoService.Bootstrap.Editor
             plotObj.transform.localPosition = localPos;
 
             GameObject ghost = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            ghost.name = "Ghost";
+            ghost.name = "Visual";
             ghost.transform.SetParent(plotObj.transform, false);
             ghost.GetComponent<Collider>().isTrigger = true;
             ghost.transform.localScale = new Vector3(4f, 2f, 4f);
             ghost.transform.localPosition = new Vector3(0, 1f, 0);
             ghost.layer = LayerMask.NameToLayer("Interactable");
             
-            var highlight1 = ghost.AddComponent<InteractableHighlight>();
-            var hlSo1 = new SerializedObject(highlight1);
-            hlSo1.FindProperty("_renderers").InsertArrayElementAtIndex(0);
-            hlSo1.FindProperty("_renderers").GetArrayElementAtIndex(0).objectReferenceValue = ghost.GetComponent<Renderer>();
-            hlSo1.ApplyModifiedPropertiesWithoutUndo();
+            var highlight = ghost.AddComponent<InteractableHighlight>();
+            var hlSo = new SerializedObject(highlight);
+            hlSo.FindProperty("_renderers").InsertArrayElementAtIndex(0);
+            hlSo.FindProperty("_renderers").GetArrayElementAtIndex(0).objectReferenceValue = ghost.GetComponent<Renderer>();
+            hlSo.ApplyModifiedPropertiesWithoutUndo();
 
             GameObject target = GameObject.CreatePrimitive(PrimitiveType.Cube);
             target.name = "Service_" + name;
@@ -177,8 +197,11 @@ namespace AutoService.Bootstrap.Editor
             target.transform.localPosition = new Vector3(0, 1f, 0);
             target.SetActive(false);
 
-            Transform approach = CreateChild("Approach", plotObj.transform).transform;
+            Transform approach = CreateChild("ApproachPoint", plotObj.transform).transform;
             approach.localPosition = new Vector3(0, 0, 0f);
+
+            Transform anchor = CreateChild("PanelAnchor", plotObj.transform).transform;
+            anchor.localPosition = new Vector3(0, 1.5f, 0f);
 
             var view = plotObj.AddComponent<BuildPlotView>();
             var so = new SerializedObject(view);
@@ -186,7 +209,8 @@ namespace AutoService.Bootstrap.Editor
             so.FindProperty("_ghost").objectReferenceValue = ghost;
             so.FindProperty("_target").objectReferenceValue = target;
             so.FindProperty("_approachPoint").objectReferenceValue = approach;
-            so.FindProperty("_highlight").objectReferenceValue = highlight1;
+            so.FindProperty("_panelAnchor").objectReferenceValue = anchor;
+            so.FindProperty("_highlight").objectReferenceValue = highlight;
             so.ApplyModifiedPropertiesWithoutUndo();
         }
 
@@ -196,17 +220,17 @@ namespace AutoService.Bootstrap.Editor
             plotObj.transform.localPosition = localPos;
 
             GameObject ghost = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            ghost.name = "Ghost";
+            ghost.name = "Visual";
             ghost.transform.SetParent(plotObj.transform, false);
             ghost.GetComponent<Collider>().isTrigger = true;
             ghost.transform.localScale = new Vector3(2f, 0.1f, 2f);
             ghost.layer = LayerMask.NameToLayer("Interactable");
             
-            var highlight2 = ghost.AddComponent<InteractableHighlight>();
-            var hlSo2 = new SerializedObject(highlight2);
-            hlSo2.FindProperty("_renderers").InsertArrayElementAtIndex(0);
-            hlSo2.FindProperty("_renderers").GetArrayElementAtIndex(0).objectReferenceValue = ghost.GetComponent<Renderer>();
-            hlSo2.ApplyModifiedPropertiesWithoutUndo();
+            var highlight = ghost.AddComponent<InteractableHighlight>();
+            var hlSo = new SerializedObject(highlight);
+            hlSo.FindProperty("_renderers").InsertArrayElementAtIndex(0);
+            hlSo.FindProperty("_renderers").GetArrayElementAtIndex(0).objectReferenceValue = ghost.GetComponent<Renderer>();
+            hlSo.ApplyModifiedPropertiesWithoutUndo();
 
             GameObject target = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             target.name = "TravelPoint";
@@ -220,8 +244,11 @@ namespace AutoService.Bootstrap.Editor
             var tp = target.AddComponent<TravelPoint>();
             tp.TargetTransform = teleportTarget;
 
-            Transform approach = CreateChild("Approach", plotObj.transform).transform;
+            Transform approach = CreateChild("ApproachPoint", plotObj.transform).transform;
             approach.localPosition = new Vector3(0, 0, 0f);
+
+            Transform anchor = CreateChild("PanelAnchor", plotObj.transform).transform;
+            anchor.localPosition = new Vector3(0, 1.5f, 0f);
 
             var view = plotObj.AddComponent<BuildPlotView>();
             var so = new SerializedObject(view);
@@ -229,7 +256,8 @@ namespace AutoService.Bootstrap.Editor
             so.FindProperty("_ghost").objectReferenceValue = ghost;
             so.FindProperty("_target").objectReferenceValue = target;
             so.FindProperty("_approachPoint").objectReferenceValue = approach;
-            so.FindProperty("_highlight").objectReferenceValue = highlight2;
+            so.FindProperty("_panelAnchor").objectReferenceValue = anchor;
+            so.FindProperty("_highlight").objectReferenceValue = highlight;
             so.ApplyModifiedPropertiesWithoutUndo();
             
             return view;
