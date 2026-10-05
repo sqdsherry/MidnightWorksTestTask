@@ -33,10 +33,11 @@ namespace AutoService.Bootstrap.Installers
             LayerMask interactableMask,
             LayerMask groundMask,
             LayerMask occluderMask,
-            LocationLayout location1,
+            LocationLayout[] locations,
             CarVisualCatalog carVisuals,
             Transform carPoolRoot,
             BalanceView balanceView,
+            ProgressionView progressionView,
             OfferPanelView buildPanel,
             PointPanelView pointPanel,
             OfferPanelView storekeeperPanel,
@@ -57,10 +58,11 @@ namespace AutoService.Bootstrap.Installers
             InteractableMask = interactableMask;
             GroundMask = groundMask;
             OccluderMask = occluderMask;
-            Location1 = location1;
+            Locations = locations ?? System.Array.Empty<LocationLayout>();
             CarVisuals = carVisuals;
             CarPoolRoot = carPoolRoot;
             BalanceView = balanceView;
+            ProgressionView = progressionView;
             BuildPanel = buildPanel;
             PointPanel = pointPanel;
             StorekeeperPanel = storekeeperPanel;
@@ -98,8 +100,8 @@ namespace AutoService.Bootstrap.Installers
         /// <summary>Layers that block pointer raycasts without being clickable.</summary>
         public LayerMask OccluderMask { get; }
 
-        /// <summary>Markup of location 1.</summary>
-        public LocationLayout Location1 { get; }
+        /// <summary>Markup of all locations on the scene.</summary>
+        public LocationLayout[] Locations { get; }
 
         /// <summary>Car type id → car prefab.</summary>
         public CarVisualCatalog CarVisuals { get; }
@@ -109,6 +111,9 @@ namespace AutoService.Bootstrap.Installers
 
         /// <summary>Temporary balance label.</summary>
         public BalanceView BalanceView { get; }
+
+        /// <summary>Player progression (level and XP) view in HUD.</summary>
+        public ProgressionView ProgressionView { get; }
 
         /// <summary>Screen-space build panel.</summary>
         public OfferPanelView BuildPanel { get; }

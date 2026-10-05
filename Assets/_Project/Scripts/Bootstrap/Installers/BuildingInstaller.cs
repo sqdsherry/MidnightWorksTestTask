@@ -1,14 +1,17 @@
 using System;
+using System.Collections.Generic;
 using AutoService.Presentation.Building;
+using AutoService.Presentation.Traffic;
 using AutoService.Services.Building;
 using AutoService.Services.Config;
 using AutoService.Services.Economy;
 using AutoService.Services.Events;
+using AutoService.Services.Traffic;
 
 namespace AutoService.Bootstrap.Installers
 {
     /// <summary>
-    /// Build plots of location 1: the unlock gate (A1: everything unlocked), the build service, the binder that turns
+    /// Build plots of all locations: the unlock gate, the build service, the binder that turns
     /// built plots into points/slots, and the build panel.
     /// </summary>
     internal sealed class BuildingInstaller : IGameplayInstaller
@@ -30,15 +33,16 @@ namespace AutoService.Bootstrap.Installers
         /// <inheritdoc />
         public void Install(GameplayContext context)
         {
-            if (_serviceLoop.Points == null || _serviceLoop.Traffic == null)
+            if (_serviceLoop.Points == null)
             {
-                context.Logger.Warning("[Gameplay] Building skipped: the service loop of location 1 is not running.");
+                context.Logger.Warning("[Gameplay] Building skipped: the service loop is not running.");
                 return;
             }
 
             IConfigProvider config = context.Resolve<IConfigProvider>();
             IWalletService wallet = context.Resolve<IWalletService>();
             GameplaySceneRefs scene = context.Scene;
+            LocationLayout[] locations = scene.Locations;
 
             var gate = new AutoService.Services.Progression.LevelUnlockGate(context.Resolve<AutoService.Services.Progression.IProgressionService>());
             var build = new BuildService(wallet, gate, context.Resolve<IEventBus>());
@@ -47,18 +51,35 @@ namespace AutoService.Bootstrap.Installers
             context.Register<IBuildService>(build);
             Gate = gate;
 
-            // Plots were validated against the config together with the layout (ValidateBuildPlots).
-            BuildPlotView[] plots = scene.Location1.BuildPlots;
-            for (int i = 0; i < plots.Length; i++)
-            {
-                if (config.TryGetBuildable(plots[i].PlotId, out BuildableSettings settings))
-                {
-                    build.Register(settings.PlotDefinition);
-                }
-            }
+            var allPlots = new List<BuildPlotView>();
 
-            // Restored by SaveInstaller (see its order).
-            context.Track(new BuildableBinder(build, config, _serviceLoop.Registrar, _serviceLoop.Traffic, scene.Location1, context.Logger, context.Resolve<AutoService.Services.Progression.IProgressionService>(), wallet));
+            for (int i = 0; i < locations.Length; i++)
+            {
+                LocationLayout layout = locations[i];
+                if (layout == null)
+                {
+                    continue;
+                }
+
+                BuildPlotView[] plots = layout.BuildPlots;
+                for (int p = 0; p < plots.Length; p++)
+                {
+                    BuildPlotView plot = plots[p];
+                    if (plot == null)
+                    {
+                        continue;
+                    }
+
+                    allPlots.Add(plot);
+                    if (config.TryGetBuildable(plot.PlotId, out BuildableSettings settings))
+                    {
+                        build.Register(settings.PlotDefinition);
+                    }
+                }
+
+                _serviceLoop.Traffics.TryGetValue(layout.LocationId, out LocationTraffic traffic);
+                context.Track(new BuildableBinder(build, config, _serviceLoop.Registrar, traffic, layout, context.Logger, context.Resolve<AutoService.Services.Progression.IProgressionService>(), wallet));
+            }
 
             if (scene.BuildPanel == null || scene.Camera == null)
             {
@@ -66,7 +87,7 @@ namespace AutoService.Bootstrap.Installers
                 return;
             }
 
-            context.Register(new BuildPanelPresenter(build, config, wallet, scene.BuildPanel, scene.Camera, plots, _player.Escape));
+            context.Register(new BuildPanelPresenter(build, config, wallet, scene.BuildPanel, scene.Camera, allPlots.ToArray(), _player.Escape));
         }
     }
 }

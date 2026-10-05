@@ -41,7 +41,8 @@ namespace AutoService.Services.Staff
         private readonly ISupplyService _supplies;
         private readonly IWalletService _wallet;
         private readonly IUnlockGate _gate;
-        private readonly IStaffAgents _agents;
+        private readonly IStaffAgents _defaultAgents;
+        private readonly Dictionary<string, IStaffAgents> _agentsByLocation = new Dictionary<string, IStaffAgents>(StringComparer.Ordinal);
         private readonly IConfigProvider _config;
         private readonly IEventBus _eventBus;
         private readonly IGameLogger _logger;
@@ -71,11 +72,40 @@ namespace AutoService.Services.Staff
             _supplies = supplies ?? throw new ArgumentNullException(nameof(supplies));
             _wallet = wallet ?? throw new ArgumentNullException(nameof(wallet));
             _gate = gate ?? throw new ArgumentNullException(nameof(gate));
-            _agents = agents ?? throw new ArgumentNullException(nameof(agents));
+            _defaultAgents = agents;
             _config = config ?? throw new ArgumentNullException(nameof(config));
             _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _agents.Arrived += OnArrived;
+
+            if (_defaultAgents != null)
+            {
+                _defaultAgents.Arrived += OnArrived;
+            }
+        }
+
+        /// <summary>Registers an agent handler for a specific location.</summary>
+        public void RegisterAgents(string locationId, IStaffAgents agents)
+        {
+            if (string.IsNullOrEmpty(locationId) || agents == null)
+            {
+                return;
+            }
+
+            if (!_agentsByLocation.ContainsKey(locationId))
+            {
+                _agentsByLocation.Add(locationId, agents);
+                agents.Arrived += OnArrived;
+            }
+        }
+
+        private IStaffAgents GetAgents(string locationId)
+        {
+            if (locationId != null && _agentsByLocation.TryGetValue(locationId, out IStaffAgents agents))
+            {
+                return agents;
+            }
+
+            return _defaultAgents;
         }
 
         /// <inheritdoc />
@@ -242,7 +272,20 @@ namespace AutoService.Services.Staff
             }
 
             _disposed = true;
-            _agents.Arrived -= OnArrived;
+            if (_defaultAgents != null)
+            {
+                _defaultAgents.Arrived -= OnArrived;
+            }
+
+            foreach (IStaffAgents agents in _agentsByLocation.Values)
+            {
+                if (agents != null && agents != _defaultAgents)
+                {
+                    agents.Arrived -= OnArrived;
+                }
+            }
+
+            _agentsByLocation.Clear();
         }
 
         private HireAvailability Availability(bool hired, int requiredLevel, Money cost)
@@ -279,7 +322,7 @@ namespace AutoService.Services.Staff
             StaffMember member = StaffMember.CreateWorker(_nextId++, definition.LocationId, definition.Id);
             _workersByPoint.Add(definition.Id, member);
             Add(member);
-            _agents.MoveTo(member.Id, StaffDestination.WorkSpot(definition.Id));
+            GetAgents(member.LocationId)?.MoveTo(member.Id, StaffDestination.WorkSpot(definition.Id));
             return member;
         }
 
@@ -290,7 +333,7 @@ namespace AutoService.Services.Staff
             StaffMember member = StaffMember.CreateStorekeeper(_nextId++, locationId, index);
             _storekeeperCounts[locationId] = index + 1;
             Add(member);
-            _agents.MoveTo(member.Id, StaffDestination.Home(locationId, index));
+            GetAgents(member.LocationId)?.MoveTo(member.Id, StaffDestination.Home(locationId, index));
             return member;
         }
 
@@ -300,7 +343,7 @@ namespace AutoService.Services.Staff
             _staff.Add(member);
             _entries.Add(entry);
             _entriesById.Add(member.Id, entry);
-            _agents.Spawn(member.Id, member.Role, member.LocationId);
+            GetAgents(member.LocationId)?.Spawn(member.Id, member.Role, member.LocationId);
             Hired?.Invoke(member);
         }
 
@@ -316,7 +359,7 @@ namespace AutoService.Services.Staff
             string targetId = target.Definition.Id;
             member.GoToWarehouse(targetId);
             Reserve(entry, target);
-            _agents.MoveTo(member.Id, StaffDestination.Warehouse(member.LocationId));
+            GetAgents(member.LocationId)?.MoveTo(member.Id, StaffDestination.Warehouse(member.LocationId));
         }
 
         /// <summary>
@@ -355,7 +398,7 @@ namespace AutoService.Services.Staff
 
         private void GoHome(StaffMember member)
         {
-            _agents.MoveTo(member.Id, StaffDestination.Home(member.LocationId, member.HomeIndex));
+            GetAgents(member.LocationId)?.MoveTo(member.Id, StaffDestination.Home(member.LocationId, member.HomeIndex));
         }
 
         private void OnArrived(int staffId)
@@ -404,8 +447,8 @@ namespace AutoService.Services.Staff
             if (_supplies.TryBuyBoxFor(targetId, false, out SupplyBox box))
             {
                 member.PickUp(box, targetId);
-                _agents.SetCarried(member.Id, box.SupplyTypeId);
-                _agents.MoveTo(member.Id, StaffDestination.SupplyDrop(targetId));
+                GetAgents(member.LocationId)?.SetCarried(member.Id, box.SupplyTypeId);
+                GetAgents(member.LocationId)?.MoveTo(member.Id, StaffDestination.SupplyDrop(targetId));
                 return;
             }
 
@@ -426,7 +469,7 @@ namespace AutoService.Services.Staff
             if (_supplies.TryDeliver(box, targetId, false))
             {
                 member.ReleaseBox();
-                _agents.SetCarried(member.Id, string.Empty);
+                GetAgents(member.LocationId)?.SetCarried(member.Id, string.Empty);
                 GoHome(member);
                 return;
             }
@@ -439,12 +482,12 @@ namespace AutoService.Services.Staff
                 member.Redirect(otherId);
                 _supplies.MarkIncoming(otherId, box.Units);
                 entry.ReservedUnits = box.Units;
-                _agents.MoveTo(member.Id, StaffDestination.SupplyDrop(otherId));
+                GetAgents(member.LocationId)?.MoveTo(member.Id, StaffDestination.SupplyDrop(otherId));
                 return;
             }
 
             member.ReleaseBox();
-            _agents.SetCarried(member.Id, string.Empty);
+            GetAgents(member.LocationId)?.SetCarried(member.Id, string.Empty);
             GoHome(member);
         }
 

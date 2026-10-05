@@ -17,6 +17,6 @@ MonoBehaviour:
   _description: Tires bay.
   _kind: 0
   _targetId: loc2_tires_1
-  _cost: 1000
-  _requiredLevel: 5
+  _cost: 100
+  _requiredLevel: 1
   _flowBonus: 0.2

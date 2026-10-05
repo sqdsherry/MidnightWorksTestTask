@@ -203,10 +203,10 @@ namespace AutoService.Bootstrap.Editor
         // Why: in layout v3.1 the work spot of a bay at its local (3.5, 0, 0) falls into the pillar of the next bay to the
         // east (bays are 6 m apart, pillars at ±2.5). South of the east pillar's end is free: off the car lane (cars are
         // ±1 m around the lane) and in front of the bay, where the player can see the car.
-        private static readonly Vector3 BayWorkSpotLocal = new Vector3(2.5f, 0f, -3.5f);
+        internal static readonly Vector3 BayWorkSpotLocal = new Vector3(2.5f, 0f, -3.5f);
 
         // Manage pad of a bay: 2 m further south, in line with the bay's outer wall (not on the lane, not on the NPC path).
-        private static readonly Vector3 BayPadFromWorkSpot = new Vector3(0f, 0f, -2f);
+        internal static readonly Vector3 BayPadFromWorkSpot = new Vector3(0f, 0f, -2f);
 
         // Manage pads of the entrances: beside their booths, off the road and off the walk from the staff room.
         private static readonly Vector3 MainEntrancePad = new Vector3(5.5f, 0f, -15.5f);
@@ -416,7 +416,7 @@ namespace AutoService.Bootstrap.Editor
             return main;
         }
 
-        private static ServicePointView FindPoint(LocationLayout layout, string pointId)
+        internal static ServicePointView FindPoint(LocationLayout layout, string pointId)
         {
             ServicePointView[] points = layout.GetComponentsInChildren<ServicePointView>(true);
             for (int i = 0; i < points.Length; i++)
@@ -573,7 +573,7 @@ namespace AutoService.Bootstrap.Editor
             AddWallObstacles(bay);
         }
 
-        private static void PlaceBayWorkSpot(ServicePointView bay)
+        internal static void PlaceBayWorkSpot(ServicePointView bay)
         {
             Transform work = ApproachOf(bay);
             if (work == bay.transform)
@@ -858,7 +858,7 @@ namespace AutoService.Bootstrap.Editor
             return plot;
         }
 
-        private static Transform ApproachOf(ServicePointView point)
+        internal static Transform ApproachOf(ServicePointView point)
         {
             var view = new SerializedObject(point);
             return view.FindProperty("_approachPoint").objectReferenceValue is Transform work ? work : point.transform;
@@ -1009,7 +1009,7 @@ namespace AutoService.Bootstrap.Editor
         // ── A2: pads, warehouse, staff room ──────────────────────────────────────────────────────────────────────────
 
         /// <summary>Yellow work pad under the bay's work spot and its blue manage pad, both inside the bay (they appear with it).</summary>
-        private static ManagePadView AddBayPads(ServicePointView bay, Material workPad, Material managePad, ServicePointHud referenceHud)
+        internal static ManagePadView AddBayPads(ServicePointView bay, Material workPad, Material managePad, ServicePointHud referenceHud)
         {
             Transform work = ApproachOf(bay);
             CreateWorkPad(bay.transform, work.position, workPad);

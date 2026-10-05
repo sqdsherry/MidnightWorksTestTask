@@ -18,6 +18,7 @@ namespace AutoService.Bootstrap.Installers
         public void Install(GameplayContext context)
         {
             InstallBalance(context);
+            InstallProgression(context);
             InstallPause(context);
         }
 
@@ -31,6 +32,24 @@ namespace AutoService.Bootstrap.Installers
             }
 
             context.Register(new BalancePresenter(context.Resolve<IWalletService>(), balanceView));
+        }
+
+        private static void InstallProgression(GameplayContext context)
+        {
+            ProgressionView progressionView = context.Scene.ProgressionView;
+            if (progressionView == null)
+            {
+                context.Logger.Warning("[Gameplay] _progressionView is not assigned; the progression is not shown.");
+                return;
+            }
+
+            if (!context.TryResolve(out AutoService.Services.Progression.IProgressionService progressionService))
+            {
+                context.Logger.Warning("[Gameplay] IProgressionService not found; progression is not shown.");
+                return;
+            }
+
+            context.Register(new ProgressionPresenter(progressionService, progressionView));
         }
 
         private static void InstallPause(GameplayContext context)

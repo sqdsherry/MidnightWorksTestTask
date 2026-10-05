@@ -197,6 +197,21 @@ namespace AutoService.Presentation.Traffic
             return _graph;
         }
 
+        /// <summary>
+        /// Resets the cached route graph, node array, and graph validation error.
+        /// Useful in Editor tools when rebuilding nodes or layouts.
+        /// </summary>
+        public void ResetGraphCache()
+        {
+            _graph = null;
+            _nodes = null;
+            _graphProblem = null;
+            _mainEntranceNode = null;
+            _serviceEntranceNode = null;
+            _servicePointNodes = null;
+            _zones.Clear();
+        }
+
         /// <summary>Road node with graph index <paramref name="index"/> (after <see cref="BuildGraph"/>).</summary>
         /// <exception cref="InvalidOperationException">Thrown before <see cref="BuildGraph"/>.</exception>
         public RoadNode NodeAt(int index)
@@ -476,15 +491,19 @@ namespace AutoService.Presentation.Traffic
                 return "Location Id is empty";
             }
 
-            string problem = ValidatePoint(_mainEntrance, "Main Entrance") ?? ValidatePoint(_serviceEntrance, "Service Entrance");
-            if (problem != null)
+            string problem = null;
+            if (_mainEntrance != null || _serviceEntrance != null)
             {
-                return problem;
-            }
+                problem = ValidatePoint(_mainEntrance, "Main Entrance") ?? ValidatePoint(_serviceEntrance, "Service Entrance");
+                if (problem != null)
+                {
+                    return problem;
+                }
 
-            if (_mainEntrance == _serviceEntrance)
-            {
-                return "Main and Service Entrance must be different points";
+                if (_mainEntrance == _serviceEntrance)
+                {
+                    return "Main and Service Entrance must be different points";
+                }
             }
 
             if (_spawnNode == null)
@@ -613,6 +632,7 @@ namespace AutoService.Presentation.Traffic
 
         private string RequirePad(ServicePointView point)
         {
+            if (point == null) return null;
             return TryGetManagePad(point.PointId, out _) ? null : "Point '" + point.name + "' has no manage pad in Manage Pads";
         }
 
@@ -640,8 +660,8 @@ namespace AutoService.Presentation.Traffic
         {
             string problem = RequireOwn(_spawnNode, "Spawn node")
                 ?? RequireOwn(_exitNode, "Exit node")
-                ?? RequireOwn(_mainEntranceNode, "Car spot")
-                ?? RequireOwn(_serviceEntranceNode, "Car spot")
+                ?? (_mainEntranceNode != null ? RequireOwn(_mainEntranceNode, "Car spot") : null)
+                ?? (_serviceEntranceNode != null ? RequireOwn(_serviceEntranceNode, "Car spot") : null)
                 ?? RequireOwnNodes(_queueSlots, "Queue slot")
                 ?? RequireOwnNodes(_parkingSlots, "Parking slot")
                 ?? RequireOwnNodes(_servicePointNodes, "Car spot");
@@ -657,7 +677,10 @@ namespace AutoService.Presentation.Traffic
 
             // Why: a car that stops at a slot or a spot must never be routed THROUGH one — it would drive across a parked
             // car, a busy bay or a closed barrier. On equal routes the graph prefers earlier connections (through lane first).
-            var stops = new HashSet<RoadNode>(_parkingSlots) { _mainEntranceNode, _serviceEntranceNode };
+            var stops = new HashSet<RoadNode>(_parkingSlots);
+            if (_mainEntranceNode != null) stops.Add(_mainEntranceNode);
+            if (_serviceEntranceNode != null) stops.Add(_serviceEntranceNode);
+            
             for (int i = 0; i < _servicePointNodes.Length; i++)
             {
                 stops.Add(_servicePointNodes[i]);
@@ -670,12 +693,15 @@ namespace AutoService.Presentation.Traffic
                 problem = CheckRoute(_spawnNode, _queueSlots[i], stops, path);
             }
 
-            problem ??= CheckRoute(head, _mainEntranceNode, stops, path);
-            for (int i = 0; i < _parkingSlots.Length && problem == null; i++)
+            if (_mainEntranceNode != null && _serviceEntranceNode != null)
             {
-                problem = CheckRoute(_mainEntranceNode, _parkingSlots[i], stops, path)
-                    ?? CheckRoute(_serviceEntranceNode, _parkingSlots[i], stops, path)
-                    ?? CheckRoute(_parkingSlots[i], _exitNode, stops, path);
+                problem ??= CheckRoute(head, _mainEntranceNode, stops, path);
+                for (int i = 0; i < _parkingSlots.Length && problem == null; i++)
+                {
+                    problem = CheckRoute(_mainEntranceNode, _parkingSlots[i], stops, path)
+                        ?? CheckRoute(_serviceEntranceNode, _parkingSlots[i], stops, path)
+                        ?? CheckRoute(_parkingSlots[i], _exitNode, stops, path);
+                }
             }
 
             for (int i = 0; i < _servicePoints.Length && problem == null; i++)
@@ -683,8 +709,13 @@ namespace AutoService.Presentation.Traffic
                 RoadNode point = _servicePointNodes[i];
                 RoadNode[] buffer = _servicePoints[i].BufferSlots;
                 problem = CheckRoute(head, point, stops, path)
-                    ?? CheckRoute(point, _exitNode, stops, path)
-                    ?? CheckRoute(point, _serviceEntranceNode, stops, path);
+                    ?? CheckRoute(point, _exitNode, stops, path);
+                
+                if (_serviceEntranceNode != null && problem == null)
+                {
+                    problem = CheckRoute(point, _serviceEntranceNode, stops, path);
+                }
+                
                 for (int slot = 0; slot < buffer.Length && problem == null; slot++)
                 {
                     problem = CheckRoute(head, buffer[slot], stops, path)

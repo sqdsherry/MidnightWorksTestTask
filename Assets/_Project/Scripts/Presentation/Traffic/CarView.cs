@@ -51,6 +51,13 @@ namespace AutoService.Presentation.Traffic
         // Editor-only debugging: where the gizmo label reads the car's plan and state from (may stay null).
         private LocationTraffic _debugTraffic;
 
+        private static readonly int BaseColorPropertyId = Shader.PropertyToID("_BaseColor");
+        private static readonly int ColorPropertyId = Shader.PropertyToID("_Color");
+        private MaterialPropertyBlock _propertyBlock;
+        private bool _hasCustomColor;
+        private GameObject _customVisual;
+        private GameObject _defaultVisual;
+
         /// <summary>True while the car has a route it has not reported finishing yet.</summary>
         public bool IsDriving => _pathIndex < _path.Count;
 
@@ -214,12 +221,118 @@ namespace AutoService.Presentation.Traffic
             _debugTraffic = traffic;
         }
 
-        /// <summary>Clears all runtime state (route, zone) before the car goes back to the pool.</summary>
+        /// <summary>Clears all runtime state (route, zone, customization) before the car goes back to the pool.</summary>
         public void ResetForPool()
         {
             Halt();
+            ResetVisualModel();
+            ClearCustomColor();
             _currentNode = null;
             _carId = NoCar;
+        }
+
+        /// <summary>Applies a custom body color to the car's renderers via MaterialPropertyBlock (zero material allocation).</summary>
+        public void SetBodyColor(Color color)
+        {
+            if (_propertyBlock == null)
+            {
+                _propertyBlock = new MaterialPropertyBlock();
+            }
+
+            _propertyBlock.SetColor(BaseColorPropertyId, color);
+            _propertyBlock.SetColor(ColorPropertyId, color);
+            _hasCustomColor = true;
+            ApplyPropertyBlock();
+        }
+
+        /// <summary>Removes any custom MaterialPropertyBlock override.</summary>
+        public void ClearCustomColor()
+        {
+            if (!_hasCustomColor)
+            {
+                return;
+            }
+
+            _hasCustomColor = false;
+            MeshRenderer[] renderers = GetComponentsInChildren<MeshRenderer>(true);
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                renderers[i].SetPropertyBlock(null);
+            }
+        }
+
+        /// <summary>Replaces the car's visual mesh with the sport model visual from <paramref name="sportPrefab"/>.</summary>
+        public void SetSportModel(CarView sportPrefab)
+        {
+            if (sportPrefab == null)
+            {
+                return;
+            }
+
+            if (_defaultVisual == null)
+            {
+                Transform v = transform.Find("Visual");
+                if (v != null)
+                {
+                    _defaultVisual = v.gameObject;
+                }
+            }
+
+            if (_customVisual != null)
+            {
+                Destroy(_customVisual);
+                _customVisual = null;
+            }
+
+            Transform sportVisual = sportPrefab.transform.Find("Visual");
+            if (sportVisual != null)
+            {
+                if (_defaultVisual != null)
+                {
+                    _defaultVisual.SetActive(false);
+                }
+
+                _customVisual = Instantiate(sportVisual.gameObject, transform);
+                _customVisual.name = "Visual_Sport";
+                _customVisual.transform.localPosition = sportVisual.localPosition;
+                _customVisual.transform.localRotation = sportVisual.localRotation;
+                _customVisual.transform.localScale = sportVisual.localScale;
+                _customVisual.SetActive(true);
+
+                if (_hasCustomColor)
+                {
+                    ApplyPropertyBlock();
+                }
+            }
+        }
+
+        /// <summary>Restores the default visual mesh if it was swapped.</summary>
+        public void ResetVisualModel()
+        {
+            if (_customVisual != null)
+            {
+                Destroy(_customVisual);
+                _customVisual = null;
+            }
+
+            if (_defaultVisual != null)
+            {
+                _defaultVisual.SetActive(true);
+            }
+        }
+
+        private void ApplyPropertyBlock()
+        {
+            if (!_hasCustomColor || _propertyBlock == null)
+            {
+                return;
+            }
+
+            MeshRenderer[] renderers = GetComponentsInChildren<MeshRenderer>(true);
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                renderers[i].SetPropertyBlock(_propertyBlock);
+            }
         }
 
         private void StartLeg()

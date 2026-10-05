@@ -113,6 +113,19 @@ namespace AutoService.Presentation.Traffic
             }
         }
 
+        /// <summary>Finds the active view of car <paramref name="carId"/>, or returns false.</summary>
+        public bool TryGetCarView(int carId, out CarView view)
+        {
+            if (_cars.TryGetValue(carId, out ActiveCar car) && car.View != null)
+            {
+                view = car.View;
+                return true;
+            }
+
+            view = null;
+            return false;
+        }
+
         /// <inheritdoc />
         public void Spawn(int carId, string carTypeId)
         {

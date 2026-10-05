@@ -24,11 +24,14 @@ namespace AutoService.Services.Traffic
             int serviceBufferCapacity)
         {
             RequireId(locationId, nameof(locationId));
-            RequireId(mainEntranceId, nameof(mainEntranceId));
-            RequireId(serviceEntranceId, nameof(serviceEntranceId));
-            if (string.Equals(mainEntranceId, serviceEntranceId, StringComparison.Ordinal))
+            if (mainEntranceId != null || serviceEntranceId != null)
             {
-                throw new ArgumentException("The two parking entrances must be different points.", nameof(serviceEntranceId));
+                RequireId(mainEntranceId, nameof(mainEntranceId));
+                RequireId(serviceEntranceId, nameof(serviceEntranceId));
+                if (string.Equals(mainEntranceId, serviceEntranceId, StringComparison.Ordinal))
+                {
+                    throw new ArgumentException("The two parking entrances must be different points.", nameof(serviceEntranceId));
+                }
             }
 
             if (queueCapacity < 1)

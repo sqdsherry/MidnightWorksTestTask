@@ -17,6 +17,6 @@ MonoBehaviour:
   _description: Paint bay.
   _kind: 0
   _targetId: loc2_paint_1
-  _cost: 3000
-  _requiredLevel: 7
+  _cost: 100
+  _requiredLevel: 1
   _flowBonus: 0.2

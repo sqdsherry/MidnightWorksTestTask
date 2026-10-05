@@ -64,8 +64,10 @@ namespace AutoService.Presentation.Points
 
         private void Bind(ServicePointView view)
         {
-            _layout.TryGetManagePad(view.PointId, out ManagePadView pad);
-            view.ConstructStaffSupplies(_supplies, _carry, _staff, pad != null ? pad.ApproachPoint : null);
+            if (_layout.TryGetManagePad(view.PointId, out ManagePadView pad))
+            {
+                view.ConstructStaffSupplies(_supplies, _carry, _staff, pad.ApproachPoint);
+            }
         }
     }
 }

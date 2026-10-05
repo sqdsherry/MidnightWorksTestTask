@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using AutoService.Domain.Points;
 using AutoService.Presentation.Points;
 using AutoService.Presentation.Traffic;
@@ -12,53 +13,41 @@ using AutoService.Services.Traffic;
 namespace AutoService.Bootstrap.Installers
 {
     /// <summary>
-    /// Service points of location 1 (both entrances and the bays built from the start), its traffic with the car agents,
+    /// Service points of all locations (both entrances and the bays built from the start), their traffic with the car agents,
     /// and the point presenters. Ticks: point service (Simulation) → traffic (Traffic) → car agents (Agents) →
     /// point presenters (Presentation).
     /// </summary>
     internal sealed class ServiceLoopInstaller : IGameplayInstaller
     {
-        /// <summary>The point registry, or null when location 1 cannot run.</summary>
+        private readonly Dictionary<string, LocationTraffic> _traffics = new Dictionary<string, LocationTraffic>(StringComparer.Ordinal);
+        private readonly Dictionary<string, CarAgents> _carAgents = new Dictionary<string, CarAgents>(StringComparer.Ordinal);
+
+        /// <summary>The point registry, or null when locations cannot run.</summary>
         public ServicePointService Points { get; private set; }
 
-        /// <summary>Registers scene points (also the ones built later), or null when location 1 cannot run.</summary>
+        /// <summary>Registers scene points (also the ones built later), or null when locations cannot run.</summary>
         public PointRegistrar Registrar { get; private set; }
 
-        /// <summary>Traffic of location 1, or null when it was skipped.</summary>
+        /// <summary>Traffic of the primary location, or null when it was skipped.</summary>
         public LocationTraffic Traffic { get; private set; }
+
+        /// <summary>Traffic instances keyed by location id.</summary>
+        public IReadOnlyDictionary<string, LocationTraffic> Traffics => _traffics;
+
+        /// <summary>Car agent instances keyed by location id.</summary>
+        public IReadOnlyDictionary<string, CarAgents> Agents => _carAgents;
 
         /// <inheritdoc />
         public void Install(GameplayContext context)
         {
             IConfigProvider config = context.Resolve<IConfigProvider>();
             IEventBus eventBus = context.Resolve<IEventBus>();
-            if (InstallPoints(context, config, eventBus))
-            {
-                Traffic = InstallTraffic(context, config, eventBus);
-            }
+            LocationLayout[] locations = context.Scene.Locations;
 
-            // Why: tracked even when the traffic was skipped, so the presenters of the points registered so far are still
-            // ticked and disposed; their phase makes them render the state produced by this frame's simulation.
-            if (Registrar != null)
+            if (locations == null || locations.Length == 0)
             {
-                context.Track(Registrar, TickPhase.Presentation);
-            }
-        }
-
-        /// <returns>False when the location cannot run (traffic is skipped then).</returns>
-        private bool InstallPoints(GameplayContext context, IConfigProvider config, IEventBus eventBus)
-        {
-            LocationLayout layout = context.Scene.Location1;
-            if (!context.HasReference(layout, "_location1"))
-            {
-                context.Logger.Error("[Gameplay] Service loop skipped: assign the location layout on " + context.OwnerName + ".");
-                return false;
-            }
-
-            if (!layout.Validate(out string problem) || !layout.ValidateBuildPlots(config, out problem) || !layout.ValidateStaff(config, out problem))
-            {
-                context.Logger.Error("[Gameplay] Service loop skipped: LocationLayout '" + layout.name + "': " + problem + ".");
-                return false;
+                context.Logger.Error("[Gameplay] Service loop skipped: no locations found on " + context.OwnerName + ".");
+                return;
             }
 
             var points = new ServicePointService(context.Resolve<IWalletService>(), eventBus);
@@ -67,37 +56,9 @@ namespace AutoService.Bootstrap.Installers
             Points = points;
             Registrar = registrar;
 
-            // Why: every parking visit pays at one of the two entrances, so both must be Barrier-kind points; without them
-            // the traffic cannot run. Non-short-circuit `|` reports both.
-            if (!registrar.TryRegister(layout.MainEntrance, layout.LocationId, PointKind.Barrier, out _)
-                | !registrar.TryRegister(layout.ServiceEntrance, layout.LocationId, PointKind.Barrier, out _))
-            {
-                context.Logger.Error("[Gameplay] Traffic skipped: location '" + layout.LocationId + "' needs two valid parking entrances.");
-                return false;
-            }
-
-            // Why: points that are still build plots join later, when built (BuildableBinder).
-            ServicePointView[] servicePoints = layout.ServicePoints;
-            for (int i = 0; i < servicePoints.Length; i++)
-            {
-                if (layout.IsBuiltAtStart(servicePoints[i]))
-                {
-                    registrar.TryRegister(servicePoints[i], layout.LocationId, PointKind.Service, out _);
-                }
-            }
-
-            return true;
-        }
-
-        /// <returns>The traffic, or null when it was skipped.</returns>
-        private static LocationTraffic InstallTraffic(GameplayContext context, IConfigProvider config, IEventBus eventBus)
-        {
-            GameplaySceneRefs scene = context.Scene;
-            LocationLayout layout = scene.Location1;
-            if (!context.HasReference(scene.CarVisuals, "_carVisuals"))
+            if (!context.HasReference(context.Scene.CarVisuals, "_carVisuals"))
             {
                 context.Logger.Error("[Gameplay] Traffic skipped: assign the car visual catalog on " + context.OwnerName + ".");
-                return null;
             }
 
             if (config.CarTypes.Count == 0)
@@ -105,35 +66,93 @@ namespace AutoService.Bootstrap.Installers
                 context.Logger.Warning("[Gameplay] GameConfig has no car types; no cars will spawn.");
             }
 
-            var definition = new LocationTrafficDefinition(
-                layout.LocationId,
-                layout.MainEntrance.PointId,
-                layout.ServiceEntrance.PointId,
-                layout.QueueSlotCount,
-                layout.InitialParkingCapacity(config),
-                layout.ServiceBufferCapacity);
-            var agents = new CarAgents(layout, scene.CarVisuals, scene.CarPoolRoot);
-
-            LocationTraffic traffic;
-            try
+            for (int i = 0; i < locations.Length; i++)
             {
-                traffic = new LocationTraffic(
-                    definition, context.Resolve<IServicePointService>(), agents, config, context.Resolve<IRandom>(), eventBus);
+                LocationLayout layout = locations[i];
+                if (layout == null)
+                {
+                    continue;
+                }
+
+                if (!layout.Validate(out string problem) || !layout.ValidateBuildPlots(config, out problem) || !layout.ValidateStaff(config, out problem))
+                {
+                    context.Logger.Error("[Gameplay] Service loop skipped for '" + layout.name + "': " + problem + ".");
+                    continue;
+                }
+
+                bool entrancesValid = true;
+                if (layout.MainEntrance != null || layout.ServiceEntrance != null)
+                {
+                    entrancesValid = registrar.TryRegister(layout.MainEntrance, layout.LocationId, PointKind.Barrier, out _)
+                        & registrar.TryRegister(layout.ServiceEntrance, layout.LocationId, PointKind.Barrier, out _);
+                }
+
+                if (!entrancesValid)
+                {
+                    context.Logger.Error("[Gameplay] Traffic skipped: location '" + layout.LocationId + "' needs two valid parking entrances.");
+                    continue;
+                }
+
+                ServicePointView[] servicePoints = layout.ServicePoints;
+                for (int s = 0; s < servicePoints.Length; s++)
+                {
+                    if (layout.IsBuiltAtStart(servicePoints[s]))
+                    {
+                        registrar.TryRegister(servicePoints[s], layout.LocationId, PointKind.Service, out _);
+                    }
+                }
+
+                if (context.Scene.CarVisuals == null)
+                {
+                    continue;
+                }
+
+                var definition = new LocationTrafficDefinition(
+                    layout.LocationId,
+                    layout.MainEntrance?.PointId,
+                    layout.ServiceEntrance?.PointId,
+                    layout.QueueSlotCount,
+                    layout.InitialParkingCapacity(config),
+                    layout.ServiceBufferCapacity);
+                var agents = new CarAgents(layout, context.Scene.CarVisuals, context.Scene.CarPoolRoot);
+
+                LocationTraffic traffic;
+                try
+                {
+                    traffic = new LocationTraffic(
+                        definition, points, agents, config, context.Resolve<IRandom>(), eventBus);
+                }
+                catch (ArgumentException exception)
+                {
+                    agents.Dispose();
+                    context.Logger.Error("[Gameplay] Traffic skipped for '" + layout.LocationId + "': " + exception.Message);
+                    continue;
+                }
+
+                agents.SetDebugTraffic(traffic);
+
+                context.Track(traffic, TickPhase.Traffic);
+                context.Track(agents, TickPhase.Agents);
+
+                _traffics[layout.LocationId] = traffic;
+                _carAgents[layout.LocationId] = agents;
+
+                if (Traffic == null)
+                {
+                    Traffic = traffic;
+                }
             }
-            catch (ArgumentException exception)
+
+            if (Registrar != null)
             {
-                agents.Dispose();
-                context.Logger.Error("[Gameplay] Traffic skipped: " + exception.Message);
-                return null;
+                context.Track(Registrar, TickPhase.Presentation);
             }
 
-            // Debug only: Scene view labels "#id plan state" above the cars.
-            agents.SetDebugTraffic(traffic);
-
-            // Why: tracked, not registered — module 11 adds a second location with its own traffic and agents.
-            context.Track(traffic, TickPhase.Traffic);
-            context.Track(agents, TickPhase.Agents);
-            return traffic;
+            if (context.Scene.CarVisuals != null && _carAgents.Count > 0)
+            {
+                var customizationPresenter = new CarCustomizationPresenter(eventBus, context.Scene.CarVisuals, _carAgents.Values);
+                context.Track(customizationPresenter);
+            }
         }
     }
 }

@@ -66,10 +66,10 @@ namespace AutoService.Bootstrap
         [Tooltip("Layers that block pointer raycasts without being clickable (walls, roofs). May be empty.")]
         private LayerMask _occluderMask;
 
-        [Header("Location")]
+        [Header("Locations")]
         [SerializeField]
-        [Tooltip("Markup of location 1: points, road graph, queue and parking slots, spawn/exit.")]
-        private LocationLayout _location1;
+        [Tooltip("Markup of locations: points, road graph, queue and parking slots, spawn/exit. If empty, found automatically.")]
+        private LocationLayout[] _locations;
 
         [SerializeField]
         [Tooltip("Car type id → car prefab.")]
@@ -83,6 +83,10 @@ namespace AutoService.Bootstrap
         [SerializeField]
         [Tooltip("Temporary balance label (until the full HUD).")]
         private BalanceView _balanceView;
+
+        [SerializeField]
+        [Tooltip("Level and XP progression display in HUD.")]
+        private ProgressionView _progressionView;
 
         [SerializeField]
         [Tooltip("Screen-space build panel shown next to a plot the character stands at.")]
@@ -220,6 +224,12 @@ namespace AutoService.Bootstrap
 
         private GameplaySceneRefs CreateSceneRefs()
         {
+            LocationLayout[] locations = _locations;
+            if (locations == null || locations.Length == 0)
+            {
+                locations = FindObjectsByType<LocationLayout>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+            }
+
             return new GameplaySceneRefs(
                 _inputActions,
                 _camera,
@@ -229,10 +239,11 @@ namespace AutoService.Bootstrap
                 _interactableMask,
                 _groundMask,
                 _occluderMask,
-                _location1,
+                locations,
                 _carVisuals,
                 _carPoolRoot,
                 _balanceView,
+                _progressionView,
                 _buildPanel,
                 _pointPanel,
                 _storekeeperPanel,

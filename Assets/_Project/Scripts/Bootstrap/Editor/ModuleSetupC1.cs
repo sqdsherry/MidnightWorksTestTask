@@ -711,6 +711,7 @@ namespace AutoService.Bootstrap.Editor
             entry.FindProperty("_pauseButton").objectReferenceValue = EnsurePauseButton(hud, problems);
             entry.FindProperty("_pauseMenu").objectReferenceValue = EnsurePauseMenu(hud, problems);
             entry.FindProperty("_settingsPanel").objectReferenceValue = EnsureSettingsInstance(settingsPrefabReady, hud, problems, "Gameplay");
+            entry.FindProperty("_progressionView").objectReferenceValue = EnsureProgressionView(hud, problems);
             entry.ApplyModifiedPropertiesWithoutUndo();
 
             EditorSceneManager.MarkSceneDirty(scene);
@@ -760,6 +761,77 @@ namespace AutoService.Bootstrap.Editor
             var serialized = new SerializedObject(view);
             serialized.FindProperty("_button").objectReferenceValue = button;
             serialized.ApplyModifiedPropertiesWithoutUndo();
+            return view;
+        }
+
+        private static ProgressionView EnsureProgressionView(Transform hud, List<string> problems)
+        {
+            const string ProgressionViewName = "Progression";
+            Transform existing = hud.Find(ProgressionViewName);
+            if (existing != null && !SetupUi.IsGenerated(existing.gameObject))
+            {
+                problems.Add("Gameplay: '" + ProgressionViewName + "' was not made by this tool and was left as is");
+                return existing.GetComponent<ProgressionView>();
+            }
+
+            GameObject root;
+            if (existing != null)
+            {
+                root = existing.gameObject;
+            }
+            else
+            {
+                root = new GameObject(ProgressionViewName, typeof(RectTransform));
+                root.transform.SetParent(hud, false);
+                SetupUi.MarkGenerated(root);
+                var rect = (RectTransform)root.transform;
+                // Position in top-left, to the right of the pause button (pause is at x=24, w=72 -> right edge is 96)
+                SetupUi.Place(rect, new Vector2(0f, 1f), new Vector2(120f, -24f), new Vector2(260f, 60f), new Vector2(0f, 1f));
+            }
+
+            var view = SetupUi.GetOrAdd<ProgressionView>(root);
+
+            TMP_Text levelText = SetupUi.EnsureChild(root.transform, "LevelText", problems, p =>
+            {
+                TMP_Text t = SetupUi.CreateText(p, "LevelText", "Lvl 1", 24f, true, TextAlignmentOptions.Left);
+                SetupUi.Place(t.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 0f), new Vector2(100f, 28f), new Vector2(0f, 1f));
+                return t;
+            });
+
+            TMP_Text xpText = SetupUi.EnsureChild(root.transform, "XpText", problems, p =>
+            {
+                TMP_Text t = SetupUi.CreateText(p, "XpText", "0 / 100 XP", 18f, false, TextAlignmentOptions.Right);
+                SetupUi.Place(t.rectTransform, new Vector2(1f, 1f), new Vector2(0f, -4f), new Vector2(150f, 24f), new Vector2(1f, 1f));
+                t.color = new Color(0.85f, 0.85f, 0.85f, 1f);
+                return t;
+            });
+
+            RectTransform barBg = SetupUi.EnsureRect(root.transform, "BarBackground", problems, r =>
+            {
+                SetupUi.Place(r, new Vector2(0f, 0f), new Vector2(0f, 4f), new Vector2(260f, 16f), new Vector2(0f, 0f));
+                SetupUi.AddImage(r, new Color32(0x1E, 0x24, 0x30, 220));
+            });
+
+            Image fill = barBg == null ? null : SetupUi.EnsureChild(barBg, "Fill", problems, p =>
+            {
+                RectTransform fillRect = SetupUi.CreateRect("Fill", p);
+                SetupUi.Stretch(fillRect);
+                var img = fillRect.gameObject.AddComponent<Image>();
+                img.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
+                img.type = Image.Type.Filled;
+                img.fillMethod = Image.FillMethod.Horizontal;
+                img.fillOrigin = (int)Image.OriginHorizontal.Left;
+                img.fillAmount = 0f;
+                img.color = new Color32(0x3B, 0x82, 0xF6, 255); // Vibrant blue for XP
+                return img;
+            });
+
+            var serialized = new SerializedObject(view);
+            serialized.FindProperty("_levelText").objectReferenceValue = levelText;
+            serialized.FindProperty("_xpText").objectReferenceValue = xpText;
+            serialized.FindProperty("_progressBarFill").objectReferenceValue = fill;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+
             return view;
         }
 

@@ -13,7 +13,7 @@ namespace AutoService.Presentation.Ui.FloatingText
     public class FloatingTextSpawner : MonoBehaviour, IDisposable
     {
         [SerializeField] private FloatingText _prefab;
-        [SerializeField] private LocationLayout _location;
+        [SerializeField] private LocationLayout[] _locations;
 
         private IEventBus _eventBus;
         private Action<OrderAcceptedEvent> _onOrderAccepted;
@@ -21,10 +21,10 @@ namespace AutoService.Presentation.Ui.FloatingText
         private readonly Queue<FloatingText> _pool = new Queue<FloatingText>();
         private readonly List<FloatingText> _active = new List<FloatingText>();
 
-        public void Initialize(IEventBus eventBus, LocationLayout location)
+        public void Initialize(IEventBus eventBus, LocationLayout[] locations)
         {
             _eventBus = eventBus;
-            _location = location;
+            _locations = locations;
             _onOrderAccepted = OnOrderAccepted;
             _eventBus.Subscribe(_onOrderAccepted);
         }
@@ -48,13 +48,32 @@ namespace AutoService.Presentation.Ui.FloatingText
 
         private Vector3 GetPointPosition(string pointId)
         {
-            if (_location != null)
+            if (_locations != null)
             {
-                foreach (var point in _location.ServicePoints)
+                for (int l = 0; l < _locations.Length; l++)
                 {
-                    if (point.PointId == pointId)
+                    LocationLayout loc = _locations[l];
+                    if (loc == null) continue;
+
+                    if (loc.MainEntrance != null && loc.MainEntrance.PointId == pointId)
                     {
-                        return point.transform.position;
+                        return loc.MainEntrance.transform.position;
+                    }
+                    if (loc.ServiceEntrance != null && loc.ServiceEntrance.PointId == pointId)
+                    {
+                        return loc.ServiceEntrance.transform.position;
+                    }
+
+                    if (loc.ServicePoints != null)
+                    {
+                        for (int i = 0; i < loc.ServicePoints.Length; i++)
+                        {
+                            var point = loc.ServicePoints[i];
+                            if (point != null && point.PointId == pointId)
+                            {
+                                return point.transform.position;
+                            }
+                        }
                     }
                 }
             }

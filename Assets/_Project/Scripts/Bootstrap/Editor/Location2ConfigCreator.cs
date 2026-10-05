@@ -32,11 +32,11 @@ namespace AutoService.Bootstrap.Editor
         private static readonly BuildableSpec[] Buildables =
         {
             new BuildableSpec("B_Loc2_Tires1", "loc2_build_tires_1", "Tires 1", "Tires bay.",
-                BuildableKind.ServicePoint, "loc2_tires_1", 1000, 5, 0.2f),
+                BuildableKind.ServicePoint, "loc2_tires_1", 100, 1, 0.2f),
             new BuildableSpec("B_Loc2_Tuning1", "loc2_build_tuning_1", "Tuning 1", "Tuning bay.",
-                BuildableKind.ServicePoint, "loc2_tuning_1", 2000, 6, 0.2f),
+                BuildableKind.ServicePoint, "loc2_tuning_1", 100, 1, 0.2f),
             new BuildableSpec("B_Loc2_Paint1", "loc2_build_paint_1", "Paint 1", "Paint bay.",
-                BuildableKind.ServicePoint, "loc2_paint_1", 3000, 7, 0.2f),
+                BuildableKind.ServicePoint, "loc2_paint_1", 100, 1, 0.2f),
             new BuildableSpec("B_TravelToLoc2", "b_travel_to_loc2", "Travel to Location 2", "Go to Location 2.",
                 BuildableKind.TravelPoint, "travel_to_loc2", 0, 1, 0f),
             new BuildableSpec("B_TravelToLoc1", "b_travel_to_loc1", "Travel to Location 1", "Return to Location 1.",
@@ -113,7 +113,11 @@ namespace AutoService.Bootstrap.Editor
         {
             string path = folder + "/" + assetName + ".asset";
             var existing = AssetDatabase.LoadAssetAtPath<T>(path);
-            if (existing != null) return existing;
+            if (existing != null)
+            {
+                fill(existing);
+                return existing;
+            }
 
             var asset = ScriptableObject.CreateInstance<T>();
             AssetDatabase.CreateAsset(asset, path);

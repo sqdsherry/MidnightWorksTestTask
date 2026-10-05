@@ -270,6 +270,11 @@ namespace AutoService.Services.Traffic
 
         private static ServicePoint ResolveEntrance(LocationTrafficDefinition definition, string pointId, IServicePointService points)
         {
+            if (pointId == null)
+            {
+                return null;
+            }
+
             if (!points.TryGet(pointId, out ServicePoint entrance))
             {
                 throw new ArgumentException("Parking entrance '" + pointId + "' is not registered.", nameof(definition));
@@ -489,6 +494,12 @@ namespace AutoService.Services.Traffic
         {
             stay = 0f;
 
+            if (entrance == null)
+            {
+                slot = ParkingLot.None;
+                return false;
+            }
+
             // Why: both are checked before anything is reserved, so a failure never leaves half a reservation behind.
             if (!entrance.IsAvailable || !_parking.TryReserve(car.Id, out slot))
             {
@@ -542,6 +553,11 @@ namespace AutoService.Services.Traffic
                 return;
             }
 
+            if (_serviceTypeIds.Count == 0 && (_mainEntrance == null || _definition.ParkingCapacity == 0))
+            {
+                return;
+            }
+
             CarType carType = PickCarType();
             CarVisitPlan plan = PickPlan();
             string serviceTypeId = plan == CarVisitPlan.ParkOnly ? null : _serviceTypeIds[_random.Range(0, _serviceTypeIds.Count)];
@@ -568,6 +584,11 @@ namespace AutoService.Services.Traffic
 
         private CarVisitPlan PickPlan()
         {
+            if (_mainEntrance == null || _definition.ParkingCapacity == 0)
+            {
+                return CarVisitPlan.WashOnly;
+            }
+
             // Why: without service points the location still earns from parking, so cars keep coming as parking-only.
             if (_serviceTypeIds.Count == 0)
             {

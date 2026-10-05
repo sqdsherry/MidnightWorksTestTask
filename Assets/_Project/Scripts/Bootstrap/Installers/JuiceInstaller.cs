@@ -11,7 +11,7 @@ namespace AutoService.Bootstrap.Installers
             var spawnerGo = new GameObject("FloatingTextSpawner");
             var spawner = spawnerGo.AddComponent<FloatingTextSpawner>();
             
-            spawner.Initialize(context.Resolve<IEventBus>(), context.Scene.Location1);
+            spawner.Initialize(context.Resolve<IEventBus>(), context.Scene.Locations);
             
             // To ensure it gets cleaned up on reload/dispose:
             context.Track(spawner);
