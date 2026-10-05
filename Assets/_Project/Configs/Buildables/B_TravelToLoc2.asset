@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d266a2f171f3f52409904530caf1b904, type: 3}
+  m_Name: B_TravelToLoc2
+  m_EditorClassIdentifier: AutoService.Infrastructure::AutoService.Infrastructure.Config.BuildableConfig
+  _id: b_travel_to_loc2
+  _displayName: Travel to Location 2
+  _description: Go to Location 2.
+  _kind: 2
+  _targetId: travel_to_loc2
+  _cost: 1500
+  _requiredLevel: 5
+  _flowBonus: 0

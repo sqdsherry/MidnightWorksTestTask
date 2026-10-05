@@ -38,9 +38,9 @@ namespace AutoService.Bootstrap.Editor
             new BuildableSpec("B_Loc2_Paint1", "loc2_build_paint_1", "Paint 1", "Paint bay.",
                 BuildableKind.ServicePoint, "loc2_paint_1", 3000, 7, 0.2f),
             new BuildableSpec("B_TravelToLoc2", "b_travel_to_loc2", "Travel to Location 2", "Go to Location 2.",
-                BuildableKind.TravelPoint, "travel_to_loc2", 1500, 5, 0f),
+                BuildableKind.TravelPoint, "travel_to_loc2", 0, 1, 0f),
             new BuildableSpec("B_TravelToLoc1", "b_travel_to_loc1", "Travel to Location 1", "Return to Location 1.",
-                BuildableKind.TravelPoint, "travel_to_loc1", 0, 0, 0f),
+                BuildableKind.TravelPoint, "travel_to_loc1", 0, 1, 0f),
         };
 
         [MenuItem("AutoService/Whitebox/Create Location 2 Configs")]

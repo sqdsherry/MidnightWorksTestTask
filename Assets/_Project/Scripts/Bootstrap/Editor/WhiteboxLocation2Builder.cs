@@ -1,6 +1,7 @@
 using AutoService.Presentation.Building;
 using AutoService.Presentation.Interaction;
 using AutoService.Presentation.Traffic;
+using AutoService.Presentation.Supplies;
 using UnityEditor;
 using UnityEngine;
 
@@ -41,16 +42,63 @@ namespace AutoService.Bootstrap.Editor
             Transform travelSpawnLoc2 = CreateChild("SpawnLoc2", loc2.transform).transform;
             travelSpawnLoc2.position = loc2.transform.position + new Vector3(0, 0, -10f); // just a safe spot
 
-            CreateTravelPlot(loc1.transform, "b_travel_to_loc2", "Travel_To_Loc2", new Vector3(-35f, 0f, 0f), travelSpawnLoc2);
+            BuildPlotView travel1To2 = CreateTravelPlot(loc1.transform, "b_travel_to_loc2", "Travel_To_Loc2", new Vector3(-35f, 0f, 0f), travelSpawnLoc2);
 
             // Travel point on Loc 2 to Loc 1
             Transform travelSpawnLoc1 = CreateChild("SpawnLoc1", loc1.transform).transform;
             travelSpawnLoc1.position = loc1.transform.position + new Vector3(-34f, 0, -19f); // near Loc 1 spawn
 
-            CreateTravelPlot(loc2.transform, "b_travel_to_loc1", "Travel_To_Loc1", new Vector3(-5f, 0f, -5f), travelSpawnLoc1);
+            BuildPlotView travel2To1 = CreateTravelPlot(loc2.transform, "b_travel_to_loc1", "Travel_To_Loc1", new Vector3(-5f, 0f, -5f), travelSpawnLoc1);
+
+            // Add travel plot to Loc 1 LocationLayout
+            var loc1So = new SerializedObject(loc1);
+            AddPlotToLayout(loc1So, travel1To2);
+            loc1So.ApplyModifiedPropertiesWithoutUndo();
+
+            // Set up Loc 2 LocationLayout
+            var loc2So = new SerializedObject(loc2);
+            loc2So.FindProperty("_locationId").stringValue = "loc2";
+            
+            // Collect all build plots from Loc2
+            var loc2Plots = loc2.GetComponentsInChildren<BuildPlotView>(true);
+            var buildPlotsProp = loc2So.FindProperty("_buildPlots");
+            buildPlotsProp.ClearArray();
+            for (int i = 0; i < loc2Plots.Length; i++)
+            {
+                buildPlotsProp.InsertArrayElementAtIndex(i);
+                buildPlotsProp.GetArrayElementAtIndex(i).objectReferenceValue = loc2Plots[i];
+            }
+
+            // Find warehouse
+            var warehouse = loc2.GetComponentInChildren<WarehouseView>(true);
+            if (warehouse != null)
+            {
+                loc2So.FindProperty("_warehouse").objectReferenceValue = warehouse;
+            }
+
+            loc2So.ApplyModifiedPropertiesWithoutUndo();
 
             Undo.CollapseUndoOperations(undoGroup);
             Debug.Log("[Whitebox] Location 2 and Travel Points built.");
+        }
+
+        private static void AddPlotToLayout(SerializedObject layoutSo, BuildPlotView plot)
+        {
+            var buildPlotsProp = layoutSo.FindProperty("_buildPlots");
+            bool contains = false;
+            for (int i = 0; i < buildPlotsProp.arraySize; i++)
+            {
+                if (buildPlotsProp.GetArrayElementAtIndex(i).objectReferenceValue == plot)
+                {
+                    contains = true;
+                    break;
+                }
+            }
+            if (!contains)
+            {
+                buildPlotsProp.InsertArrayElementAtIndex(buildPlotsProp.arraySize);
+                buildPlotsProp.GetArrayElementAtIndex(buildPlotsProp.arraySize - 1).objectReferenceValue = plot;
+            }
         }
 
         private static void BuildLoc2Whitebox(LocationLayout loc2)
@@ -114,6 +162,13 @@ namespace AutoService.Bootstrap.Editor
             ghost.GetComponent<Collider>().isTrigger = true;
             ghost.transform.localScale = new Vector3(4f, 2f, 4f);
             ghost.transform.localPosition = new Vector3(0, 1f, 0);
+            ghost.layer = LayerMask.NameToLayer("Interactable");
+            
+            var highlight1 = ghost.AddComponent<InteractableHighlight>();
+            var hlSo1 = new SerializedObject(highlight1);
+            hlSo1.FindProperty("_renderers").InsertArrayElementAtIndex(0);
+            hlSo1.FindProperty("_renderers").GetArrayElementAtIndex(0).objectReferenceValue = ghost.GetComponent<Renderer>();
+            hlSo1.ApplyModifiedPropertiesWithoutUndo();
 
             GameObject target = GameObject.CreatePrimitive(PrimitiveType.Cube);
             target.name = "Service_" + name;
@@ -123,7 +178,7 @@ namespace AutoService.Bootstrap.Editor
             target.SetActive(false);
 
             Transform approach = CreateChild("Approach", plotObj.transform).transform;
-            approach.localPosition = new Vector3(0, 0, -3f);
+            approach.localPosition = new Vector3(0, 0, 0f);
 
             var view = plotObj.AddComponent<BuildPlotView>();
             var so = new SerializedObject(view);
@@ -131,10 +186,11 @@ namespace AutoService.Bootstrap.Editor
             so.FindProperty("_ghost").objectReferenceValue = ghost;
             so.FindProperty("_target").objectReferenceValue = target;
             so.FindProperty("_approachPoint").objectReferenceValue = approach;
+            so.FindProperty("_highlight").objectReferenceValue = highlight1;
             so.ApplyModifiedPropertiesWithoutUndo();
         }
 
-        private static void CreateTravelPlot(Transform parent, string plotId, string name, Vector3 localPos, Transform teleportTarget)
+        private static BuildPlotView CreateTravelPlot(Transform parent, string plotId, string name, Vector3 localPos, Transform teleportTarget)
         {
             GameObject plotObj = CreateChild("TravelPlot_" + name, parent);
             plotObj.transform.localPosition = localPos;
@@ -144,19 +200,28 @@ namespace AutoService.Bootstrap.Editor
             ghost.transform.SetParent(plotObj.transform, false);
             ghost.GetComponent<Collider>().isTrigger = true;
             ghost.transform.localScale = new Vector3(2f, 0.1f, 2f);
+            ghost.layer = LayerMask.NameToLayer("Interactable");
+            
+            var highlight2 = ghost.AddComponent<InteractableHighlight>();
+            var hlSo2 = new SerializedObject(highlight2);
+            hlSo2.FindProperty("_renderers").InsertArrayElementAtIndex(0);
+            hlSo2.FindProperty("_renderers").GetArrayElementAtIndex(0).objectReferenceValue = ghost.GetComponent<Renderer>();
+            hlSo2.ApplyModifiedPropertiesWithoutUndo();
 
             GameObject target = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             target.name = "TravelPoint";
             target.transform.SetParent(plotObj.transform, false);
             target.transform.localScale = new Vector3(2f, 0.1f, 2f);
             target.GetComponent<Collider>().isTrigger = true;
+            var renderer = target.GetComponent<Renderer>();
+            renderer.sharedMaterial = new Material(renderer.sharedMaterial) { color = Color.green };
             target.SetActive(false);
 
             var tp = target.AddComponent<TravelPoint>();
             tp.TargetTransform = teleportTarget;
 
             Transform approach = CreateChild("Approach", plotObj.transform).transform;
-            approach.localPosition = new Vector3(0, 0, -2f);
+            approach.localPosition = new Vector3(0, 0, 0f);
 
             var view = plotObj.AddComponent<BuildPlotView>();
             var so = new SerializedObject(view);
@@ -164,7 +229,10 @@ namespace AutoService.Bootstrap.Editor
             so.FindProperty("_ghost").objectReferenceValue = ghost;
             so.FindProperty("_target").objectReferenceValue = target;
             so.FindProperty("_approachPoint").objectReferenceValue = approach;
+            so.FindProperty("_highlight").objectReferenceValue = highlight2;
             so.ApplyModifiedPropertiesWithoutUndo();
+            
+            return view;
         }
 
         private static GameObject CreateChild(string name, Transform parent)

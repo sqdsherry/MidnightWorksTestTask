@@ -304,6 +304,10 @@ namespace AutoService.Presentation.Traffic
                 {
                     problem = ValidatePointPlot(plot, settings, config);
                 }
+                else if (settings.Kind == BuildableKind.TravelPoint)
+                {
+                    // Travel points do not occupy slots.
+                }
                 else if (settings.PlotDefinition.ParkingSlotIndex >= _parkingSlots.Length)
                 {
                     problem = "Build plot '" + plot.name + "' targets parking slot " + settings.TargetId + ", but there are only "
