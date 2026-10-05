@@ -1,5 +1,6 @@
 using AutoService.Domain.Common;
 using UnityEngine;
+using UnityEngine.AI;
 
 namespace AutoService.Presentation.Interaction
 {
@@ -11,7 +12,7 @@ namespace AutoService.Presentation.Interaction
         [SerializeField] private DwellRingView _ring;
 
         private DwellProgress _dwell;
-        private CharacterController _playerInZone;
+        private NavMeshAgent _playerInZone;
 
         public Transform TargetTransform
         {
@@ -19,16 +20,16 @@ namespace AutoService.Presentation.Interaction
             set => _targetTransform = value;
         }
 
-        private void Awake()
+        private void OnEnable()
         {
             _dwell = new DwellProgress(_dwellSeconds);
         }
 
         private void OnTriggerStay(Collider other)
         {
-            if (_playerInZone == null && other.TryGetComponent(out CharacterController cc))
+            if (_playerInZone == null && other.TryGetComponent(out NavMeshAgent agent))
             {
-                _playerInZone = cc;
+                _playerInZone = agent;
                 _dwell.Begin();
             }
         }
@@ -82,9 +83,7 @@ namespace AutoService.Presentation.Interaction
         {
             if (_targetTransform == null || _playerInZone == null) return;
             
-            _playerInZone.enabled = false;
-            _playerInZone.transform.position = _targetTransform.position;
-            _playerInZone.enabled = true;
+            _playerInZone.Warp(_targetTransform.position);
             
             _playerInZone = null; 
         }
