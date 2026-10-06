@@ -74,10 +74,15 @@ namespace AutoService.Presentation.CameraControl
 
         [Header("Bounds (pivot, world XZ)")]
         [SerializeField]
+        [Tooltip("Pivot area of the first location; other locations get the same area shifted to their origin.")]
         private Vector2 _boundsMin = new Vector2(-25f, -25f);
 
         [SerializeField]
+        [Tooltip("Pivot area of the first location; other locations get the same area shifted to their origin.")]
         private Vector2 _boundsMax = new Vector2(25f, 25f);
+
+        private Vector2 _homeBoundsMin;
+        private Vector2 _homeBoundsMax;
 
         private GameplayInput _input;
         private PlayerView _player;
@@ -134,25 +139,28 @@ namespace AutoService.Presentation.CameraControl
             ApplyTransform();
         }
 
-        /// <summary>Instantly moves the pivot to the specified world position and optionally updates bounds.</summary>
-        public void SnapTo(Vector3 worldPosition, Vector2? newBoundsMin = null, Vector2? newBoundsMax = null)
+        /// <summary>
+        /// Moves the bounds set in the inspector (those of the first location) by <paramref name="offset"/> on XZ,
+        /// e.g. the offset of another location's origin from the first one.
+        /// </summary>
+        public void ShiftHomeBounds(Vector3 offset)
         {
-            if (newBoundsMin.HasValue && newBoundsMax.HasValue)
-            {
-                _boundsMin = Vector2.Min(newBoundsMin.Value, newBoundsMax.Value);
-                _boundsMax = Vector2.Max(newBoundsMin.Value, newBoundsMax.Value);
-            }
-            
-            _pivot = new Vector3(worldPosition.x, _pivot.y, worldPosition.z);
-            _pivot = ClampToBounds(_pivot);
+            var shift = new Vector2(offset.x, offset.z);
+            SetBounds(_homeBoundsMin + shift, _homeBoundsMax + shift);
+        }
+
+        /// <summary>Instantly moves the pivot to <paramref name="worldPosition"/> and resumes following the character.</summary>
+        public void SnapTo(Vector3 worldPosition)
+        {
+            _pivot = ClampToBounds(new Vector3(worldPosition.x, _pivot.y, worldPosition.z));
             ApplyTransform();
-            
-            // Re-enable follow mode seamlessly if they were moving
             _isFollowing = true;
         }
 
         private void Awake()
         {
+            _homeBoundsMin = _boundsMin;
+            _homeBoundsMax = _boundsMax;
             _pivot = transform.position;
             _targetDistance = Mathf.Clamp(_distance, _distanceRange.x, _distanceRange.y);
             _currentDistance = _targetDistance;

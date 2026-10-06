@@ -113,6 +113,7 @@ namespace AutoService.Bootstrap.Installers
                 if (layout.Warehouse != null)
                 {
                     layout.Warehouse.Construct(supplies, carry);
+                    context.Track(layout.Warehouse);
                 }
             }
 

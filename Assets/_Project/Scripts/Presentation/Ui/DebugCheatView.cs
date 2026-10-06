@@ -1,28 +1,28 @@
-﻿using System;
 using AutoService.Domain.Common;
-using AutoService.Presentation.CameraControl;
 using AutoService.Presentation.Controls;
 using AutoService.Presentation.Player;
+using AutoService.Presentation.Popups;
 using AutoService.Services.Core;
 using AutoService.Services.Economy;
 using AutoService.Services.Progression;
 using AutoService.Services.Save;
 using AutoService.Services.Scenes;
-using TMPro;
 using UnityEngine;
-using UnityEngine.AI;
 using UnityEngine.InputSystem;
-using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 namespace AutoService.Presentation.Ui
 {
     /// <summary>
-    /// Debug cheat panel toggled via F1 or corner button, allowing instant progression, currency additions,
-    /// teleportation between locations, and save state reset.
+    /// Debug panel for reviewers, toggled with F1 or the corner button: money, an instant level-up, teleports between
+    /// locations and a progress reset. Button labels are set in the scene.
     /// </summary>
-    public sealed class DebugCheatView : MonoBehaviour, IEscapeHandler
+    /// <remarks>Ticked by the game loop (F1 polling); works without any of its optional services, just with fewer actions.</remarks>
+    public sealed class DebugCheatView : MonoBehaviour, IEscapeHandler, ITickable
     {
+        private const long SmallCashAmount = 1000L;
+        private const long BigCashAmount = 10000L;
+
         [Header("Roots")]
         [SerializeField]
         [Tooltip("The panel containing the cheat buttons.")]
@@ -58,13 +58,12 @@ namespace AutoService.Presentation.Ui
         private Button _teleportLoc2Button;
 
         [SerializeField]
-        [Tooltip("Wipes saves and PlayerPrefs, reloading current scene.")]
+        [Tooltip("Deletes the save and restarts the gameplay scene.")]
         private Button _resetProgressButton;
 
         private IWalletService _wallet;
         private IProgressionService _progression;
-        private PlayerView _player;
-        private CameraRig _cameraRig;
+        private PlayerTeleporter _teleporter;
         private ISaveService _saveService;
         private IGameSaver _gameSaver;
         private ISceneLoader _sceneLoader;
@@ -74,22 +73,20 @@ namespace AutoService.Presentation.Ui
         /// <summary>True if the cheat panel is open.</summary>
         public bool IsOpen => _panelRoot != null && _panelRoot.activeSelf;
 
-        /// <summary>Injects runtime services needed for cheat actions.</summary>
-        public void Initialize(
+        /// <summary>Injects the services the actions use; any of them may be null (that action then does nothing).</summary>
+        public void Construct(
             IWalletService wallet,
             IProgressionService progression,
-            PlayerView player,
-            CameraRig cameraRig,
-            ISaveService saveService = null,
-            IGameSaver gameSaver = null,
-            ISceneLoader sceneLoader = null,
-            IPauseService pauseService = null,
-            EscapeRouter escapeRouter = null)
+            PlayerTeleporter teleporter,
+            ISaveService saveService,
+            IGameSaver gameSaver,
+            ISceneLoader sceneLoader,
+            IPauseService pauseService,
+            EscapeRouter escapeRouter)
         {
             _wallet = wallet;
             _progression = progression;
-            _player = player;
-            _cameraRig = cameraRig;
+            _teleporter = teleporter;
             _saveService = saveService;
             _gameSaver = gameSaver;
             _sceneLoader = sceneLoader;
@@ -99,47 +96,14 @@ namespace AutoService.Presentation.Ui
 
         private void Awake()
         {
-            if (_toggleButton != null)
-            {
-                _toggleButton.onClick.AddListener(TogglePanel);
-            }
-
-            if (_closeButton != null)
-            {
-                _closeButton.onClick.AddListener(ClosePanel);
-            }
-
-            if (_add1000Button != null)
-            {
-                _add1000Button.onClick.AddListener(OnAdd1000);
-            }
-
-            if (_add10000Button != null)
-            {
-                _add10000Button.onClick.AddListener(OnAdd10000);
-            }
-
-            if (_levelUpButton != null)
-            {
-                _levelUpButton.onClick.AddListener(OnLevelUp);
-            }
-
-            if (_teleportLoc1Button != null)
-            {
-                _teleportLoc1Button.onClick.AddListener(OnTeleportLoc1);
-            }
-
-            if (_teleportLoc2Button != null)
-            {
-                _teleportLoc2Button.onClick.AddListener(OnTeleportLoc2);
-            }
-
-            if (_resetProgressButton != null)
-            {
-                _resetProgressButton.onClick.AddListener(OnResetProgress);
-            }
-
-            AdjustButtonLabels();
+            AddListener(_toggleButton, TogglePanel);
+            AddListener(_closeButton, ClosePanel);
+            AddListener(_add1000Button, OnAddSmallCash);
+            AddListener(_add10000Button, OnAddBigCash);
+            AddListener(_levelUpButton, OnLevelUp);
+            AddListener(_teleportLoc1Button, OnTeleportLoc1);
+            AddListener(_teleportLoc2Button, OnTeleportLoc2);
+            AddListener(_resetProgressButton, OnResetProgress);
 
             if (_panelRoot != null)
             {
@@ -147,118 +111,24 @@ namespace AutoService.Presentation.Ui
             }
         }
 
-        private void AdjustButtonLabels()
-        {
-            if (_toggleButton != null)
-            {
-                TMP_Text t = _toggleButton.GetComponentInChildren<TMP_Text>();
-                if (t != null)
-                {
-                    // Avoid unicode gear icon that causes missing font glyph warning
-                    t.text = "F1";
-                    t.fontSize = 18f;
-                }
-            }
-
-            ConfigureButtonLabel(_add1000Button, "+ $1,000");
-            ConfigureButtonLabel(_add10000Button, "+ $10,000");
-            ConfigureButtonLabel(_levelUpButton, "+ 1 Уровень (Level Up)");
-            ConfigureButtonLabel(_teleportLoc1Button, "Телепорт: Локация 1");
-            ConfigureButtonLabel(_teleportLoc2Button, "Телепорт: Локация 2");
-            ConfigureButtonLabel(_resetProgressButton, "Сброс прогресса");
-        }
-
-        private static void ConfigureButtonLabel(Button button, string expectedText)
-        {
-            if (button == null) return;
-            TMP_Text label = button.GetComponentInChildren<TMP_Text>();
-            if (label == null) return;
-
-            if (!string.IsNullOrEmpty(expectedText))
-            {
-                label.text = expectedText;
-            }
-
-            label.enableAutoSizing = true;
-            label.fontSizeMin = 12f;
-            label.fontSizeMax = 18f;
-            label.fontSize = 16f;
-            label.margin = new Vector4(8f, 2f, 8f, 2f);
-            label.textWrappingMode = TextWrappingModes.NoWrap;
-            label.overflowMode = TextOverflowModes.Ellipsis;
-        }
-
         private void OnDestroy()
         {
-            if (_toggleButton != null)
-            {
-                _toggleButton.onClick.RemoveListener(TogglePanel);
-            }
-
-            if (_closeButton != null)
-            {
-                _closeButton.onClick.RemoveListener(ClosePanel);
-            }
-
-            if (_add1000Button != null)
-            {
-                _add1000Button.onClick.RemoveListener(OnAdd1000);
-            }
-
-            if (_add10000Button != null)
-            {
-                _add10000Button.onClick.RemoveListener(OnAdd10000);
-            }
-
-            if (_levelUpButton != null)
-            {
-                _levelUpButton.onClick.RemoveListener(OnLevelUp);
-            }
-
-            if (_teleportLoc1Button != null)
-            {
-                _teleportLoc1Button.onClick.RemoveListener(OnTeleportLoc1);
-            }
-
-            if (_teleportLoc2Button != null)
-            {
-                _teleportLoc2Button.onClick.RemoveListener(OnTeleportLoc2);
-            }
-
-            if (_resetProgressButton != null)
-            {
-                _resetProgressButton.onClick.RemoveListener(OnResetProgress);
-            }
-
+            RemoveListener(_toggleButton, TogglePanel);
+            RemoveListener(_closeButton, ClosePanel);
+            RemoveListener(_add1000Button, OnAddSmallCash);
+            RemoveListener(_add10000Button, OnAddBigCash);
+            RemoveListener(_levelUpButton, OnLevelUp);
+            RemoveListener(_teleportLoc1Button, OnTeleportLoc1);
+            RemoveListener(_teleportLoc2Button, OnTeleportLoc2);
+            RemoveListener(_resetProgressButton, OnResetProgress);
             _escapeRouter?.Remove(this);
         }
 
-        private void Update()
+        /// <inheritdoc />
+        public void Tick(float deltaTime)
         {
-            bool f1Pressed = false;
-
             Keyboard keyboard = Keyboard.current;
             if (keyboard != null && keyboard.f1Key.wasPressedThisFrame)
-            {
-                f1Pressed = true;
-            }
-
-            if (!f1Pressed)
-            {
-                try
-                {
-                    if (Input.GetKeyDown(KeyCode.F1))
-                    {
-                        f1Pressed = true;
-                    }
-                }
-                catch (InvalidOperationException)
-                {
-                    // Legacy Input may throw if inactive in project settings
-                }
-            }
-
-            if (f1Pressed)
             {
                 TogglePanel();
             }
@@ -300,93 +170,55 @@ namespace AutoService.Presentation.Ui
         /// <inheritdoc />
         public bool TryHandleEscape()
         {
-            if (IsOpen)
+            if (!IsOpen)
             {
-                ClosePanel();
-                return true;
+                return false;
             }
 
-            return false;
+            ClosePanel();
+            return true;
         }
 
-        private void OnAdd1000()
+        private static void AddListener(Button button, UnityEngine.Events.UnityAction action)
         {
-            _wallet?.Add(new Money(1000));
+            if (button != null)
+            {
+                button.onClick.AddListener(action);
+            }
         }
 
-        private void OnAdd10000()
+        private static void RemoveListener(Button button, UnityEngine.Events.UnityAction action)
         {
-            _wallet?.Add(new Money(10000));
+            if (button != null)
+            {
+                button.onClick.RemoveListener(action);
+            }
         }
+
+        private void OnAddSmallCash() => _wallet?.Add(new Money(SmallCashAmount));
+
+        private void OnAddBigCash() => _wallet?.Add(new Money(BigCashAmount));
 
         private void OnLevelUp()
         {
-            if (_progression != null)
-            {
-                int xpNeeded = Mathf.Max(1, _progression.XpToNextLevel);
-                _progression.AddExperience(xpNeeded);
-            }
+            _progression?.AddExperience(Mathf.Max(1, _progression.XpToNextLevel));
         }
 
-        private void OnTeleportLoc1()
-        {
-            TeleportPlayer(new Vector3(0f, 0f, 0f));
-        }
+        private void OnTeleportLoc1() => _teleporter?.TeleportToLocation(0);
 
-        private void OnTeleportLoc2()
-        {
-            TeleportPlayer(new Vector3(200f, 0f, 0f));
-        }
-
-        private void TeleportPlayer(Vector3 targetPos)
-        {
-            if (_player != null && _player.Agent != null)
-            {
-                if (NavMesh.SamplePosition(targetPos, out NavMeshHit hit, 20f, NavMesh.AllAreas))
-                {
-                    _player.Agent.Warp(hit.position);
-                }
-                else
-                {
-                    _player.Agent.Warp(targetPos);
-                }
-
-                _player.Stop();
-
-                if (_cameraRig != null)
-                {
-                    bool isLoc2 = targetPos.x > 100f;
-                    Vector2 minBounds = isLoc2 ? new Vector2(175f, -25f) : new Vector2(-25f, -25f);
-                    Vector2 maxBounds = isLoc2 ? new Vector2(225f, 25f) : new Vector2(25f, 25f);
-                    _cameraRig.SnapTo(_player.Agent.transform.position, minBounds, maxBounds);
-                }
-            }
-        }
+        private void OnTeleportLoc2() => _teleporter?.TeleportToLocation(1);
 
         private void OnResetProgress()
         {
-            // Suspend coordinator from saving old state on unload, then delete disk save
+            // Why: stop the coordinator first, or it would save the current game again while the scene unloads.
             _gameSaver?.ResetProgress();
             _saveService?.Delete();
 
-            // Clear all player preferences (welcome popup flags, tutorial, etc.)
-            PlayerPrefs.DeleteAll();
-            PlayerPrefs.Save();
+            // Why: only the game's own flag — PlayerPrefs also hold the player's audio and video settings.
+            Location2WelcomePresenter.ResetShownFlag();
 
-            // Reset pause and unfreeze timescale
             _pauseService?.ResetAll();
-            Time.timeScale = 1f;
-
-            // Load fresh gameplay scene via project scene loader so composition root enters properly
-            if (_sceneLoader != null)
-            {
-                _sceneLoader.Load(GameScene.Gameplay);
-            }
-            else
-            {
-                Scene activeScene = SceneManager.GetActiveScene();
-                SceneManager.LoadScene(activeScene.buildIndex);
-            }
+            _sceneLoader?.Load(GameScene.Gameplay);
         }
     }
 }

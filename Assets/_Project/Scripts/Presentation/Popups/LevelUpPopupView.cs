@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections;
+using System.Collections.Generic;
+using System.Text;
 using AutoService.Presentation.Controls;
 using AutoService.Presentation.Ui;
 using TMPro;
@@ -26,11 +28,11 @@ namespace AutoService.Presentation.Popups
         private Image _starIcon;
 
         [SerializeField]
-        [Tooltip("Title label ('НОВЫЙ УРОВЕНЬ!').")]
+        [Tooltip("Title label; its text is set in the scene.")]
         private TMP_Text _titleText;
 
         [SerializeField]
-        [Tooltip("Level indicator ('УРОВЕНЬ {0}').")]
+        [Tooltip("Level indicator, filled from the level format.")]
         private TMP_Text _levelBadgeText;
 
         [SerializeField]
@@ -40,6 +42,21 @@ namespace AutoService.Presentation.Popups
         [SerializeField]
         [Tooltip("Button to dismiss the popup.")]
         private Button _continueButton;
+
+        [Header("Texts")]
+        [SerializeField]
+        [Tooltip("Level badge text; {0} is the new level.")]
+        private string _levelFormat = "LEVEL {0}";
+
+        [SerializeField]
+        [Tooltip("Line above the list of buildables the new level unlocks.")]
+        private string _unlocksHeader = "Now available to build:";
+
+        [SerializeField]
+        [Tooltip("Shown when the new level unlocks nothing.")]
+        private string _noUnlocksText = "Keep growing your auto service!";
+
+        private readonly StringBuilder _builder = new StringBuilder();
 
         private Action _onClose;
         private Coroutine _animationCoroutine;
@@ -72,19 +89,22 @@ namespace AutoService.Presentation.Popups
             _escapeRouter = escapeRouter;
         }
 
-        /// <summary>Shows the level up popup with animation and description.</summary>
-        public void Show(int newLevel, string unlockedDescription, Action onClose = null)
+        /// <summary>Shows the popup for <paramref name="newLevel"/> with the names of what it unlocks.</summary>
+        /// <param name="newLevel">The level just reached.</param>
+        /// <param name="unlocks">Display names of the unlocked buildables; may be empty.</param>
+        /// <param name="onClose">Called once when the popup is closed.</param>
+        public void Show(int newLevel, IReadOnlyList<string> unlocks, Action onClose = null)
         {
             _onClose = onClose;
 
             if (_levelBadgeText != null)
             {
-                _levelBadgeText.text = $"УРОВЕНЬ {newLevel}";
+                _levelBadgeText.text = string.Format(_levelFormat, newLevel);
             }
 
             if (_descriptionText != null)
             {
-                _descriptionText.text = unlockedDescription;
+                _descriptionText.text = BuildDescription(unlocks);
             }
 
             UiVisibility.ShowChain(gameObject);
@@ -103,6 +123,23 @@ namespace AutoService.Presentation.Popups
                 }
                 _animationCoroutine = StartCoroutine(AnimateCardIn());
             }
+        }
+
+        private string BuildDescription(IReadOnlyList<string> unlocks)
+        {
+            if (unlocks == null || unlocks.Count == 0)
+            {
+                return _noUnlocksText;
+            }
+
+            _builder.Clear();
+            _builder.Append(_unlocksHeader);
+            for (int i = 0; i < unlocks.Count; i++)
+            {
+                _builder.Append('\n').Append("- ").Append(unlocks[i]);
+            }
+
+            return _builder.ToString();
         }
 
         /// <summary>Hides the popup and invokes the close callback.</summary>

@@ -24,13 +24,15 @@ namespace AutoService.Tests.EditMode
             _viewGo = new GameObject("WelcomePopupTest");
             _view = _viewGo.AddComponent<Location2WelcomePopupView>();
 
-            _presenter = new Location2WelcomePresenter(_player, _view);
+            // Why: a popup starts hidden in the scene; a new GameObject is active by default.
+            _viewGo.SetActive(false);
+
+            _presenter = new Location2WelcomePresenter(_player, _view, Vector3.zero, new Vector3(200f, 0f, 0f));
         }
 
         [TearDown]
         public void TearDown()
         {
-            _presenter?.Dispose();
             PlayerPrefs.DeleteKey(Location2WelcomePresenter.Loc2WelcomeShownKey);
 
             if (_playerGo != null)

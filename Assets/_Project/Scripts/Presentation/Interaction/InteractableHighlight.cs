@@ -45,7 +45,7 @@ namespace AutoService.Presentation.Interaction
         public void SetOverrideBaseColor(Color? color)
         {
             _overrideBaseColor = color;
-            SetHighlighted(_isHighlighted); // Переотрисовать текущее состояние
+            SetHighlighted(_isHighlighted); // Re-render the current state.
         }
 
         private void Awake()
@@ -113,7 +113,7 @@ namespace AutoService.Presentation.Interaction
 
                 if (!highlighted && _overrideBaseColor == null)
                 {
-                    // Если нет ховера и нет переопределения цвета — сбрасываем в дефолтный мат
+                    // No hover and no color override: back to the default material.
                     target.SetPropertyBlock(null);
                     continue;
                 }
@@ -128,14 +128,14 @@ namespace AutoService.Presentation.Interaction
                     else
                     {
                         Color baseCol = _overrideBaseColor ?? _baseColors[i];
-                        // Если объект заблокирован (желтый), при наведении он будет становиться ярче (тянуться к белому), а не к зеленому
+                        // A locked (yellow) object brightens towards white on hover instead of turning green.
                         Color highlightCol = _overrideBaseColor.HasValue ? Color.white : color;
                         _block.SetColor(BaseColorId, Color.Lerp(baseCol, highlightCol, _intensity));
                     }
                 }
                 else if (_overrideBaseColor.HasValue)
                 {
-                    // Если ховера нет, но есть переопределенный цвет (желтый призрак)
+                    // No hover, but a color override is set (yellow ghost).
                     _block.SetColor(BaseColorId, _overrideBaseColor.Value);
                 }
 

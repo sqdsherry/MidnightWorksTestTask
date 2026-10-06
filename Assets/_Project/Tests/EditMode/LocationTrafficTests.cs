@@ -401,8 +401,9 @@ namespace AutoService.Tests.EditMode
         }
 
         [Test]
-        public void WashThenPark_WithAFullLot_LeavesAndReportsTheRefusal()
+        public void WashThenPark_WithoutAParkingLot_IsPlannedAsWashOnly()
         {
+            // Why: a location without parking (location 2) turns every visit into wash-only, so nobody is refused.
             UseTraffic(0, 0, 1);
             CreateTraffic(parkingCapacity: 0);
             int car = SendFirstCarToWash();
@@ -411,9 +412,7 @@ namespace AutoService.Tests.EditMode
 
             Assert.AreEqual(Destination.Exit(), Describe(car));
             Assert.AreEqual(ServicePointState.Idle, _service.State);
-            Assert.AreEqual(1, _refused.Count);
-            Assert.AreEqual(car, _refused[0].CarId);
-            Assert.AreEqual(LocationId, _refused[0].LocationId);
+            Assert.AreEqual(0, _refused.Count);
             Assert.AreEqual(new Money(12), _wallet.Balance, "Only the wash.");
         }
 

@@ -9,7 +9,10 @@ using UnityEngine;
 
 namespace AutoService.Bootstrap.Installers
 {
-    /// <summary>Input, the scene's Esc router, pointer raycasts, the character's movement FSM and the camera rig.</summary>
+    /// <summary>
+    /// Input, the scene's Esc router, pointer raycasts, the character's movement FSM, the camera rig and travel between
+    /// locations (<see cref="PlayerTeleporter"/>, registered for the HUD, and the travel pads).
+    /// </summary>
     internal sealed class PlayerInstaller : IGameplayInstaller
     {
         /// <summary>Gameplay input, or null when the player module was skipped.</summary>
@@ -83,6 +86,25 @@ namespace AutoService.Bootstrap.Installers
                 TickPhase.Input);
 
             scene.CameraRig.Construct(input, scene.Player);
+            InstallTravel(context);
+        }
+
+        private static void InstallTravel(GameplayContext context)
+        {
+            GameplaySceneRefs scene = context.Scene;
+            var teleporter = new PlayerTeleporter(scene.Player, scene.CameraRig, scene.Locations);
+            context.Register(teleporter);
+
+            // Why: pads are found once here (they live inside the location roots) and ticked by the game loop.
+            for (int i = 0; i < scene.Locations.Length; i++)
+            {
+                TravelPoint[] pads = scene.Locations[i].GetComponentsInChildren<TravelPoint>(true);
+                for (int p = 0; p < pads.Length; p++)
+                {
+                    pads[p].Construct(teleporter);
+                    context.Track(pads[p]);
+                }
+            }
         }
     }
 }

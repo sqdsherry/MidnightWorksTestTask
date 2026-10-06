@@ -2,6 +2,7 @@
 using AutoService.Domain.Points;
 using AutoService.Domain.Supplies;
 using AutoService.Presentation.Interaction;
+using AutoService.Services.Core;
 using AutoService.Services.Formatting;
 using AutoService.Services.Supplies;
 using TMPro;
@@ -18,7 +19,7 @@ namespace AutoService.Presentation.Supplies
     /// The view holds no game state: buying is <see cref="ISupplyService.TryBuyBoxForHungriest"/>, the hands are
     /// <see cref="IPlayerCarry"/>. Hiring the storekeeper happens on the warehouse's own blue pad, not here.
     /// </remarks>
-    public sealed class WarehouseView : MonoBehaviour, IInteractable
+    public sealed class WarehouseView : MonoBehaviour, IInteractable, ITickable
     {
         [SerializeField]
         [Tooltip("Id of the location this warehouse serves, e.g. \"loc1\".")]
@@ -156,14 +157,15 @@ namespace AutoService.Presentation.Supplies
             }
         }
 
-        private void Update()
+        /// <inheritdoc />
+        public void Tick(float deltaTime)
         {
             if (!_isInteracting)
             {
                 return;
             }
 
-            _dwellTimer += Time.deltaTime;
+            _dwellTimer += deltaTime;
             float progress = Mathf.Clamp01(_dwellTimer / _dwellSeconds);
             if (_progressBarFill != null)
             {

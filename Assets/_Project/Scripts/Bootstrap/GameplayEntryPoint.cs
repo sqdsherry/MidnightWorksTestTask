@@ -190,7 +190,6 @@ namespace AutoService.Bootstrap
             {
                 new EconomyInstaller(),
                 new ProgressionInstaller(),
-                new AudioInstaller(),
                 new JuiceInstaller(),
                 player,
                 serviceLoop,
@@ -198,6 +197,7 @@ namespace AutoService.Bootstrap
                 new StaffSuppliesInstaller(serviceLoop, building, player),
                 new SaveInstaller(),
                 new HudInstaller(),
+                new AudioInstaller(gameObject.scene.GetRootGameObjects()),
             };
 
             for (int i = 0; i < installers.Length; i++)
@@ -243,6 +243,10 @@ namespace AutoService.Bootstrap
             if (locations == null || locations.Length == 0)
             {
                 locations = FindObjectsByType<LocationLayout>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+
+                // Why: FindObjectsByType has no defined order, but the first location is the primary one (camera
+                // bounds, storekeeper panel, debug teleport) — sort by name so Location_1 always comes first.
+                Array.Sort(locations, (a, b) => string.CompareOrdinal(a.name, b.name));
             }
 
             return new GameplaySceneRefs(
@@ -270,9 +274,9 @@ namespace AutoService.Bootstrap
                 _pauseMenu,
                 _pauseButton,
                 _settingsPanel,
-                _levelUpPopup != null ? _levelUpPopup : FindFirstObjectByType<LevelUpPopupView>(FindObjectsInactive.Include),
-                _loc2WelcomePopup != null ? _loc2WelcomePopup : FindFirstObjectByType<Location2WelcomePopupView>(FindObjectsInactive.Include),
-                _debugCheatView != null ? _debugCheatView : FindFirstObjectByType<DebugCheatView>(FindObjectsInactive.Include));
+                _levelUpPopup,
+                _loc2WelcomePopup,
+                _debugCheatView);
         }
 
         // Why: reverse order, like the container — dependents go before what they depend on.

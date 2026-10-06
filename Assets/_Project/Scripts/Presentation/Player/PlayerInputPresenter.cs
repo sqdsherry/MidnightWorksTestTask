@@ -21,6 +21,9 @@ namespace AutoService.Presentation.Player
         private readonly ClickMarkerView _clickMarker;
         private readonly List<RaycastResult> _uiRaycastResults = new List<RaycastResult>();
 
+        // Why: reused every tick (zero allocations); re-created only if the scene's EventSystem changes.
+        private PointerEventData _pointerData;
+
         private IInteractable _hovered;
         private bool _clickPending;
         private bool _disposed;
@@ -143,13 +146,16 @@ namespace AutoService.Presentation.Player
             // Why: EventSystem.IsPointerOverGameObject() returns true even when the pointer is over World Space canvases
             // (such as in-world floating bay HUDs, indicators, or name plates). Gameplay ground clicks must only be
             // blocked when the pointer is over Screen Space UI (ScreenHud, popups, menus).
-            var pointerData = new PointerEventData(eventSystem)
+            if (_pointerData == null || _pointerData.currentInputModule != eventSystem.currentInputModule)
             {
-                position = pointerPosition
-            };
+                _pointerData = new PointerEventData(eventSystem);
+            }
+
+            _pointerData.Reset();
+            _pointerData.position = pointerPosition;
 
             _uiRaycastResults.Clear();
-            eventSystem.RaycastAll(pointerData, _uiRaycastResults);
+            eventSystem.RaycastAll(_pointerData, _uiRaycastResults);
 
             for (int i = 0; i < _uiRaycastResults.Count; i++)
             {
