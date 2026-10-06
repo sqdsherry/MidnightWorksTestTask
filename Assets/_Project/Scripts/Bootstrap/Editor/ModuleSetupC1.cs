@@ -125,15 +125,26 @@ namespace AutoService.Bootstrap.Editor
                 scene = EditorSceneManager.OpenScene(GameplayScenePath, OpenSceneMode.Single);
             }
 
-            var entryPoint = FindRoot(scene, EntryPointName);
+            GameplayEntryPoint entryPoint = FindInScene<GameplayEntryPoint>(scene);
             if (entryPoint == null)
             {
-                Debug.LogError("[Setup] EntryPoint not found in Gameplay scene");
+                var root = FindRoot(scene, EntryPointName);
+                if (root != null)
+                {
+                    entryPoint = root.GetComponent<GameplayEntryPoint>();
+                }
+            }
+
+            if (entryPoint == null)
+            {
+                Debug.LogError("[Setup] GameplayEntryPoint not found in Gameplay scene");
                 return;
             }
 
             var entry = new SerializedObject(entryPoint);
-            Transform hud = FindScreenHud(scene, entry.FindProperty("_balanceView").objectReferenceValue as BalanceView);
+            var balanceProp = entry.FindProperty("_balanceView");
+            BalanceView balance = balanceProp != null ? balanceProp.objectReferenceValue as BalanceView : null;
+            Transform hud = FindScreenHud(scene, balance);
             if (hud == null)
             {
                 Debug.LogError("[Setup] HUD Canvas not found");

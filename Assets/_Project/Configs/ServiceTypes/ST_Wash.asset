@@ -25,3 +25,4 @@ MonoBehaviour:
   _workerTitle: Washer
   _workerHireCost: 300
   _workerRequiredLevel: 2
+  _xpReward: 5

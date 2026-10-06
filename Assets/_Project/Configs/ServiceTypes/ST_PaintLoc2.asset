@@ -20,9 +20,9 @@ MonoBehaviour:
   _serviceDuration: 24
   _acceptDelay: 1
   _clearDelay: 1
-  _supplyTypeId: 
+  _supplyTypeId: paint_cans
   _supplyCapacity: 10
-  _workerTitle: 
-  _workerHireCost: 150
-  _workerRequiredLevel: 1
-  _xpReward: 0
+  _workerTitle: Painter
+  _workerHireCost: 800
+  _workerRequiredLevel: 5
+  _xpReward: 35

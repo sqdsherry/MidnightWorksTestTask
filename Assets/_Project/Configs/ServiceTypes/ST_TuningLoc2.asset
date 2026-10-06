@@ -20,9 +20,9 @@ MonoBehaviour:
   _serviceDuration: 18
   _acceptDelay: 1
   _clearDelay: 1
-  _supplyTypeId: 
+  _supplyTypeId: tuning_parts
   _supplyCapacity: 10
-  _workerTitle: 
-  _workerHireCost: 150
-  _workerRequiredLevel: 1
-  _xpReward: 0
+  _workerTitle: Tuning Specialist
+  _workerHireCost: 650
+  _workerRequiredLevel: 4
+  _xpReward: 25

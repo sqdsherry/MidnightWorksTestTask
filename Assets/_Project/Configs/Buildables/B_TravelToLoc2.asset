@@ -17,6 +17,6 @@ MonoBehaviour:
   _description: Go to Location 2.
   _kind: 2
   _targetId: travel_to_loc2
-  _cost: 0
-  _requiredLevel: 1
+  _cost: 250
+  _requiredLevel: 2
   _flowBonus: 0

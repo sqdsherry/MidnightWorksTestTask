@@ -20,9 +20,9 @@ MonoBehaviour:
   _serviceDuration: 12
   _acceptDelay: 1
   _clearDelay: 1
-  _supplyTypeId: 
+  _supplyTypeId: tires_box
   _supplyCapacity: 10
-  _workerTitle: 
-  _workerHireCost: 150
-  _workerRequiredLevel: 1
-  _xpReward: 0
+  _workerTitle: Tire Specialist
+  _workerHireCost: 500
+  _workerRequiredLevel: 3
+  _xpReward: 15

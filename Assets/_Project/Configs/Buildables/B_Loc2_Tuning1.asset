@@ -17,6 +17,6 @@ MonoBehaviour:
   _description: Tuning bay.
   _kind: 0
   _targetId: loc2_tuning_1
-  _cost: 100
-  _requiredLevel: 1
+  _cost: 900
+  _requiredLevel: 3
   _flowBonus: 0.2

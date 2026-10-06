@@ -25,3 +25,4 @@ MonoBehaviour:
   _workerTitle: Tire Mechanic
   _workerHireCost: 700
   _workerRequiredLevel: 4
+  _xpReward: 15
