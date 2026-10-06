@@ -21,16 +21,16 @@ namespace AutoService.Presentation.Traffic
     /// </summary>
     public sealed class CarCustomizationPresenter : IDisposable
     {
+        // Why: no red, orange or green — those are the stock body colors (sedan, sport, SUV), and a car repainted
+        // into almost the same color looked as if the paint shop had done nothing.
         private static readonly Color[] PaintPalette =
         {
-            new Color(0.95f, 0.15f, 0.15f), // Rich Red
             new Color(0.1f, 0.5f, 1f),      // Electric Neon Blue
-            new Color(0.15f, 0.9f, 0.25f),  // Vibrant Lime Green
-            new Color(1f, 0.55f, 0.05f),    // Sport Orange
             new Color(0.7f, 0.15f, 0.95f),  // Deep Neon Purple
             new Color(1f, 0.85f, 0.1f),     // Racing Yellow
             new Color(0.1f, 0.9f, 0.9f),    // Bright Cyan
-            new Color(0.95f, 0.2f, 0.6f)    // Hot Pink
+            new Color(0.95f, 0.2f, 0.6f),   // Hot Pink
+            new Color(0.95f, 0.95f, 0.95f)  // Pearl White
         };
 
         private readonly IEventBus _eventBus;
