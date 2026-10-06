@@ -38,7 +38,7 @@ namespace AutoService.Bootstrap.Editor
         // Service type id → consumable (empty for the parking barriers) and its worker.
         private static readonly PointStaffSpec[] PointStaff =
         {
-            new PointStaffSpec("parking", string.Empty, "Parking Attendant", 150, 1, 0),
+            new PointStaffSpec("parking", string.Empty, "Parking Attendant", 150, 1, 5),
             new PointStaffSpec(WashTypeId, "shampoo", "Washer", 300, 2, 5),
             new PointStaffSpec("oil", "oil", "Oil Mechanic", 400, 3, 10),
             new PointStaffSpec("tires", "tires", "Tire Mechanic", 700, 4, 15),

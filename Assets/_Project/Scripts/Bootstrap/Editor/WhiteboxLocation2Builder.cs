@@ -199,20 +199,28 @@ namespace AutoService.Bootstrap.Editor
                 warehouseArea.transform, new Vector3(25f, 0f, 10f), staffMat);
 
             // 7. Travel Points
-            Transform travelSpawnLoc2 = CreateChild("SpawnLoc2", root).transform;
-            travelSpawnLoc2.position = root.position + new Vector3(30f, 0f, -15f);
+            Transform existingTravelPlot = plotsObj.transform.Find("TravelPlot_Travel_To_Loc1");
+            Vector3 travel2Pos = existingTravelPlot != null ? existingTravelPlot.localPosition : new Vector3(-5f, 0f, -12f);
 
             BuildPlotView travel1To2 = CreateTravelPlot(
                 loc1.transform, "b_travel_to_loc2", "Travel_To_Loc2",
-                new Vector3(-3f, 0f, 12f), travelSpawnLoc2);
-
-            Transform travelSpawnLoc1 = CreateChild("SpawnLoc1", loc1.transform).transform;
-            travelSpawnLoc1.position = loc1.transform.position + new Vector3(-34f, 0f, -19f);
+                new Vector3(-3f, 0f, 12f), null);
 
             BuildPlotView travel2To1 = CreateTravelPlot(
                 plotsObj.transform, "b_travel_to_loc1", "Travel_To_Loc1",
-                new Vector3(-5f, 0f, -12f), travelSpawnLoc1);
+                travel2Pos, null);
             buildPlots.Add(travel2To1);
+
+            if (travel1To2.Target != null && travel2To1.Target != null)
+            {
+                var tp1 = travel1To2.Target.GetComponent<TravelPoint>();
+                var tp2 = travel2To1.Target.GetComponent<TravelPoint>();
+                if (tp1 != null && tp2 != null)
+                {
+                    tp1.TargetTransform = tp2.transform;
+                    tp2.TargetTransform = tp1.transform;
+                }
+            }
 
             var loc1So = new SerializedObject(loc1);
             AddPlotToLayout(loc1So, travel1To2);

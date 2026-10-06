@@ -6,12 +6,13 @@ using AutoService.Services.Formatting;
 using AutoService.Services.Supplies;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace AutoService.Presentation.Supplies
 {
     /// <summary>
-    /// The warehouse of a location: the character walks up and immediately takes (and pays for) a box for the hungriest
-    /// point. Failures ("Hands full", "All stocked", "Need $15") flash above the warehouse for a moment.
+    /// The warehouse of a location: the character walks up and takes (and pays for) a box for the hungriest
+    /// point after a short pickup dwell with visual progress. Failures ("Hands full", "All stocked", "Need $15") flash above.
     /// </summary>
     /// <remarks>
     /// The view holds no game state: buying is <see cref="ISupplyService.TryBuyBoxForHungriest"/>, the hands are
@@ -51,10 +52,25 @@ namespace AutoService.Presentation.Supplies
         [Tooltip("Shown when the balance does not cover the box; {0} = price.")]
         private string _needFormat = "Need {0}";
 
+        [Header("Pickup Progress")]
+        [SerializeField, Min(0.1f)]
+        [Tooltip("Seconds required to pick up a box from the warehouse.")]
+        private float _dwellSeconds = 1.2f;
+
+        [SerializeField]
+        [Tooltip("Parent of the green progress bar (hidden when idle).")]
+        private GameObject _progressRoot;
+
+        [SerializeField]
+        [Tooltip("Horizontal fill image for pickup progress.")]
+        private Image _progressBarFill;
+
         private ISupplyService _supplies;
         private IPlayerCarry _carry;
         private Coroutine _message;
         private WaitForSecondsRealtime _messageWait;
+        private bool _isInteracting;
+        private float _dwellTimer;
 
         /// <summary>Id of the location this warehouse serves.</summary>
         public string LocationId => _locationId;
@@ -77,7 +93,22 @@ namespace AutoService.Presentation.Supplies
         {
             _supplies = supplies;
             _carry = carry;
+            _isInteracting = false;
+            _dwellTimer = 0f;
+            if (_progressRoot != null)
+            {
+                _progressRoot.SetActive(false);
+            }
+            if (_progressBarFill != null)
+            {
+                _progressBarFill.fillAmount = 0f;
+            }
             HideMessage();
+        }
+
+        private void OnDisable()
+        {
+            EndInteraction();
         }
 
         /// <inheritdoc />
@@ -103,21 +134,69 @@ namespace AutoService.Presentation.Supplies
                 return;
             }
 
-            if (_supplies.TryBuyBoxForHungriest(_locationId, true, out SupplyBox box, out ServicePoint target))
+            if (_supplies.FindHungriest(_locationId) == null)
             {
-                _carry.TryPick(box);
+                ShowMessage(_allStockedText);
                 return;
             }
 
-            // Why: the purchase fails either because nothing needs a box or because the balance is too low — say which.
-            ShowMessage(target == null
-                ? _allStockedText
-                : string.Format(_needFormat, MoneyFormatter.Format(_supplies.GetBoxPrice(target.Supply.SupplyTypeId))));
+            _isInteracting = true;
+            _dwellTimer = 0f;
+            if (_progressRoot != null)
+            {
+                _progressRoot.SetActive(true);
+            }
+            if (_progressBarFill != null)
+            {
+                _progressBarFill.fillAmount = 0f;
+            }
+        }
+
+        private void Update()
+        {
+            if (!_isInteracting)
+            {
+                return;
+            }
+
+            _dwellTimer += Time.deltaTime;
+            float progress = Mathf.Clamp01(_dwellTimer / _dwellSeconds);
+            if (_progressBarFill != null)
+            {
+                _progressBarFill.fillAmount = progress;
+            }
+
+            if (_dwellTimer >= _dwellSeconds)
+            {
+                _isInteracting = false;
+                if (_progressRoot != null)
+                {
+                    _progressRoot.SetActive(false);
+                }
+
+                if (_supplies.TryBuyBoxForHungriest(_locationId, true, out SupplyBox box, out ServicePoint target))
+                {
+                    _carry.TryPick(box);
+                }
+                else
+                {
+                    // Why: the purchase fails either because nothing needs a box or because the balance is too low — say which.
+                    ShowMessage(target == null
+                        ? _allStockedText
+                        : string.Format(_needFormat, MoneyFormatter.Format(_supplies.GetBoxPrice(target.Supply.SupplyTypeId))));
+                }
+            }
         }
 
         /// <inheritdoc />
         public void EndInteraction()
         {
+            _isInteracting = false;
+            _dwellTimer = 0f;
+            if (_progressRoot != null)
+            {
+                _progressRoot.SetActive(false);
+            }
         }
 
         private void ShowMessage(string text)

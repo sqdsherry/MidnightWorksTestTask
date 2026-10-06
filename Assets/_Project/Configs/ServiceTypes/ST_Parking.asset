@@ -25,3 +25,4 @@ MonoBehaviour:
   _workerTitle: Parking Attendant
   _workerHireCost: 150
   _workerRequiredLevel: 1
+  _xpReward: 5
