@@ -249,6 +249,10 @@ namespace AutoService.Bootstrap.Editor
                 Debug.Log("[Whitebox] Location_2 Validate succeeded! 0 errors.");
             }
 
+            var problems = new List<string>();
+            int baked = ModuleSetupA2.BakeNavMeshes(problems);
+            Debug.Log($"[Whitebox] NavMesh baked: {baked} surface(s). Problems: {problems.Count}");
+
             UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(UnityEditor.SceneManagement.EditorSceneManager.GetActiveScene());
             UnityEditor.SceneManagement.EditorSceneManager.SaveScene(UnityEditor.SceneManagement.EditorSceneManager.GetActiveScene());
             AssetDatabase.SaveAssets();
@@ -618,6 +622,8 @@ namespace AutoService.Bootstrap.Editor
             Transform plotAnchor = CreateChild("PanelAnchor", plotObj.transform).transform;
             plotAnchor.localPosition = new Vector3(0f, 1.5f, 0f);
 
+            GhostTag ghostTag = CreateTagCanvas(ghost.transform, new Vector3(0f, 15f, 0f), "Travel");
+
             var plotView = plotObj.AddComponent<BuildPlotView>();
             var plotSo = new SerializedObject(plotView);
             plotSo.FindProperty("_plotId").stringValue = plotId;
@@ -626,6 +632,8 @@ namespace AutoService.Bootstrap.Editor
             plotSo.FindProperty("_approachPoint").objectReferenceValue = plotApproach;
             plotSo.FindProperty("_panelAnchor").objectReferenceValue = plotAnchor;
             plotSo.FindProperty("_highlight").objectReferenceValue = highlight;
+            plotSo.FindProperty("_ring").objectReferenceValue = ghostTag.Ring;
+            plotSo.FindProperty("_priceTag").objectReferenceValue = ghostTag.Label;
             plotSo.ApplyModifiedPropertiesWithoutUndo();
 
             return plotView;

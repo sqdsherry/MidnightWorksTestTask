@@ -112,6 +112,44 @@ namespace AutoService.Bootstrap.Editor
             }
         }
 
+        /// <summary>
+        /// Creates or updates the <see cref="ProgressionView"/> on the screen HUD in <c>Gameplay.unity</c>
+        /// and wires it to <see cref="GameplayEntryPoint._progressionView"/>.
+        /// </summary>
+        [MenuItem("AutoService/Setup/Setup Progression HUD")]
+        public static void SetupProgressionHudOnly()
+        {
+            Scene scene = EditorSceneManager.GetActiveScene();
+            if (scene.name != GameplaySceneName)
+            {
+                scene = EditorSceneManager.OpenScene(GameplayScenePath, OpenSceneMode.Single);
+            }
+
+            var entryPoint = FindRoot(scene, EntryPointName);
+            if (entryPoint == null)
+            {
+                Debug.LogError("[Setup] EntryPoint not found in Gameplay scene");
+                return;
+            }
+
+            var entry = new SerializedObject(entryPoint);
+            Transform hud = FindScreenHud(scene, entry.FindProperty("_balanceView").objectReferenceValue as BalanceView);
+            if (hud == null)
+            {
+                Debug.LogError("[Setup] HUD Canvas not found");
+                return;
+            }
+
+            var problems = new List<string>();
+            ProgressionView progView = EnsureProgressionView(hud, problems);
+            entry.FindProperty("_progressionView").objectReferenceValue = progView;
+            entry.ApplyModifiedPropertiesWithoutUndo();
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene);
+            Debug.Log("[Setup] ProgressionView successfully wired to GameplayEntryPoint in Gameplay.unity!");
+        }
+
         // Why: an untitled scene cannot be restored (it has no path); Boot is where Play starts anyway.
         private static void RestoreScenes(SceneSetup[] setup)
         {
@@ -784,10 +822,11 @@ namespace AutoService.Bootstrap.Editor
                 root = new GameObject(ProgressionViewName, typeof(RectTransform));
                 root.transform.SetParent(hud, false);
                 SetupUi.MarkGenerated(root);
-                var rect = (RectTransform)root.transform;
-                // Position in top-left, to the right of the pause button (pause is at x=24, w=72 -> right edge is 96)
-                SetupUi.Place(rect, new Vector2(0f, 1f), new Vector2(120f, -24f), new Vector2(260f, 60f), new Vector2(0f, 1f));
             }
+
+            var rect = (RectTransform)root.transform;
+            // Position in top-left, to the right of the pause button (pause is at x=24, w=72 -> right edge is 96)
+            SetupUi.Place(rect, new Vector2(0f, 1f), new Vector2(110f, -24f), new Vector2(240f, 60f), new Vector2(0f, 1f));
 
             var view = SetupUi.GetOrAdd<ProgressionView>(root);
 
@@ -800,15 +839,15 @@ namespace AutoService.Bootstrap.Editor
 
             TMP_Text xpText = SetupUi.EnsureChild(root.transform, "XpText", problems, p =>
             {
-                TMP_Text t = SetupUi.CreateText(p, "XpText", "0 / 100 XP", 18f, false, TextAlignmentOptions.Right);
-                SetupUi.Place(t.rectTransform, new Vector2(1f, 1f), new Vector2(0f, -4f), new Vector2(150f, 24f), new Vector2(1f, 1f));
+                TMP_Text t = SetupUi.CreateText(p, "XpText", "0 / 15 XP", 18f, false, TextAlignmentOptions.Right);
+                SetupUi.Place(t.rectTransform, new Vector2(1f, 1f), new Vector2(0f, -4f), new Vector2(140f, 24f), new Vector2(1f, 1f));
                 t.color = new Color(0.85f, 0.85f, 0.85f, 1f);
                 return t;
             });
 
             RectTransform barBg = SetupUi.EnsureRect(root.transform, "BarBackground", problems, r =>
             {
-                SetupUi.Place(r, new Vector2(0f, 0f), new Vector2(0f, 4f), new Vector2(260f, 16f), new Vector2(0f, 0f));
+                SetupUi.Place(r, new Vector2(0f, 0f), new Vector2(0f, 4f), new Vector2(240f, 16f), new Vector2(0f, 0f));
                 SetupUi.AddImage(r, new Color32(0x1E, 0x24, 0x30, 220));
             });
 

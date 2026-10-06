@@ -38,10 +38,10 @@ namespace AutoService.Bootstrap.Editor
         // Service type id → consumable (empty for the parking barriers) and its worker.
         private static readonly PointStaffSpec[] PointStaff =
         {
-            new PointStaffSpec("parking", string.Empty, "Parking Attendant", 150, 1),
-            new PointStaffSpec(WashTypeId, "shampoo", "Washer", 300, 2),
-            new PointStaffSpec("oil", "oil", "Oil Mechanic", 400, 3),
-            new PointStaffSpec("tires", "tires", "Tire Mechanic", 700, 4),
+            new PointStaffSpec("parking", string.Empty, "Parking Attendant", 150, 1, 0),
+            new PointStaffSpec(WashTypeId, "shampoo", "Washer", 300, 2, 5),
+            new PointStaffSpec("oil", "oil", "Oil Mechanic", 400, 3, 10),
+            new PointStaffSpec("tires", "tires", "Tire Mechanic", 700, 4, 15),
         };
 
         // Why: an ASCII minus — the default TMP font has no U+2212 glyph.
@@ -210,6 +210,12 @@ namespace AutoService.Bootstrap.Editor
                 serialized.FindProperty("_workerTitle").stringValue = spec.WorkerTitle;
                 serialized.FindProperty("_workerHireCost").longValue = spec.WorkerHireCost;
                 serialized.FindProperty("_workerRequiredLevel").intValue = spec.WorkerRequiredLevel;
+                filled++;
+            }
+
+            if (spec.XpReward > 0 && asset.XpReward != spec.XpReward)
+            {
+                serialized.FindProperty("_xpReward").intValue = spec.XpReward;
                 filled++;
             }
 
@@ -410,13 +416,14 @@ namespace AutoService.Bootstrap.Editor
 
         private readonly struct PointStaffSpec
         {
-            public PointStaffSpec(string serviceTypeId, string supplyTypeId, string workerTitle, long workerHireCost, int workerRequiredLevel)
+            public PointStaffSpec(string serviceTypeId, string supplyTypeId, string workerTitle, long workerHireCost, int workerRequiredLevel, int xpReward)
             {
                 ServiceTypeId = serviceTypeId;
                 SupplyTypeId = supplyTypeId;
                 WorkerTitle = workerTitle;
                 WorkerHireCost = workerHireCost;
                 WorkerRequiredLevel = workerRequiredLevel;
+                XpReward = xpReward;
             }
 
             public string ServiceTypeId { get; }
@@ -428,6 +435,8 @@ namespace AutoService.Bootstrap.Editor
             public long WorkerHireCost { get; }
 
             public int WorkerRequiredLevel { get; }
+
+            public int XpReward { get; }
         }
 
         private readonly struct UpgradeSpec

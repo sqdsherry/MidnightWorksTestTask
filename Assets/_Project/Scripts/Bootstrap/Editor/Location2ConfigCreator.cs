@@ -3,6 +3,7 @@ using AutoService.Domain.Building;
 using AutoService.Domain.Points;
 using AutoService.Domain.Upgrades;
 using AutoService.Infrastructure.Config;
+using AutoService.Presentation.Supplies;
 using UnityEditor;
 using UnityEngine;
 
@@ -24,23 +25,26 @@ namespace AutoService.Bootstrap.Editor
 
         private static readonly ServiceTypeSpec[] ServiceTypes =
         {
-            new ServiceTypeSpec("ST_TiresLoc2", "tires_loc2", "Tires", 35, 12f),
-            new ServiceTypeSpec("ST_TuningLoc2", "tuning_loc2", "Tuning", 60, 18f),
-            new ServiceTypeSpec("ST_PaintLoc2", "paint_loc2", "Paint", 90, 24f),
+            new ServiceTypeSpec("ST_TiresLoc2", "tires_loc2", "Tires", 35, 12f,
+                "tires_box", 10, "Tire Specialist", 500, 3, 15),
+            new ServiceTypeSpec("ST_TuningLoc2", "tuning_loc2", "Tuning", 60, 18f,
+                "tuning_parts", 10, "Tuning Specialist", 650, 4, 25),
+            new ServiceTypeSpec("ST_PaintLoc2", "paint_loc2", "Paint", 90, 24f,
+                "paint_cans", 10, "Painter", 800, 5, 35),
         };
 
         private static readonly BuildableSpec[] Buildables =
         {
-            new BuildableSpec("B_Loc2_Tires1", "loc2_build_tires_1", "Tires 1", "Tires bay.",
-                BuildableKind.ServicePoint, "loc2_tires_1", 100, 1, 0.2f),
-            new BuildableSpec("B_Loc2_Tuning1", "loc2_build_tuning_1", "Tuning 1", "Tuning bay.",
-                BuildableKind.ServicePoint, "loc2_tuning_1", 100, 1, 0.2f),
-            new BuildableSpec("B_Loc2_Paint1", "loc2_build_paint_1", "Paint 1", "Paint bay.",
-                BuildableKind.ServicePoint, "loc2_paint_1", 100, 1, 0.2f),
             new BuildableSpec("B_TravelToLoc2", "b_travel_to_loc2", "Travel to Location 2", "Go to Location 2.",
-                BuildableKind.TravelPoint, "travel_to_loc2", 0, 1, 0f),
+                BuildableKind.TravelPoint, "travel_to_loc2", 250, 2, 0f),
             new BuildableSpec("B_TravelToLoc1", "b_travel_to_loc1", "Travel to Location 1", "Return to Location 1.",
                 BuildableKind.TravelPoint, "travel_to_loc1", 0, 1, 0f),
+            new BuildableSpec("B_Loc2_Tires1", "loc2_build_tires_1", "Tires 1", "Tires bay.",
+                BuildableKind.ServicePoint, "loc2_tires_1", 500, 2, 0.2f),
+            new BuildableSpec("B_Loc2_Tuning1", "loc2_build_tuning_1", "Tuning 1", "Tuning bay.",
+                BuildableKind.ServicePoint, "loc2_tuning_1", 900, 3, 0.2f),
+            new BuildableSpec("B_Loc2_Paint1", "loc2_build_paint_1", "Paint 1", "Paint bay.",
+                BuildableKind.ServicePoint, "loc2_paint_1", 1400, 4, 0.2f),
         };
 
         [MenuItem("AutoService/Whitebox/Create Location 2 Configs")]
@@ -87,6 +91,9 @@ namespace AutoService.Bootstrap.Editor
                 + AddMissing(serializedConfig.FindProperty("_supplyTypes"), supplyTypes, asset => asset.Id);
 
             serializedConfig.ApplyModifiedProperties();
+
+            EnsureSupplyVisuals();
+
             AssetDatabase.SaveAssets();
             Debug.Log($"[Whitebox] Location 2 configs: {created} asset(s) created, {added} added.");
             return true;
@@ -137,6 +144,12 @@ namespace AutoService.Bootstrap.Editor
             serialized.FindProperty("_serviceDuration").floatValue = spec.Duration;
             serialized.FindProperty("_acceptDelay").floatValue = 1f;
             serialized.FindProperty("_clearDelay").floatValue = 1f;
+            serialized.FindProperty("_supplyTypeId").stringValue = spec.SupplyTypeId;
+            serialized.FindProperty("_supplyCapacity").intValue = spec.SupplyCapacity;
+            serialized.FindProperty("_workerTitle").stringValue = spec.WorkerTitle;
+            serialized.FindProperty("_workerHireCost").longValue = spec.WorkerHireCost;
+            serialized.FindProperty("_workerRequiredLevel").intValue = spec.WorkerRequiredLevel;
+            serialized.FindProperty("_xpReward").intValue = spec.XpReward;
             serialized.ApplyModifiedPropertiesWithoutUndo();
         }
 
@@ -186,12 +199,100 @@ namespace AutoService.Bootstrap.Editor
 
         private readonly struct ServiceTypeSpec
         {
-            public ServiceTypeSpec(string assetName, string id, string displayName, long basePrice, float duration)
+            public ServiceTypeSpec(
+                string assetName,
+                string id,
+                string displayName,
+                long basePrice,
+                float duration,
+                string supplyTypeId,
+                int supplyCapacity,
+                string workerTitle,
+                long workerHireCost,
+                int workerRequiredLevel,
+                int xpReward)
             {
-                AssetName = assetName; Id = id; DisplayName = displayName; BasePrice = basePrice; Duration = duration;
+                AssetName = assetName;
+                Id = id;
+                DisplayName = displayName;
+                BasePrice = basePrice;
+                Duration = duration;
+                SupplyTypeId = supplyTypeId;
+                SupplyCapacity = supplyCapacity;
+                WorkerTitle = workerTitle;
+                WorkerHireCost = workerHireCost;
+                WorkerRequiredLevel = workerRequiredLevel;
+                XpReward = xpReward;
             }
-            public string AssetName { get; } public string Id { get; } public string DisplayName { get; }
-            public long BasePrice { get; } public float Duration { get; }
+
+            public string AssetName { get; }
+            public string Id { get; }
+            public string DisplayName { get; }
+            public long BasePrice { get; }
+            public float Duration { get; }
+            public string SupplyTypeId { get; }
+            public int SupplyCapacity { get; }
+            public string WorkerTitle { get; }
+            public long WorkerHireCost { get; }
+            public int WorkerRequiredLevel { get; }
+            public int XpReward { get; }
+        }
+
+        private static readonly (string id, Color color)[] SupplyVisuals =
+        {
+            ("tires_box", new Color(0.2f, 0.2f, 0.22f, 1f)),
+            ("tuning_parts", new Color(0.9f, 0.55f, 0.15f, 1f)),
+            ("paint_cans", new Color(0.75f, 0.2f, 0.85f, 1f)),
+        };
+
+        private static void EnsureSupplyVisuals()
+        {
+            string[] guids = AssetDatabase.FindAssets("t:" + nameof(SupplyVisualCatalog));
+            if (guids.Length == 0) return;
+
+            string path = AssetDatabase.GUIDToAssetPath(guids[0]);
+            var catalog = AssetDatabase.LoadAssetAtPath<SupplyVisualCatalog>(path);
+            if (catalog == null) return;
+
+            var serialized = new SerializedObject(catalog);
+            var entriesProp = serialized.FindProperty("_entries");
+            bool modified = false;
+
+            for (int i = 0; i < SupplyVisuals.Length; i++)
+            {
+                string supplyId = SupplyVisuals[i].id;
+                Color color = SupplyVisuals[i].color;
+
+                bool found = false;
+                for (int j = 0; j < entriesProp.arraySize; j++)
+                {
+                    var element = entriesProp.GetArrayElementAtIndex(j);
+                    var idProp = element.FindPropertyRelative("_supplyTypeId");
+                    if (idProp != null && string.Equals(idProp.stringValue, supplyId, System.StringComparison.Ordinal))
+                    {
+                        found = true;
+                        break;
+                    }
+                }
+
+                if (!found)
+                {
+                    int index = entriesProp.arraySize;
+                    entriesProp.arraySize++;
+                    var element = entriesProp.GetArrayElementAtIndex(index);
+                    element.FindPropertyRelative("_supplyTypeId").stringValue = supplyId;
+                    element.FindPropertyRelative("_color").colorValue = color;
+                    element.FindPropertyRelative("_icon").objectReferenceValue = null;
+                    modified = true;
+                }
+            }
+
+            if (modified)
+            {
+                serialized.ApplyModifiedProperties();
+                EditorUtility.SetDirty(catalog);
+                Debug.Log("[Whitebox] Added Loc2 supply visuals to SupplyVisualCatalog.");
+            }
         }
 
         private readonly struct BuildableSpec
