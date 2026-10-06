@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using AutoService.Domain.Common;
 using AutoService.Domain.Points;
 using AutoService.Domain.Progression;

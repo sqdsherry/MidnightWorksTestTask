@@ -1,4 +1,4 @@
-namespace AutoService.Domain.Traffic
+﻿namespace AutoService.Domain.Traffic
 {
     /// <summary>
     /// Where a car is in the flow (layout v3, GDD §3):

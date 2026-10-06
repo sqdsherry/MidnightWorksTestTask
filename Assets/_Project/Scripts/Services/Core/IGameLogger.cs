@@ -1,4 +1,4 @@
-namespace AutoService.Services.Core
+﻿namespace AutoService.Services.Core
 {
     /// <summary>
     /// Engine-agnostic logging facade. Domain and Services cannot reference UnityEngine,

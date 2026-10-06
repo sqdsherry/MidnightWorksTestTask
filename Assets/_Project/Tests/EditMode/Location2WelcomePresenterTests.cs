@@ -1,4 +1,4 @@
-using AutoService.Presentation.Player;
+﻿using AutoService.Presentation.Player;
 using AutoService.Presentation.Popups;
 using NUnit.Framework;
 using UnityEngine;

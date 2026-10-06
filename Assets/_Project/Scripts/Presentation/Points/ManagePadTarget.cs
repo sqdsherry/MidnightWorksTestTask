@@ -1,4 +1,4 @@
-namespace AutoService.Presentation.Points
+﻿namespace AutoService.Presentation.Points
 {
     /// <summary>What a <see cref="ManagePadView"/> manages, i.e. what its Target Id means.</summary>
     public enum ManagePadTarget

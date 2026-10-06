@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using AutoService.Services.Save;
 
 namespace AutoService.Tests.EditMode

@@ -1,4 +1,4 @@
-namespace AutoService.Bootstrap.Installers
+﻿namespace AutoService.Bootstrap.Installers
 {
     /// <summary>
     /// Position of a ticked service in the frame. The game loop ticks phases in this order; inside a phase,

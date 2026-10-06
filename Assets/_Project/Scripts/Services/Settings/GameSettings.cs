@@ -1,4 +1,4 @@
-namespace AutoService.Services.Settings
+﻿namespace AutoService.Services.Settings
 {
     /// <summary>
     /// Immutable player settings (audio, quality, display). Values are validated on construction;

@@ -1,4 +1,4 @@
-namespace AutoService.Presentation.Player
+﻿namespace AutoService.Presentation.Player
 {
     /// <summary>States of the character's movement FSM, driven by <see cref="PlayerMotor"/>.</summary>
     public enum PlayerMotionState

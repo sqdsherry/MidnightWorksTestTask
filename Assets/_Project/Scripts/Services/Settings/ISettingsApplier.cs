@@ -1,4 +1,4 @@
-namespace AutoService.Services.Settings
+﻿namespace AutoService.Services.Settings
 {
     /// <summary>
     /// Port that pushes settings into the engine (quality, screen mode, audio volumes).

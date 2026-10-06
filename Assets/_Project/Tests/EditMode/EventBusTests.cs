@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using AutoService.Services.Events;
 using NUnit.Framework;
 

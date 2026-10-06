@@ -1,4 +1,4 @@
-namespace AutoService.Services.Traffic
+﻿namespace AutoService.Services.Traffic
 {
     /// <summary>Why a car left the location.</summary>
     public enum CarLeaveReason

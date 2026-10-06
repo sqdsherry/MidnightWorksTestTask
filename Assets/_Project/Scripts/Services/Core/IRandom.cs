@@ -1,4 +1,4 @@
-namespace AutoService.Services.Core
+﻿namespace AutoService.Services.Core
 {
     /// <summary>
     /// Source of randomness. Abstracted so chance-based logic (breakdowns, car types, negotiation)

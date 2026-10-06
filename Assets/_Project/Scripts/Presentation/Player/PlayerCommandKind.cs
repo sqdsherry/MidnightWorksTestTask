@@ -1,4 +1,4 @@
-namespace AutoService.Presentation.Player
+﻿namespace AutoService.Presentation.Player
 {
     /// <summary>Kinds of commands <see cref="PlayerView"/> hands to <see cref="PlayerMotor"/>.</summary>
     internal enum PlayerCommandKind

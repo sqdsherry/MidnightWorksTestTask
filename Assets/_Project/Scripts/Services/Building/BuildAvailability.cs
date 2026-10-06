@@ -1,4 +1,4 @@
-namespace AutoService.Services.Building
+﻿namespace AutoService.Services.Building
 {
     /// <summary>Whether a plot can be built right now, and if not — why.</summary>
     public enum BuildAvailability

@@ -1,4 +1,4 @@
-namespace AutoService.Domain.Upgrades
+﻿namespace AutoService.Domain.Upgrades
 {
     /// <summary>What a point upgrade improves.</summary>
     public enum UpgradeKind

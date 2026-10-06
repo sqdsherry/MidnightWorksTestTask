@@ -1,4 +1,4 @@
-namespace AutoService.Domain.Staff
+﻿namespace AutoService.Domain.Staff
 {
     /// <summary>Job of a hired NPC.</summary>
     public enum StaffRole

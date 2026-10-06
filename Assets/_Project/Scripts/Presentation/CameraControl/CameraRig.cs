@@ -1,4 +1,4 @@
-using AutoService.Presentation.Controls;
+﻿using AutoService.Presentation.Controls;
 using AutoService.Presentation.Player;
 using UnityEngine;
 using UnityEngine.EventSystems;

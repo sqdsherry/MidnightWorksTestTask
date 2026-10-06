@@ -1,4 +1,4 @@
-namespace AutoService.Bootstrap.Installers
+﻿namespace AutoService.Bootstrap.Installers
 {
     /// <summary>
     /// One module's part of the Gameplay Composition Root: creates the module's services, views and presenters

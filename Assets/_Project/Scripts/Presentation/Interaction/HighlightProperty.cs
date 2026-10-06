@@ -1,4 +1,4 @@
-namespace AutoService.Presentation.Interaction
+﻿namespace AutoService.Presentation.Interaction
 {
     /// <summary>Which material property <see cref="InteractableHighlight"/> drives.</summary>
     public enum HighlightProperty

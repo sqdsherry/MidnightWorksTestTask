@@ -1,4 +1,4 @@
-namespace AutoService.Services.Traffic
+﻿namespace AutoService.Services.Traffic
 {
     /// <summary>Bus event: a car reached the exit and was despawned.</summary>
     public readonly struct CarLeftEvent

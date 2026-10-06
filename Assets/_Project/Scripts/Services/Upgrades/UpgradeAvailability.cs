@@ -1,4 +1,4 @@
-namespace AutoService.Services.Upgrades
+﻿namespace AutoService.Services.Upgrades
 {
     /// <summary>Whether the next level of a point upgrade can be bought now, and if not — why.</summary>
     public enum UpgradeAvailability

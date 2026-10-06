@@ -1,4 +1,4 @@
-using AutoService.Services.Core;
+﻿using AutoService.Services.Core;
 using UnityEngine;
 
 namespace AutoService.Infrastructure.Logging

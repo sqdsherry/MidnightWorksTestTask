@@ -1,4 +1,4 @@
-namespace AutoService.Domain.Points
+﻿namespace AutoService.Domain.Points
 {
     /// <summary>Role of a service point in the car flow.</summary>
     public enum PointKind

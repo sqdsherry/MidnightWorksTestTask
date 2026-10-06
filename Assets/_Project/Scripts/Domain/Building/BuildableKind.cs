@@ -1,4 +1,4 @@
-namespace AutoService.Domain.Building
+﻿namespace AutoService.Domain.Building
 {
     /// <summary>What a build plot turns into once it is built.</summary>
     public enum BuildableKind

@@ -1,4 +1,4 @@
-namespace AutoService.Services.Staff
+﻿namespace AutoService.Services.Staff
 {
     /// <summary>Kind of place a staff NPC walks to.</summary>
     public enum StaffDestinationKind

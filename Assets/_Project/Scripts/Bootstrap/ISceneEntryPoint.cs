@@ -1,4 +1,4 @@
-namespace AutoService.Bootstrap
+﻿namespace AutoService.Bootstrap
 {
     /// <summary>
     /// Implemented by the single root component of a scene that builds that scene's object graph.

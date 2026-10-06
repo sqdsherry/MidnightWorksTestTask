@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using AutoService.Domain.Progression;
 using NUnit.Framework;
 

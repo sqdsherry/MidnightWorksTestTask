@@ -1,4 +1,4 @@
-using AutoService.Domain.Points;
+﻿using AutoService.Domain.Points;
 
 namespace AutoService.Services.Points
 {

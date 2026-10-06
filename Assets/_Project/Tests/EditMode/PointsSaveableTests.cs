@@ -1,4 +1,4 @@
-using AutoService.Domain.Common;
+﻿using AutoService.Domain.Common;
 using AutoService.Domain.Upgrades;
 using AutoService.Services.Points;
 using AutoService.Services.Save;

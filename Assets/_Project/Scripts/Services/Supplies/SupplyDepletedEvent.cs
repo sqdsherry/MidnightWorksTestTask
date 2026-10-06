@@ -1,4 +1,4 @@
-namespace AutoService.Services.Supplies
+﻿namespace AutoService.Services.Supplies
 {
     /// <summary>
     /// Bus event: a point's stock has just become empty — it stops accepting orders until a box arrives

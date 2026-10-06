@@ -1,4 +1,4 @@
-namespace AutoService.Services.Traffic
+﻿namespace AutoService.Services.Traffic
 {
     /// <summary>Bus event: a new car appeared and joined the entry queue.</summary>
     public readonly struct CarSpawnedEvent

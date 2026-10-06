@@ -1,4 +1,4 @@
-namespace AutoService.Domain.Staff
+﻿namespace AutoService.Domain.Staff
 {
     /// <summary>
     /// What a hired NPC is doing. Workers: <see cref="WalkingToSpot"/> → (<see cref="WaitingForSpot"/>) → <see cref="Working"/>.

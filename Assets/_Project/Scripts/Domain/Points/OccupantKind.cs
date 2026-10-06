@@ -1,4 +1,4 @@
-namespace AutoService.Domain.Points
+﻿namespace AutoService.Domain.Points
 {
     /// <summary>Who stands on a point's work spot.</summary>
     public enum OccupantKind

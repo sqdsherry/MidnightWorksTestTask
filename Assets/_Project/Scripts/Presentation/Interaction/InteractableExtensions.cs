@@ -1,4 +1,4 @@
-namespace AutoService.Presentation.Interaction
+﻿namespace AutoService.Presentation.Interaction
 {
     /// <summary>Helpers for working with <see cref="IInteractable"/> references.</summary>
     public static class InteractableExtensions

@@ -1,4 +1,4 @@
-using AutoService.Services.Settings;
+﻿using AutoService.Services.Settings;
 
 namespace AutoService.Tests.EditMode
 {

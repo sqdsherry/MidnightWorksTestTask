@@ -1,4 +1,4 @@
-using AutoService.Presentation.Ui.FloatingText;
+﻿using AutoService.Presentation.Ui.FloatingText;
 using AutoService.Services.Events;
 using UnityEngine;
 

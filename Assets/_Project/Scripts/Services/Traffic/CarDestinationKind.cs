@@ -1,4 +1,4 @@
-namespace AutoService.Services.Traffic
+﻿namespace AutoService.Services.Traffic
 {
     /// <summary>Kind of place a car can be sent to.</summary>
     public enum CarDestinationKind

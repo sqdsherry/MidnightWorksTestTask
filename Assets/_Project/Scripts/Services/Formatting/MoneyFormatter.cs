@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using AutoService.Domain.Common;
 
 namespace AutoService.Services.Formatting

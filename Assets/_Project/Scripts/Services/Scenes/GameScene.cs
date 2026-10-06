@@ -1,4 +1,4 @@
-namespace AutoService.Services.Scenes
+﻿namespace AutoService.Services.Scenes
 {
     /// <summary>Scenes the player can be sent to. Boot is not here: it is loaded once by the engine and never again.</summary>
     public enum GameScene

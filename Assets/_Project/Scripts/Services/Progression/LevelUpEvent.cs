@@ -1,4 +1,4 @@
-namespace AutoService.Services.Progression
+﻿namespace AutoService.Services.Progression
 {
     /// <summary>
     /// Event fired when the player reaches a new level.

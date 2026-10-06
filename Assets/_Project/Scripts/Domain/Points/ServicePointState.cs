@@ -1,4 +1,4 @@
-namespace AutoService.Domain.Points
+﻿namespace AutoService.Domain.Points
 {
     /// <summary>Lifecycle of a service point's current order.</summary>
     public enum ServicePointState

@@ -1,4 +1,4 @@
-namespace AutoService.Services.Menu
+﻿namespace AutoService.Services.Menu
 {
     /// <summary>Outcome of <see cref="MainMenuModel.NewGame"/>.</summary>
     public enum NewGameResult

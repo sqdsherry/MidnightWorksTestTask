@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using AutoService.Presentation.Ui;
 using UnityEngine;
 using UnityEngine.UI;

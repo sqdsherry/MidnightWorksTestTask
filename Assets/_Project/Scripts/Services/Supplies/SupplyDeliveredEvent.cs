@@ -1,4 +1,4 @@
-namespace AutoService.Services.Supplies
+﻿namespace AutoService.Services.Supplies
 {
     /// <summary>Bus event: a box was put into a point's stock (onboarding, sound). Published by <see cref="SupplyService"/>.</summary>
     public readonly struct SupplyDeliveredEvent

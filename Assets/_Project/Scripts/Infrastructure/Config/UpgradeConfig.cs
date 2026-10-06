@@ -1,4 +1,4 @@
-using AutoService.Domain.Upgrades;
+﻿using AutoService.Domain.Upgrades;
 using UnityEngine;
 
 namespace AutoService.Infrastructure.Config

@@ -1,4 +1,4 @@
-namespace AutoService.Services.Save
+﻿namespace AutoService.Services.Save
 {
     /// <summary>
     /// Converts <see cref="SaveData"/> to and from text.

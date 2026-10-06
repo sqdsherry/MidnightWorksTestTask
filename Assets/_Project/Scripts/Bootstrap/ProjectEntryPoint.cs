@@ -1,4 +1,4 @@
-using AutoService.Infrastructure.Config;
+﻿using AutoService.Infrastructure.Config;
 using AutoService.Infrastructure.Logging;
 using AutoService.Infrastructure.Pause;
 using AutoService.Infrastructure.Randomness;

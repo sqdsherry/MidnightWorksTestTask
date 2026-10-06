@@ -1,4 +1,4 @@
-using AutoService.Presentation.CameraControl;
+﻿using AutoService.Presentation.CameraControl;
 using AutoService.Presentation.Hud;
 using AutoService.Presentation.Panels;
 using AutoService.Presentation.Pause;

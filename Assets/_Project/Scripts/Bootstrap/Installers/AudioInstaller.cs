@@ -1,4 +1,4 @@
-using AutoService.Infrastructure.Services.Audio;
+﻿using AutoService.Infrastructure.Services.Audio;
 using AutoService.Services.Events;
 using UnityEngine;
 
@@ -8,8 +8,12 @@ namespace AutoService.Bootstrap.Installers
     {
         public void Install(GameplayContext context)
         {
-            var audioGo = new GameObject("AudioService");
-            var audioService = audioGo.AddComponent<AudioService>();
+            var audioService = Object.FindFirstObjectByType<AudioService>(FindObjectsInactive.Include);
+            if (audioService == null)
+            {
+                var audioGo = new GameObject("AudioService");
+                audioService = audioGo.AddComponent<AudioService>();
+            }
             
             audioService.Initialize(context.Resolve<IEventBus>());
             

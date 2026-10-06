@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using AutoService.Presentation.Ui;
 using TMPro;
@@ -100,16 +100,28 @@ namespace AutoService.Presentation.Settings
             if (_qualityDropdown != null)
             {
                 _qualityDropdown.onValueChanged.AddListener(OnQualityPicked);
+                if (_qualityDropdown.transform.parent != null)
+                {
+                    _qualityDropdown.transform.parent.gameObject.SetActive(false);
+                }
             }
 
             if (_fullscreenToggle != null)
             {
                 _fullscreenToggle.onValueChanged.AddListener(OnFullscreenToggled);
+                if (_fullscreenToggle.transform.parent != null)
+                {
+                    _fullscreenToggle.transform.parent.gameObject.SetActive(false);
+                }
             }
 
             if (_resolutionDropdown != null)
             {
                 _resolutionDropdown.onValueChanged.AddListener(OnResolutionPicked);
+                if (_resolutionDropdown.transform.parent != null)
+                {
+                    _resolutionDropdown.transform.parent.gameObject.SetActive(false);
+                }
             }
 
             if (_backButton != null)

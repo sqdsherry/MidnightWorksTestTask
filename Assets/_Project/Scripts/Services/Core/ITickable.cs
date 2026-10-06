@@ -1,4 +1,4 @@
-namespace AutoService.Services.Core
+﻿namespace AutoService.Services.Core
 {
     /// <summary>
     /// A service updated every frame by the single game loop. Implementations must not allocate in <see cref="Tick"/>.

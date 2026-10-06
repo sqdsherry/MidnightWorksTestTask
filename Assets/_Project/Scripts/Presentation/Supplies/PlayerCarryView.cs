@@ -1,4 +1,4 @@
-using AutoService.Services.Supplies;
+﻿using AutoService.Services.Supplies;
 using UnityEngine;
 
 namespace AutoService.Presentation.Supplies

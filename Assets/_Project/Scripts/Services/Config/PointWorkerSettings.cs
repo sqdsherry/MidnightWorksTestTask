@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using AutoService.Domain.Common;
 
 namespace AutoService.Services.Config

@@ -1,4 +1,4 @@
-using AutoService.Domain.Common;
+﻿using AutoService.Domain.Common;
 using AutoService.Domain.Economy;
 using AutoService.Domain.Points;
 using AutoService.Services.Config;

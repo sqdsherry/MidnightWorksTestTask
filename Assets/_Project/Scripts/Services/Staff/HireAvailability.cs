@@ -1,4 +1,4 @@
-namespace AutoService.Services.Staff
+﻿namespace AutoService.Services.Staff
 {
     /// <summary>Whether a staff member can be hired now, and if not — why.</summary>
     public enum HireAvailability

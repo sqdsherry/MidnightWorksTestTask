@@ -1,4 +1,4 @@
-namespace AutoService.Services.Traffic
+﻿namespace AutoService.Services.Traffic
 {
     /// <summary>
     /// Bus event: a served car wanted to park afterwards, but the service entrance or every slot was taken, so it left

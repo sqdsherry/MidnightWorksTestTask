@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using AutoService.Presentation.Controls;
 using AutoService.Presentation.Settings;
 using AutoService.Presentation.Ui;

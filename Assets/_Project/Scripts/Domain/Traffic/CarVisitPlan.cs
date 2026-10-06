@@ -1,4 +1,4 @@
-namespace AutoService.Domain.Traffic
+﻿namespace AutoService.Domain.Traffic
 {
     /// <summary>What a car came for; chosen once on spawn (GDD §3).</summary>
     /// <remarks>"Wash" stands for any service point of the location (the car's requested service type).</remarks>

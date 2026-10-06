@@ -1,4 +1,4 @@
-using AutoService.Domain.Progression;
+﻿using AutoService.Domain.Progression;
 using AutoService.Services.Config;
 using AutoService.Services.Events;
 using AutoService.Services.Progression;

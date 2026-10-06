@@ -1,4 +1,4 @@
-namespace AutoService.Services.Save
+﻿namespace AutoService.Services.Save
 {
     /// <summary>
     /// A service that owns a slice of <see cref="SaveData"/> (money, buildings, staff...).

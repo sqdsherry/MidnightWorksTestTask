@@ -1,4 +1,4 @@
-namespace AutoService.Services.Save
+﻿namespace AutoService.Services.Save
 {
     /// <summary>
     /// Port to the place where the serialized save lives (a file on disk in the game, memory in tests).

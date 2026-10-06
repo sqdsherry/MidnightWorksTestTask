@@ -1,4 +1,4 @@
-using AutoService.Domain.Common;
+﻿using AutoService.Domain.Common;
 
 namespace AutoService.Services.Supplies
 {

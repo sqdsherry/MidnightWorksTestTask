@@ -1,4 +1,4 @@
-namespace AutoService.Services.Scenes
+﻿namespace AutoService.Services.Scenes
 {
     /// <summary>What hides the scene switch: the scene loader waits for it to cover the screen before activating a scene.</summary>
     public interface ILoadingCurtain

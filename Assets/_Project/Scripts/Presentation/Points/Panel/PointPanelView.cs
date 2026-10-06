@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using AutoService.Domain.Upgrades;
 using AutoService.Presentation.Panels;
 using TMPro;

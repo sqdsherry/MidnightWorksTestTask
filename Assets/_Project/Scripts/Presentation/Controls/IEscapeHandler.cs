@@ -1,4 +1,4 @@
-namespace AutoService.Presentation.Controls
+﻿namespace AutoService.Presentation.Controls
 {
     /// <summary>Something that closes on Esc while it is open (a panel, the pause menu).</summary>
     /// <remarks>Registered in the <see cref="EscapeRouter"/> when it opens and removed when it closes.</remarks>

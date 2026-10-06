@@ -1,4 +1,4 @@
-namespace AutoService.Services.Core
+﻿namespace AutoService.Services.Core
 {
     /// <summary>
     /// A service that needs a one-time setup step after the whole object graph of its scope has been built

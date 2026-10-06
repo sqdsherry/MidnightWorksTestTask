@@ -1,4 +1,4 @@
-using AutoService.Domain.Economy;
+﻿using AutoService.Domain.Economy;
 using AutoService.Services.Config;
 using AutoService.Services.Economy;
 using AutoService.Services.Events;

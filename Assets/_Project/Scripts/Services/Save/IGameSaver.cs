@@ -1,4 +1,4 @@
-namespace AutoService.Services.Save
+﻿namespace AutoService.Services.Save
 {
     /// <summary>Writes the current progress right now (leaving to the menu, quitting).</summary>
     /// <remarks>

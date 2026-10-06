@@ -1,4 +1,4 @@
-namespace AutoService.Services.Traffic
+﻿namespace AutoService.Services.Traffic
 {
     /// <summary>
     /// Engine-agnostic address of a place in a location. Presentation resolves it into a road node of the scene.

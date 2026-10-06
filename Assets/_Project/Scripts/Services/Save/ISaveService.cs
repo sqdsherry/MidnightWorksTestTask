@@ -1,4 +1,4 @@
-namespace AutoService.Services.Save
+﻿namespace AutoService.Services.Save
 {
     /// <summary>
     /// Reads and writes the single save slot. Knows nothing about game services; that is <see cref="SaveCoordinator"/>'s job.

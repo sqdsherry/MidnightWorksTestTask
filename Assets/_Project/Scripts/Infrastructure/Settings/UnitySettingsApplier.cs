@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using AutoService.Services.Settings;
 using UnityEngine;
 
@@ -21,7 +21,10 @@ namespace AutoService.Infrastructure.Settings
             ApplyQuality(settings.QualityLevel);
             ApplyScreen(settings);
 
-            // TODO(12-visual): route volumes to the AudioMixer.
+            if (AutoService.Infrastructure.Services.Audio.AudioService.Instance != null)
+            {
+                AutoService.Infrastructure.Services.Audio.AudioService.Instance.ApplyVolumes(1f, settings.SfxVolume, settings.MusicVolume);
+            }
         }
 
         private static void ApplyQuality(int level)

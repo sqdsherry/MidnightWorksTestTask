@@ -1,4 +1,4 @@
-namespace AutoService.Services.Settings
+﻿namespace AutoService.Services.Settings
 {
     /// <summary>
     /// Port to persistent settings storage (PlayerPrefs in the game, memory in tests).
