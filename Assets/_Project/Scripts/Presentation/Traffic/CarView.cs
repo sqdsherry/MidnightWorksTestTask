@@ -312,20 +312,19 @@ namespace AutoService.Presentation.Traffic
             byte targetG = (byte)Mathf.Clamp(Mathf.RoundToInt(targetColor.g * 255f), 0, 255);
             byte targetB = (byte)Mathf.Clamp(Mathf.RoundToInt(targetColor.b * 255f), 0, 255);
 
-            // Why: car bodies use the saturated cells of the Kenney colormap (red sedan, green SUV, orange sport),
-            // while glass, trim and tires use low-saturation greys — so every saturated pixel is repainted and the
-            // rest is kept, whatever the original body color of the model is.
+            // Why: only the body cells of the Kenney colormap are repainted — red/orange (sedan, sport) and green
+            // (SUV). Glass, trim, lights and the orange racing rims fall outside both ranges and keep their color.
             for (int i = 0; i < modifiedBytes.Length; i += 4)
             {
                 byte r = modifiedBytes[i];
                 byte g = modifiedBytes[i + 1];
                 byte b = modifiedBytes[i + 2];
 
-                int max = Mathf.Max(r, Mathf.Max(g, b));
-                int min = Mathf.Min(r, Mathf.Min(g, b));
-                if (max > 90 && (max - min) > max * 0.35f)
+                bool redBody = r > 180 && g < 155 && b < 100 && (r - g) > 35 && (r - b) > 55;
+                bool greenBody = g > 140 && r < 110 && b < 150 && (g - r) > 50 && (g - b) > 30;
+                if (redBody || greenBody)
                 {
-                    float factor = max / 255f;
+                    float factor = Mathf.Max(r, g) / 255f;
                     modifiedBytes[i] = (byte)Mathf.Clamp(Mathf.RoundToInt(targetR * factor), 0, 255);
                     modifiedBytes[i + 1] = (byte)Mathf.Clamp(Mathf.RoundToInt(targetG * factor), 0, 255);
                     modifiedBytes[i + 2] = (byte)Mathf.Clamp(Mathf.RoundToInt(targetB * factor), 0, 255);
