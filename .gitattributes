@@ -62,3 +62,5 @@ Packages/packages-lock.json linguist-generated
 
 # Binary files
 LightingData.asset     binary
+# Why: NavMeshData is always serialized binary even under Force Text; eol=lf from *.asset would corrupt it.
+NavMesh*.asset         binary
