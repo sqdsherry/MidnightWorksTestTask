@@ -16,6 +16,8 @@ namespace AutoService.Bootstrap.Editor
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode || EditorApplication.isCompiling) return;
             
+            if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name != "Gameplay") return;
+            
             Debug.Log("[AutoSceneRepair] Ensuring restored Gameplay.unity has all Task 20 and 21 setups applied...");
             try
             {
