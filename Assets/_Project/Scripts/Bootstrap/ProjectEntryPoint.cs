@@ -1,4 +1,4 @@
-﻿using AutoService.Infrastructure.Config;
+using AutoService.Infrastructure.Config;
 using AutoService.Infrastructure.Logging;
 using AutoService.Infrastructure.Pause;
 using AutoService.Infrastructure.Randomness;
@@ -30,7 +30,7 @@ namespace AutoService.Bootstrap
     public sealed class ProjectEntryPoint : MonoBehaviour
     {
         private const float DefaultMusicVolume = 0.7f;
-        private const float DefaultSfxVolume = 0.8f;
+        private const float DefaultSfxVolume = 0.4f;
 
         [SerializeField]
         [Tooltip("Root game configuration asset.")]
