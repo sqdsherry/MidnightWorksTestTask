@@ -1,3 +1,4 @@
+using AutoService.Infrastructure.Audio;
 using AutoService.Infrastructure.Config;
 using AutoService.Infrastructure.Logging;
 using AutoService.Infrastructure.Pause;
@@ -7,6 +8,7 @@ using AutoService.Infrastructure.Scenes;
 using AutoService.Infrastructure.Settings;
 using AutoService.Infrastructure.Timing;
 using AutoService.Presentation.Loading;
+using AutoService.Services.Audio;
 using AutoService.Services.Config;
 using AutoService.Services.Core;
 using AutoService.Services.Events;
@@ -30,7 +32,7 @@ namespace AutoService.Bootstrap
     public sealed class ProjectEntryPoint : MonoBehaviour
     {
         private const float DefaultMusicVolume = 0.7f;
-        private const float DefaultSfxVolume = 0.4f;
+        private const float DefaultSfxVolume = 0.1f;
 
         [SerializeField]
         [Tooltip("Root game configuration asset.")]
@@ -81,7 +83,11 @@ namespace AutoService.Bootstrap
             _container.Register<IEventBus>(new EventBus(_logger));
             _container.Register<IConfigProvider>(new ScriptableObjectConfigProvider(_gameConfig));
             _container.Register<ISaveService>(CreateSaveService(timeProvider));
-            _container.Register<ISettingsService>(CreateSettingsService());
+            // Why: on this persistent object, so one audio source serves every scene; created before settings,
+            // which apply the saved volumes to it.
+            IAudioService audio = new UnityAudioService(gameObject, _logger);
+            _container.Register(audio);
+            _container.Register<ISettingsService>(CreateSettingsService(audio));
 
             // Why: Unity's == — an unassigned (or missing) view must reach the loader as a real null.
             ILoadingCurtain curtain = _loadingScreen != null ? _loadingScreen : null;
@@ -133,7 +139,7 @@ namespace AutoService.Bootstrap
             return new SaveService(storage, new JsonUtilitySaveSerializer(), timeProvider, _logger);
         }
 
-        private static ISettingsService CreateSettingsService()
+        private static ISettingsService CreateSettingsService(IAudioService audio)
         {
             // Why: quality and window mode default to what the player launched with, so the first launch changes nothing.
             var defaults = new GameSettings(
@@ -144,7 +150,7 @@ namespace AutoService.Bootstrap
                 resolutionWidth: 0,
                 resolutionHeight: 0);
 
-            var settings = new SettingsService(new PlayerPrefsSettingsStore(), new UnitySettingsApplier(), defaults);
+            var settings = new SettingsService(new PlayerPrefsSettingsStore(), new UnitySettingsApplier(audio), defaults);
 
             // Why: applied right here rather than with the scene's IInitializable pass, because settings are
             // project-wide and must be in effect before (and independently of) any scene.
