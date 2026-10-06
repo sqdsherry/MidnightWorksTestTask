@@ -54,9 +54,13 @@ namespace AutoService.Presentation.Traffic
                 _sportPrefab = sport;
             }
 
-            // Optional custom wheel prefab from Resources/Prefabs
-            _darkWheelPrefab = Resources.Load<GameObject>("wheel-dark") 
-                ?? Resources.Load<GameObject>("wheel-racing");
+            // Why: racing wheels have orange rims, clearly different from the stock ones; the dark wheels differ only
+            // by a slightly darker rim and the change was not noticeable.
+            _darkWheelPrefab = Resources.Load<GameObject>("wheel-racing");
+            if (_darkWheelPrefab == null)
+            {
+                _darkWheelPrefab = Resources.Load<GameObject>("wheel-dark");
+            }
 
             _eventBus.Subscribe<ServiceCompletedEvent>(OnServiceCompleted);
         }
