@@ -1,4 +1,4 @@
-﻿using AutoService.Infrastructure.Services.Audio;
+using AutoService.Infrastructure.Services.Audio;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -9,17 +9,6 @@ namespace AutoService.Bootstrap.Editor
     public static class AudioSetup
     {
         private const string GameplayScenePath = "Assets/_Project/Scenes/Gameplay.unity";
-
-        [InitializeOnLoadMethod]
-        private static void AutoSetupAudio()
-        {
-            EditorApplication.delayCall += () =>
-            {
-                if (EditorPrefs.GetBool("AutoService_AudioSetup_V1", false)) return;
-                EditorPrefs.SetBool("AutoService_AudioSetup_V1", true);
-                ConfigureAudio();
-            };
-        }
 
         [MenuItem("AutoService/Setup/Configure Audio")]
         public static void ConfigureAudio()

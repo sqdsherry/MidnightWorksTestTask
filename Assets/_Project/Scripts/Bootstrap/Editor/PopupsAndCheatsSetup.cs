@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using AutoService.Presentation.Hud;
 using AutoService.Presentation.Points;
 using AutoService.Presentation.Popups;
@@ -36,19 +36,6 @@ namespace AutoService.Bootstrap.Editor
         private static readonly Color32 LevelBadgeColor = new Color32(0x2E, 0xCC, 0x71, 0xFF); // #2ECC71
         private static readonly Color32 DescriptionTextColor = new Color32(0x4A, 0x55, 0x68, 0xFF); // #4A5568
         private static readonly Color32 CheatPanelColor = new Color32(0x1E, 0x24, 0x30, 0xF5);
-
-        [InitializeOnLoadMethod]
-        private static void OnEditorLoad()
-        {
-            EditorApplication.delayCall += () =>
-            {
-                if (!EditorPrefs.GetBool("Task21_Setup_V2_Completed", false))
-                {
-                    EditorPrefs.SetBool("Task21_Setup_V2_Completed", true);
-                    RunSetup();
-                }
-            };
-        }
 
         [MenuItem("AutoService/Setup/Setup Task 21 Popups and Debug Cheats")]
         public static void RunSetup()

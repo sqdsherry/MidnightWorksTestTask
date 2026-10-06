@@ -1,18 +1,13 @@
-﻿using UnityEditor;
+using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 
 namespace AutoService.Bootstrap.Editor
 {
-    [InitializeOnLoad]
     public static class AutoSceneRepair
     {
-        static AutoSceneRepair()
-        {
-            EditorApplication.delayCall += Repair;
-        }
-
-        private static void Repair()
+        [MenuItem("AutoService/Setup/Auto Repair Gameplay Scene")]
+        public static void Repair()
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode || EditorApplication.isCompiling) return;
             

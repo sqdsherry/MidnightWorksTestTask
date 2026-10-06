@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using AutoService.Infrastructure.Config;
 using AutoService.Presentation.Interaction;
@@ -30,17 +30,6 @@ namespace AutoService.Bootstrap.Editor
         private static readonly Color32 PadRingBackground = new Color32(0x1E, 0x24, 0x30, 153);
         private static readonly Color32 PadRingFill = new Color32(0x4F, 0xC3, 0xF7, 0xFF);
         private static readonly Vector2 PadCanvasSize = new Vector2(200f, 200f);
-
-        [InitializeOnLoadMethod]
-        private static void AutoSyncWarehouseVisuals()
-        {
-            EditorApplication.delayCall += () =>
-            {
-                if (EditorPrefs.GetBool("AutoService_WarehouseLoc2Visuals_V3", false)) return;
-                EditorPrefs.SetBool("AutoService_WarehouseLoc2Visuals_V3", true);
-                ApplyFixes();
-            };
-        }
 
         /// <summary>
         /// Applies in-place non-destructive updates to the gameplay scene and configs.
