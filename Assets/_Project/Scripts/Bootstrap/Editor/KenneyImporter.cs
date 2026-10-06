@@ -10,7 +10,7 @@ namespace AutoService.Bootstrap.Editor
     {
         private static readonly (string pack, string regex)[] Whitelist = new[]
         {
-            ("kenney_car-kit", "^(sedan|suv|sedan-sports|wheel-default|wheel-dark|debris-tire|cone|box)\\.fbx$"),
+            ("kenney_car-kit", "^(sedan|suv|sedan-sports|suv-luxury|hatchback-sports|race|race-future|taxi|police|ambulance|truck|van|wheel-default|wheel-dark|wheel-racing|debris-tire|debris-spoiler-.*|cone|box)\\.fbx$"),
             ("kenney_cityKitRoads_1.1", "^(road_straight|road_bend|road_curve|road_crossroad|road_intersection|road_sideEntry|road_sideExit|road_drivewayDouble|road_drivewaySingle|road_square|tile_low|light_square|light_curved)\\.fbx$"),
             ("kenney_city-kit-commercial_2.1", "^(building-[a-n]|low-detail-building-.*|building-skyscraper-.*|detail-awning(-wide)?|detail-overhang|detail-parasol-a|cover-window)\\.fbx$"),
             ("kenney_conveyor-kit", "^(structure-doorway-wide|door-wide-open|structure-wall|structure-window(-wide)?|structure-corner-.*|top(-large)?|floor(-large)?|scanner-high|cover|cover-hopper|robot-arm-a|box-small|box-long|box-wide|box-large|conveyor-long|structure-yellow-.*)\\.fbx$"),
@@ -85,6 +85,14 @@ namespace AutoService.Bootstrap.Editor
                 }
             }
 
+            bool uiImported = ImportUiPack(downloadDir, targetRoot);
+            if (uiImported)
+            {
+                importedAny = true;
+            }
+
+            ConfigureUiSprites();
+
             if (importedAny)
             {
                 AssetDatabase.Refresh();
@@ -95,6 +103,7 @@ namespace AutoService.Bootstrap.Editor
             }
             else
             {
+                CreateWrappers();
                 Debug.Log("[KenneyImporter] Kenney assets already imported or missing.");
             }
         }
@@ -213,6 +222,114 @@ namespace AutoService.Bootstrap.Editor
                 }
             }
             AssetDatabase.SaveAssets();
+        }
+
+        private static bool ImportUiPack(string downloadDir, string targetRoot)
+        {
+            string uiSourceDir = Path.Combine(downloadDir, "kenney_ui-pack", "PNG");
+            if (!Directory.Exists(uiSourceDir))
+            {
+                return false;
+            }
+
+            string targetUiDir = Path.Combine(targetRoot, "kenney_ui-pack");
+            Directory.CreateDirectory(targetUiDir);
+
+            string[] subfolders = { "Blue", "Green", "Grey", "Red", "Yellow", "Extra" };
+            bool anyCopied = false;
+
+            foreach (string folder in subfolders)
+            {
+                string srcSub = Path.Combine(uiSourceDir, folder);
+                if (!Directory.Exists(srcSub)) continue;
+
+                string dstSub = Path.Combine(targetUiDir, folder);
+                Directory.CreateDirectory(dstSub);
+
+                foreach (string file in Directory.GetFiles(srcSub, "*.png", SearchOption.AllDirectories))
+                {
+                    string relPath = file.Substring(srcSub.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                    string destFile = Path.Combine(dstSub, relPath);
+                    string destParent = Path.GetDirectoryName(destFile);
+                    if (!string.IsNullOrEmpty(destParent))
+                    {
+                        Directory.CreateDirectory(destParent);
+                    }
+
+                    if (!File.Exists(destFile))
+                    {
+                        File.Copy(file, destFile);
+                        anyCopied = true;
+                    }
+                }
+            }
+
+            if (anyCopied)
+            {
+                AssetDatabase.Refresh();
+            }
+
+            return anyCopied;
+        }
+
+        [MenuItem("AutoService/Setup/Configure Kenney UI Sprites")]
+        public static void ConfigureUiSprites()
+        {
+            string diskDir = Path.Combine(Application.dataPath, "_Project/Art/Kenney/kenney_ui-pack");
+            if (!Directory.Exists(diskDir)) return;
+
+            string[] pngFiles = Directory.GetFiles(diskDir, "*.png", SearchOption.AllDirectories);
+            bool anyChanged = false;
+
+            foreach (string fullPath in pngFiles)
+            {
+                string relPath = "Assets" + fullPath.Substring(Application.dataPath.Length).Replace('\\', '/');
+                var importer = AssetImporter.GetAtPath(relPath) as TextureImporter;
+                if (importer == null) continue;
+
+                bool changed = false;
+                if (importer.textureType != TextureImporterType.Sprite)
+                {
+                    importer.textureType = TextureImporterType.Sprite;
+                    changed = true;
+                }
+
+                if (importer.spriteImportMode != SpriteImportMode.Single)
+                {
+                    importer.spriteImportMode = SpriteImportMode.Single;
+                    changed = true;
+                }
+
+                if (importer.filterMode != FilterMode.Bilinear)
+                {
+                    importer.filterMode = FilterMode.Bilinear;
+                    changed = true;
+                }
+
+                string fileName = Path.GetFileNameWithoutExtension(relPath).ToLowerInvariant();
+                if (fileName.StartsWith("button_rectangle") || fileName.StartsWith("input_") || fileName.StartsWith("button_square"))
+                {
+                    Vector4 currentBorder = importer.spriteBorder;
+                    Vector4 targetBorder = new Vector4(14, 14, 14, 14);
+                    if (Vector4.Distance(currentBorder, targetBorder) > 0.01f)
+                    {
+                        importer.spriteBorder = targetBorder;
+                        changed = true;
+                    }
+                }
+
+                if (changed)
+                {
+                    importer.SaveAndReimport();
+                    anyChanged = true;
+                }
+            }
+
+            if (anyChanged)
+            {
+                AssetDatabase.Refresh();
+                Debug.Log("[KenneyImporter] Successfully configured Kenney UI sprites.");
+            }
         }
     }
 }

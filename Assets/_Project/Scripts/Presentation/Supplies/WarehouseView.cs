@@ -36,9 +36,13 @@ namespace AutoService.Presentation.Supplies
         [Tooltip("Optional world-space text for short failure messages.")]
         private TMP_Text _messageLabel;
 
+        [SerializeField]
+        [Tooltip("Optional message container/badge for punch and fade animations.")]
+        private GameObject _messageRoot;
+
         [SerializeField, Min(0.1f)]
         [Tooltip("Seconds a message stays visible (unscaled time).")]
-        private float _messageSeconds = 1.5f;
+        private float _messageSeconds = 2.0f;
 
         [SerializeField]
         [Tooltip("Shown when the character already carries a box.")]
@@ -201,37 +205,97 @@ namespace AutoService.Presentation.Supplies
 
         private void ShowMessage(string text)
         {
-            if (_messageLabel == null)
+            if (_messageLabel == null && _messageRoot == null)
             {
                 return;
             }
 
-            _messageLabel.text = text;
-            _messageLabel.gameObject.SetActive(true);
+            if (_messageLabel != null)
+            {
+                _messageLabel.text = text;
+            }
+
+            GameObject activeTarget = _messageRoot != null ? _messageRoot : _messageLabel.gameObject;
+            activeTarget.SetActive(true);
+
             if (_message != null)
             {
                 StopCoroutine(_message);
             }
 
-            // Why: a coroutine needs an active object; without one the message simply stays until the next interaction.
             if (isActiveAndEnabled)
             {
-                _message = StartCoroutine(HideMessageLater());
+                _message = StartCoroutine(AnimateMessage(activeTarget));
             }
         }
 
-        private IEnumerator HideMessageLater()
+        private IEnumerator AnimateMessage(GameObject target)
         {
-            // Why: unscaled — the message is UI feedback and should disappear even while the game is paused.
-            _messageWait ??= new WaitForSecondsRealtime(_messageSeconds);
-            _messageWait.Reset();
-            yield return _messageWait;
+            Transform t = target.transform;
+            Vector3 originalScale = Vector3.one;
+            Vector3 baseLocalPos = t.localPosition;
+
+            float elapsed = 0f;
+            float totalDuration = _messageSeconds;
+
+            CanvasGroup group = target.GetComponent<CanvasGroup>();
+
+            while (elapsed < totalDuration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float progress = Mathf.Clamp01(elapsed / totalDuration);
+
+                // Punch scale: quick zoom 1.0 -> 1.18 -> 1.0 in first 0.35s
+                float scaleMod = 1f;
+                if (progress < 0.2f)
+                {
+                    scaleMod = Mathf.Lerp(1.0f, 1.18f, progress / 0.2f);
+                }
+                else if (progress < 0.35f)
+                {
+                    scaleMod = Mathf.Lerp(1.18f, 1.0f, (progress - 0.2f) / 0.15f);
+                }
+
+                t.localScale = originalScale * scaleMod;
+
+                // Subtle shake while visible
+                if (progress < 0.35f)
+                {
+                    float shake = Mathf.Sin(elapsed * 45f) * 4f * (1f - progress / 0.35f);
+                    t.localPosition = baseLocalPos + new Vector3(shake, 0f, 0f);
+                }
+                else
+                {
+                    t.localPosition = baseLocalPos;
+                }
+
+                // Smooth fade out in the last 0.4s
+                if (progress > 0.8f && group != null)
+                {
+                    group.alpha = Mathf.Lerp(1f, 0f, (progress - 0.8f) / 0.2f);
+                }
+                else if (group != null)
+                {
+                    group.alpha = 1f;
+                }
+
+                yield return null;
+            }
+
+            t.localScale = originalScale;
+            t.localPosition = baseLocalPos;
+            if (group != null) group.alpha = 1f;
+
             _message = null;
             HideMessage();
         }
 
         private void HideMessage()
         {
+            if (_messageRoot != null)
+            {
+                _messageRoot.SetActive(false);
+            }
             if (_messageLabel != null)
             {
                 _messageLabel.gameObject.SetActive(false);

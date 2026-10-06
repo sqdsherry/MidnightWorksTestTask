@@ -9,30 +9,35 @@ namespace AutoService.Presentation.Traffic
     public enum ServiceType
     {
         None = 0,
-        Tuning = 1,
-        Painting = 2
+        Tires = 1,
+        Tuning = 2,
+        Painting = 3
     }
 
     /// <summary>
     /// Listens for completed services on cars and applies visual customizations:
-    /// tuning upgrades the car model to Car_Sport, and painting changes its body color.
+    /// tires upgrades rims, tuning upgrades the car model to Car_Sport, and painting changes its body color.
+    /// Modifications accumulate across services and reset when the car returns to the pool.
     /// </summary>
     public sealed class CarCustomizationPresenter : IDisposable
     {
         private static readonly Color[] PaintPalette =
         {
-            Color.red,
-            Color.blue,
-            Color.yellow,
-            Color.green,
-            new Color(1f, 0.5f, 0f),      // Orange
-            new Color(0.6f, 0f, 0.8f)     // Purple
+            new Color(0.95f, 0.15f, 0.15f), // Rich Red
+            new Color(0.1f, 0.5f, 1f),      // Electric Neon Blue
+            new Color(0.15f, 0.9f, 0.25f),  // Vibrant Lime Green
+            new Color(1f, 0.55f, 0.05f),    // Sport Orange
+            new Color(0.7f, 0.15f, 0.95f),  // Deep Neon Purple
+            new Color(1f, 0.85f, 0.1f),     // Racing Yellow
+            new Color(0.1f, 0.9f, 0.9f),    // Bright Cyan
+            new Color(0.95f, 0.2f, 0.6f)    // Hot Pink
         };
 
         private readonly IEventBus _eventBus;
         private readonly CarVisualCatalog _catalog;
         private readonly IEnumerable<CarAgents> _agents;
         private readonly CarView _sportPrefab;
+        private readonly GameObject _darkWheelPrefab;
         private bool _disposed;
 
         public CarCustomizationPresenter(
@@ -48,6 +53,10 @@ namespace AutoService.Presentation.Traffic
             {
                 _sportPrefab = sport;
             }
+
+            // Optional custom wheel prefab from Resources/Prefabs
+            _darkWheelPrefab = Resources.Load<GameObject>("wheel-dark") 
+                ?? Resources.Load<GameObject>("wheel-racing");
 
             _eventBus.Subscribe<ServiceCompletedEvent>(OnServiceCompleted);
         }
@@ -79,6 +88,9 @@ namespace AutoService.Presentation.Traffic
 
             switch (serviceType)
             {
+                case ServiceType.Tires:
+                    ApplyTires(view);
+                    break;
                 case ServiceType.Tuning:
                     ApplyTuning(view);
                     break;
@@ -90,6 +102,12 @@ namespace AutoService.Presentation.Traffic
 
         private static ServiceType ResolveServiceType(string pointId, string serviceTypeId)
         {
+            if ((pointId != null && pointId.IndexOf("tires", StringComparison.OrdinalIgnoreCase) >= 0)
+                || (serviceTypeId != null && serviceTypeId.IndexOf("tires", StringComparison.OrdinalIgnoreCase) >= 0))
+            {
+                return ServiceType.Tires;
+            }
+
             if ((pointId != null && pointId.IndexOf("tuning", StringComparison.OrdinalIgnoreCase) >= 0)
                 || (serviceTypeId != null && serviceTypeId.IndexOf("tuning", StringComparison.OrdinalIgnoreCase) >= 0))
             {
@@ -116,6 +134,11 @@ namespace AutoService.Presentation.Traffic
             }
 
             return null;
+        }
+
+        private void ApplyTires(CarView view)
+        {
+            view.ApplyTiresUpgrade(_darkWheelPrefab);
         }
 
         private void ApplyTuning(CarView view)

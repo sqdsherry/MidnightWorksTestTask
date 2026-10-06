@@ -82,13 +82,6 @@ namespace AutoService.Bootstrap.Installers
                 new PlayerInputPresenter(input, raycaster, scene.Player, context.Resolve<IPauseService>(), scene.ClickMarker),
                 TickPhase.Input);
 
-            var animator = scene.Player.GetComponentInChildren<Animator>();
-            if (animator != null)
-            {
-                var charAnim = new CharacterAnimator(animator, scene.Player.Agent);
-                context.Register(new PlayerAnimatorPresenter(charAnim, context.Resolve<IPlayerCarry>()), TickPhase.Presentation);
-            }
-
             scene.CameraRig.Construct(input, scene.Player);
         }
     }

@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: GameConfig
   m_EditorClassIdentifier: AutoService.Infrastructure::AutoService.Infrastructure.Config.GameConfig
   _economy:
-    _startingMoney: 2000
+    _startingMoney: 1000000
   _serviceTypes:
   - {fileID: 11400000, guid: ebb75d638506884498705552fc06f6c0, type: 2}
   - {fileID: 11400000, guid: 8aa51d7740bedc1469cee2695c1f7f0e, type: 2}

@@ -38,6 +38,7 @@ namespace AutoService.Presentation.Building
         private BuildPlotView _openPlot;
         private string _buildLabel;
         private string _needLabel;
+        private string _lockedLabel;
         private BuildAvailability _shownAvailability;
         private bool _disposed;
 
@@ -174,6 +175,7 @@ namespace AutoService.Presentation.Building
             // Why: formatted once per opening; the balance listener only picks one of them.
             _buildLabel = string.Format(_view.ActionLabelFormat, cost);
             _needLabel = string.Format(_view.NeedLabelFormat, cost);
+            _lockedLabel = string.Format("Locked (Lv {0})", settings.RequiredLevel.ToString(CultureInfo.InvariantCulture));
 
             BuildAvailability availability = _build.GetAvailability(plot.PlotId);
             string requirement = availability == BuildAvailability.Locked
@@ -217,7 +219,7 @@ namespace AutoService.Presentation.Building
                     _view.SetAffordable(false, _needLabel);
                     break;
                 case BuildAvailability.Locked:
-                    _view.SetAffordable(false, _view.LockedLabel);
+                    _view.SetAffordable(false, _lockedLabel);
                     break;
                 default:
                     Close();

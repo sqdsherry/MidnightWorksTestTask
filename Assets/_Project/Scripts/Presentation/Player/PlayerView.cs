@@ -58,6 +58,25 @@ namespace AutoService.Presentation.Player
         /// <summary>Current state of the movement FSM.</summary>
         public PlayerMotionState State { get; internal set; }
 
+        private void Awake()
+        {
+            if (_agent != null)
+            {
+                _agent.baseOffset = 0f;
+            }
+
+            Vector3 pos = transform.position;
+            if (Mathf.Abs(pos.y) > 0.001f)
+            {
+                pos.y = 0f;
+                transform.position = pos;
+                if (_agent != null && _agent.isOnNavMesh)
+                {
+                    _agent.Warp(pos);
+                }
+            }
+        }
+
         /// <summary>True while walking (to a point or to a target). For animation later.</summary>
         public bool IsMoving => State == PlayerMotionState.MovingToPoint || State == PlayerMotionState.MovingToTarget;
 

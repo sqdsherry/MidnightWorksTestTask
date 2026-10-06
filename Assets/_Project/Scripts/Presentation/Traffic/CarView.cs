@@ -53,8 +53,19 @@ namespace AutoService.Presentation.Traffic
 
         private static readonly int BaseColorPropertyId = Shader.PropertyToID("_BaseColor");
         private static readonly int ColorPropertyId = Shader.PropertyToID("_Color");
+        private static readonly int BaseMapPropertyId = Shader.PropertyToID("_BaseMap");
+        private static readonly int MainTexPropertyId = Shader.PropertyToID("_MainTex");
+        private static readonly Dictionary<Color, Texture2D> CachedColorTextures = new Dictionary<Color, Texture2D>();
+        private static byte[] _baseColormapBytes;
+
         private MaterialPropertyBlock _propertyBlock;
+        private MaterialPropertyBlock _wheelPropertyBlock;
         private bool _hasCustomColor;
+        private Color _customBodyColor;
+        private bool _hasCustomWheels;
+        private GameObject _customWheelPrefab;
+        private readonly List<GameObject> _spawnedWheels = new List<GameObject>(4);
+        private readonly List<GameObject> _hiddenOriginalWheels = new List<GameObject>(4);
         private GameObject _customVisual;
         private GameObject _defaultVisual;
 
@@ -66,6 +77,14 @@ namespace AutoService.Presentation.Traffic
 
         private bool AgentUsable => _agent != null && _agent.isActiveAndEnabled && _agent.isOnNavMesh;
 
+        private void Awake()
+        {
+            if (_agent != null)
+            {
+                _agent.baseOffset = 0f;
+            }
+        }
+
         /// <summary>Activates the car (if pooled) and teleports it onto <paramref name="startNode"/>, with no route.</summary>
         /// <param name="carId">Runtime id; the car enters merge zones under it.</param>
         /// <param name="startNode">Node the car appears on (the spawn); its forward is the initial heading.</param>
@@ -76,7 +95,7 @@ namespace AutoService.Presentation.Traffic
             ClearRoute();
 
             Transform start = startNode.transform;
-            Vector3 position = start.position;
+            Vector3 position = new Vector3(start.position.x, 0f, start.position.z);
             Quaternion rotation = YawOnly(start.rotation, transform.rotation);
 
             // Why: positioned before activation so the agent snaps onto the NavMesh at the spawn point, not at the pool root.
@@ -88,6 +107,7 @@ namespace AutoService.Presentation.Traffic
 
             if (_agent != null && _agent.isActiveAndEnabled)
             {
+                _agent.baseOffset = 0f;
                 _agent.Warp(position);
                 transform.rotation = rotation;
             }
@@ -227,22 +247,93 @@ namespace AutoService.Presentation.Traffic
             Halt();
             ResetVisualModel();
             ClearCustomColor();
+            ResetCustomWheels();
             _currentNode = null;
             _carId = NoCar;
         }
 
-        /// <summary>Applies a custom body color to the car's renderers via MaterialPropertyBlock (zero material allocation).</summary>
+        /// <summary>Applies a custom body color to the car's renderers via MaterialPropertyBlock using cached tinted palette texture (windows and lights remain intact).</summary>
         public void SetBodyColor(Color color)
         {
+            _customBodyColor = color;
+            _hasCustomColor = true;
+
             if (_propertyBlock == null)
             {
                 _propertyBlock = new MaterialPropertyBlock();
             }
 
-            _propertyBlock.SetColor(BaseColorPropertyId, color);
-            _propertyBlock.SetColor(ColorPropertyId, color);
-            _hasCustomColor = true;
+            Texture2D tintedTex = GetOrCreateTintedPalette(color);
+            if (tintedTex != null)
+            {
+                _propertyBlock.SetTexture(BaseMapPropertyId, tintedTex);
+                _propertyBlock.SetTexture(MainTexPropertyId, tintedTex);
+                _propertyBlock.SetColor(BaseColorPropertyId, Color.white);
+                _propertyBlock.SetColor(ColorPropertyId, Color.white);
+            }
+            else
+            {
+                _propertyBlock.SetColor(BaseColorPropertyId, color);
+                _propertyBlock.SetColor(ColorPropertyId, color);
+            }
+
             ApplyPropertyBlock();
+        }
+
+        private static Texture2D GetOrCreateTintedPalette(Color targetColor)
+        {
+            if (CachedColorTextures.TryGetValue(targetColor, out Texture2D cached) && cached != null)
+            {
+                return cached;
+            }
+
+            if (_baseColormapBytes == null)
+            {
+                TextAsset rawAsset = Resources.Load<TextAsset>("colormap_raw");
+                if (rawAsset != null)
+                {
+                    _baseColormapBytes = rawAsset.bytes;
+                }
+            }
+
+            if (_baseColormapBytes == null || _baseColormapBytes.Length != 512 * 512 * 4)
+            {
+                return null;
+            }
+
+            Texture2D newTex = new Texture2D(512, 512, TextureFormat.RGBA32, false);
+            newTex.filterMode = FilterMode.Bilinear;
+            newTex.wrapMode = TextureWrapMode.Clamp;
+
+            byte[] modifiedBytes = new byte[_baseColormapBytes.Length];
+            System.Buffer.BlockCopy(_baseColormapBytes, 0, modifiedBytes, 0, _baseColormapBytes.Length);
+
+            byte targetR = (byte)Mathf.Clamp(Mathf.RoundToInt(targetColor.r * 255f), 0, 255);
+            byte targetG = (byte)Mathf.Clamp(Mathf.RoundToInt(targetColor.g * 255f), 0, 255);
+            byte targetB = (byte)Mathf.Clamp(Mathf.RoundToInt(targetColor.b * 255f), 0, 255);
+
+            // Replace car body pixels (red/orange car sector)
+            for (int i = 0; i < modifiedBytes.Length; i += 4)
+            {
+                byte r = modifiedBytes[i];
+                byte g = modifiedBytes[i + 1];
+                byte b = modifiedBytes[i + 2];
+
+                // Detect red/orange car body color: high red, low blue, warm tone
+                if (r > 180 && g < 155 && b < 100 && (r - g) > 35 && (r - b) > 55)
+                {
+                    float factor = r / 255f;
+                    modifiedBytes[i] = (byte)Mathf.Clamp(Mathf.RoundToInt(targetR * factor), 0, 255);
+                    modifiedBytes[i + 1] = (byte)Mathf.Clamp(Mathf.RoundToInt(targetG * factor), 0, 255);
+                    modifiedBytes[i + 2] = (byte)Mathf.Clamp(Mathf.RoundToInt(targetB * factor), 0, 255);
+                }
+            }
+
+            newTex.LoadRawTextureData(modifiedBytes);
+            newTex.Apply(false, true);
+
+            CachedColorTextures[targetColor] = newTex;
+            return newTex;
         }
 
         /// <summary>Removes any custom MaterialPropertyBlock override.</summary>
@@ -299,6 +390,11 @@ namespace AutoService.Presentation.Traffic
                 _customVisual.transform.localScale = sportVisual.localScale;
                 _customVisual.SetActive(true);
 
+                if (_hasCustomWheels)
+                {
+                    ApplyWheelVisuals();
+                }
+
                 if (_hasCustomColor)
                 {
                     ApplyPropertyBlock();
@@ -321,6 +417,133 @@ namespace AutoService.Presentation.Traffic
             }
         }
 
+        /// <summary>Applies tires upgrade by swapping wheels with dark/racing wheel prefabs or applying dark sport rim material block.</summary>
+        public void ApplyTiresUpgrade(GameObject customWheelPrefab = null)
+        {
+            _hasCustomWheels = true;
+            _customWheelPrefab = customWheelPrefab;
+            ApplyWheelVisuals();
+        }
+
+        public void ResetCustomWheels()
+        {
+            _hasCustomWheels = false;
+            _customWheelPrefab = null;
+
+            for (int i = 0; i < _spawnedWheels.Count; i++)
+            {
+                if (_spawnedWheels[i] != null)
+                {
+                    Destroy(_spawnedWheels[i]);
+                }
+            }
+            _spawnedWheels.Clear();
+
+            for (int i = 0; i < _hiddenOriginalWheels.Count; i++)
+            {
+                if (_hiddenOriginalWheels[i] != null)
+                {
+                    _hiddenOriginalWheels[i].SetActive(true);
+                }
+            }
+            _hiddenOriginalWheels.Clear();
+
+            if (_wheelPropertyBlock != null)
+            {
+                Transform activeVisual = _customVisual != null && _customVisual.activeSelf
+                    ? _customVisual.transform
+                    : (_defaultVisual != null ? _defaultVisual.transform : transform.Find("Visual"));
+
+                if (activeVisual != null)
+                {
+                    MeshRenderer[] renderers = activeVisual.GetComponentsInChildren<MeshRenderer>(true);
+                    for (int i = 0; i < renderers.Length; i++)
+                    {
+                        if (renderers[i].gameObject.name.ToLowerInvariant().Contains("wheel"))
+                        {
+                            renderers[i].SetPropertyBlock(null);
+                        }
+                    }
+                }
+            }
+        }
+
+        private void ApplyWheelVisuals()
+        {
+            Transform activeVisual = _customVisual != null && _customVisual.activeSelf
+                ? _customVisual.transform
+                : (_defaultVisual != null ? _defaultVisual.transform : transform.Find("Visual"));
+
+            if (activeVisual == null) return;
+
+            // Clear previously spawned wheels
+            for (int i = 0; i < _spawnedWheels.Count; i++)
+            {
+                if (_spawnedWheels[i] != null)
+                {
+                    Destroy(_spawnedWheels[i]);
+                }
+            }
+            _spawnedWheels.Clear();
+            _hiddenOriginalWheels.Clear();
+
+            List<Transform> wheelNodes = new List<Transform>();
+            FindWheelTransforms(activeVisual, wheelNodes);
+
+            if (_customWheelPrefab != null && wheelNodes.Count > 0)
+            {
+                foreach (Transform wheelNode in wheelNodes)
+                {
+                    wheelNode.gameObject.SetActive(false);
+                    _hiddenOriginalWheels.Add(wheelNode.gameObject);
+
+                    GameObject newWheel = Instantiate(_customWheelPrefab, wheelNode.parent);
+                    newWheel.name = "CustomWheel_" + wheelNode.name;
+                    newWheel.transform.localPosition = wheelNode.localPosition;
+                    newWheel.transform.localRotation = wheelNode.localRotation;
+                    newWheel.transform.localScale = wheelNode.localScale;
+                    newWheel.SetActive(true);
+                    _spawnedWheels.Add(newWheel);
+                }
+            }
+            else
+            {
+                // Fallback / alternate styling: dark metallic rims via MaterialPropertyBlock
+                if (_wheelPropertyBlock == null)
+                {
+                    _wheelPropertyBlock = new MaterialPropertyBlock();
+                }
+                Color darkRimColor = new Color(0.12f, 0.12f, 0.14f, 1f);
+                _wheelPropertyBlock.SetColor(BaseColorPropertyId, darkRimColor);
+                _wheelPropertyBlock.SetColor(ColorPropertyId, darkRimColor);
+
+                foreach (Transform wheelNode in wheelNodes)
+                {
+                    MeshRenderer mr = wheelNode.GetComponent<MeshRenderer>();
+                    if (mr != null)
+                    {
+                        mr.SetPropertyBlock(_wheelPropertyBlock);
+                    }
+                }
+            }
+        }
+
+        private static void FindWheelTransforms(Transform parent, List<Transform> results)
+        {
+            for (int i = 0; i < parent.childCount; i++)
+            {
+                Transform child = parent.GetChild(i);
+                if (child.name.ToLowerInvariant().Contains("wheel"))
+                {
+                    results.Add(child);
+                }
+                else
+                {
+                    FindWheelTransforms(child, results);
+                }
+            }
+        }
+
         private void ApplyPropertyBlock()
         {
             if (!_hasCustomColor || _propertyBlock == null)
@@ -328,9 +551,20 @@ namespace AutoService.Presentation.Traffic
                 return;
             }
 
-            MeshRenderer[] renderers = GetComponentsInChildren<MeshRenderer>(true);
+            Transform activeVisual = _customVisual != null && _customVisual.activeSelf
+                ? _customVisual.transform
+                : (_defaultVisual != null ? _defaultVisual.transform : transform.Find("Visual"));
+
+            if (activeVisual == null) return;
+
+            MeshRenderer[] renderers = activeVisual.GetComponentsInChildren<MeshRenderer>(true);
             for (int i = 0; i < renderers.Length; i++)
             {
+                // Do not tint custom wheels if they have their own tint
+                if (_hasCustomWheels && renderers[i].gameObject.name.ToLowerInvariant().Contains("wheel"))
+                {
+                    continue;
+                }
                 renderers[i].SetPropertyBlock(_propertyBlock);
             }
         }
@@ -466,8 +700,10 @@ namespace AutoService.Presentation.Traffic
 
         private void SnapPosition(Vector3 position)
         {
+            position.y = 0f;
             if (AgentUsable)
             {
+                _agent.baseOffset = 0f;
                 _agent.Warp(position);
                 return;
             }

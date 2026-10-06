@@ -1121,7 +1121,6 @@ namespace AutoService.Bootstrap.Editor
             Vector3 position = padGround + Vector3.up * PadCanvasHeight + towardsCamera * PadCanvasTowardsCamera;
             RectTransform canvas = CreateWorldCanvas("Tag", parent, position, PadCanvasSize, facing, PadRingDiameter / PadCanvasSize.x);
 
-            Image background = CreateRingImage(canvas, "Background", PadRingBackground);
             Image fill = CreateRingImage(canvas, "Fill", PadRingFill);
             fill.type = Image.Type.Filled;
             fill.fillMethod = Image.FillMethod.Radial360;
@@ -1130,23 +1129,11 @@ namespace AutoService.Bootstrap.Editor
             fill.fillAmount = 0f;
             fill.gameObject.SetActive(false);
 
-            // Why: last child, so the icon stays visible on top of the fill; the built-in dropdown arrow points down,
-            // turned over it is the "upgrade" arrow.
-            var arrowObject = new GameObject("Arrow", typeof(RectTransform));
-            arrowObject.transform.SetParent(canvas, false);
-            var arrowRect = (RectTransform)arrowObject.transform;
-            arrowRect.sizeDelta = new Vector2(PadArrowSize, PadArrowSize);
-            arrowRect.localRotation = Quaternion.Euler(0f, 0f, 180f);
-            var arrow = arrowObject.AddComponent<Image>();
-            arrow.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>(ArrowSpritePath);
-            arrow.color = Color.white;
-            arrow.raycastTarget = false;
-
             var ringView = canvas.gameObject.AddComponent<DwellRingView>();
             var serialized = new SerializedObject(ringView);
             serialized.FindProperty("_fill").objectReferenceValue = fill;
             serialized.FindProperty("_root").objectReferenceValue = fill.gameObject;
-            serialized.FindProperty("_background").objectReferenceValue = background.gameObject;
+            serialized.FindProperty("_background").objectReferenceValue = null;
             serialized.ApplyModifiedPropertiesWithoutUndo();
             return ringView;
         }

@@ -83,16 +83,39 @@ namespace AutoService.Presentation.Staff
         public void SetRole(AutoService.Domain.Staff.StaffRole role)
         {
             Transform vis = transform.Find("Visual");
-            if (vis == null) return;
-            
-            Transform worker = vis.Find("Worker");
-            Transform storekeeper = vis.Find("Storekeeper");
-            
-            if (worker != null && storekeeper != null)
+            if (vis != null)
             {
-                worker.gameObject.SetActive(role == AutoService.Domain.Staff.StaffRole.PointWorker);
-                storekeeper.gameObject.SetActive(role == AutoService.Domain.Staff.StaffRole.Storekeeper);
-                _body = role == AutoService.Domain.Staff.StaffRole.PointWorker ? worker.GetComponentInChildren<Renderer>() : storekeeper.GetComponentInChildren<Renderer>();
+                Transform worker = vis.Find("Worker");
+                Transform storekeeper = vis.Find("Storekeeper");
+                if (worker != null && storekeeper != null)
+                {
+                    worker.gameObject.SetActive(role == AutoService.Domain.Staff.StaffRole.PointWorker);
+                    storekeeper.gameObject.SetActive(role == AutoService.Domain.Staff.StaffRole.Storekeeper);
+                    Renderer r = role == AutoService.Domain.Staff.StaffRole.PointWorker 
+                        ? worker.GetComponentInChildren<Renderer>() 
+                        : storekeeper.GetComponentInChildren<Renderer>();
+                    if (r != null)
+                    {
+                        _body = r;
+                    }
+                    return;
+                }
+            }
+
+            // Фоллбэк: если используется базовый префаб с Body/Head
+            Transform fallbackBody = transform.Find("Body");
+            if (fallbackBody != null)
+            {
+                fallbackBody.gameObject.SetActive(true);
+                if (_body == null)
+                {
+                    _body = fallbackBody.GetComponent<Renderer>();
+                }
+            }
+            Transform fallbackHead = transform.Find("Head");
+            if (fallbackHead != null)
+            {
+                fallbackHead.gameObject.SetActive(true);
             }
         }
 
@@ -101,15 +124,26 @@ namespace AutoService.Presentation.Staff
         public bool WalkTo(Transform target)
         {
             _target = target;
-            if (_agent != null
-                && _agent.isActiveAndEnabled
-                && _agent.isOnNavMesh
-                && NavMesh.SamplePosition(target.position, out NavMeshHit hit, NavMeshSampleRadius, _agent.areaMask)
-                && _agent.SetDestination(hit.position))
+            if (_agent != null && _agent.isActiveAndEnabled)
             {
-                _agent.updateRotation = true;
-                _phase = Phase.Walking;
-                return true;
+                if (!_agent.isOnNavMesh)
+                {
+                    if (NavMesh.SamplePosition(transform.position, out NavMeshHit curHit, 3.0f, _agent.areaMask))
+                    {
+                        _agent.Warp(curHit.position);
+                    }
+                }
+
+                if (_agent.isOnNavMesh
+                    && NavMesh.SamplePosition(target.position, out NavMeshHit hit, 3.0f, _agent.areaMask))
+                {
+                    if (_agent.SetDestination(hit.position))
+                    {
+                        _agent.updateRotation = true;
+                        _phase = Phase.Walking;
+                        return true;
+                    }
+                }
             }
 
             Place(target.position, target.rotation);
@@ -125,33 +159,56 @@ namespace AutoService.Presentation.Staff
             switch (_phase)
             {
                 case Phase.Walking:
-                    // Why: off the NavMesh remainingDistance throws every frame, and a partial/invalid path ends at the edge
-                    // of the reachable area — "arriving" there would let a worker hold a spot it does not stand on or the
-                    // storekeeper deliver through a wall. The NPC must not get stuck forever either, so it is teleported
-                    // onto the target (logged once) and then arrives normally.
                     if (!_agent.isOnNavMesh)
                     {
                         SnapToTarget("is not on the NavMesh");
                         return false;
                     }
 
+                    // Если путь еще рассчитывается в фоне — ждем завершения расчета
                     if (_agent.pathPending)
                     {
                         return false;
                     }
 
-                    if (_agent.pathStatus != NavMeshPathStatus.PathComplete)
+                    // Если путь вообще недостижим (нет проходимой сетки)
+                    if (_agent.pathStatus == NavMeshPathStatus.PathInvalid)
                     {
-                        SnapToTarget("has no complete path (" + _agent.pathStatus + ")");
+                        SnapToTarget("has invalid path");
                         return false;
                     }
 
-                    if (_agent.remainingDistance > _agent.stoppingDistance + _arrivalTolerance)
+                    // Если у агента еще нет пути — ждем инициализации NavMesh
+                    if (!_agent.hasPath)
                     {
                         return false;
                     }
 
-                    StartTurning();
+                    // Проверяем реальное приближение к цели
+                    bool closeToTarget = _target != null && Vector3.Distance(transform.position, _target.position) <= 1.8f;
+                    bool reachedPathEnd = _agent.remainingDistance <= Mathf.Max(_agent.stoppingDistance + _arrivalTolerance, 0.5f);
+
+                    if (closeToTarget)
+                    {
+                        StartTurning();
+                        return false;
+                    }
+
+                    if (reachedPathEnd)
+                    {
+                        // Дошел до конца доступного пути NavMesh.
+                        // Если остался небольшой разрыв до объекта из-за obstacle, дотягиваем до точки
+                        if (_target != null && Vector3.Distance(transform.position, _target.position) > 2.0f)
+                        {
+                            SnapToTarget("path ended before target; snapping to work spot");
+                        }
+                        else
+                        {
+                            StartTurning();
+                        }
+                        return false;
+                    }
+
                     return false;
                 case Phase.Turning:
                     Quaternion goal = YawOnly(_target != null ? _target.rotation : transform.rotation, transform.rotation);

@@ -49,12 +49,99 @@ namespace AutoService.Bootstrap.Editor
             UpdateTravelPoints(facing);
             UpdateManagePads(facing);
             UpdateWarehouses(facing);
+            EnsureDoorNavMesh();
+            AdjustWorkSpotsAndBakeNavMesh();
+            CleanTagCanvases();
+            EnsureServiceBayHudNames();
+            CharacterSetupHelper.ConfigureAll();
 
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene);
             AssetDatabase.SaveAssets();
 
             Debug.Log("[Location2SceneUpdater] Successfully applied Location 2 and Warehouse fixes to " + scene.name + "!");
+        }
+
+        private static void CleanTagCanvases()
+        {
+            var rings = UnityEngine.Object.FindObjectsByType<DwellRingView>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            int cleaned = 0;
+            for (int i = 0; i < rings.Length; i++)
+            {
+                DwellRingView ring = rings[i];
+                Transform t = ring.transform;
+
+                Transform bg = t.Find("Background");
+                if (bg != null)
+                {
+                    Undo.DestroyObjectImmediate(bg.gameObject);
+                    cleaned++;
+                }
+
+                Transform arrow = t.Find("Arrow");
+                if (arrow != null)
+                {
+                    Undo.DestroyObjectImmediate(arrow.gameObject);
+                    cleaned++;
+                }
+
+                var ringSo = new SerializedObject(ring);
+                var bgProp = ringSo.FindProperty("_background");
+                if (bgProp != null && bgProp.objectReferenceValue != null)
+                {
+                    bgProp.objectReferenceValue = null;
+                    ringSo.ApplyModifiedPropertiesWithoutUndo();
+                }
+            }
+
+            Debug.Log("[Location2SceneUpdater] Cleaned Background and Arrow from Tag canvases. Objects removed: " + cleaned);
+        }
+
+        private static void EnsureDoorNavMesh()
+        {
+            GameObject loc2StaffRoom = GameObject.Find("StaffRoom");
+            if (loc2StaffRoom != null)
+            {
+                Transform door = loc2StaffRoom.transform.Find("Door");
+                if (door != null)
+                {
+                    // Ensure door is in front of the house at ground level
+                    door.localPosition = new Vector3(0f, 0f, -2.2f);
+                    door.localRotation = Quaternion.LookRotation(Vector3.back);
+                    EditorUtility.SetDirty(door);
+                    Debug.Log("[Location2SceneUpdater] Verified Location 2 StaffRoom Door position.");
+                }
+            }
+        }
+
+        private static void AdjustWorkSpotsAndBakeNavMesh()
+        {
+            // Ensure WorkSpots on ServicePointViews are offset from pillars
+            var points = UnityEngine.Object.FindObjectsByType<ServicePointView>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            foreach (var point in points)
+            {
+                Transform workSpot = point.WorkSpot;
+                if (workSpot != null && workSpot != point.transform)
+                {
+                    // Offset by 0.5m forward away from pillar obstacle
+                    Vector3 localPos = workSpot.localPosition;
+                    if (Mathf.Abs(localPos.x) > 2.0f)
+                    {
+                        localPos.x = Mathf.Sign(localPos.x) * 2.0f;
+                        workSpot.localPosition = localPos;
+                        EditorUtility.SetDirty(workSpot);
+                    }
+                }
+            }
+
+            // Rebake NavMesh surfaces
+            var surfaces = UnityEngine.Object.FindObjectsByType<Unity.AI.Navigation.NavMeshSurface>(
+                FindObjectsInactive.Include, FindObjectsSortMode.None);
+            foreach (var surface in surfaces)
+            {
+                surface.BuildNavMesh();
+                Debug.Log("[Location2SceneUpdater] Rebaked NavMeshSurface: " + surface.name);
+            }
         }
 
         private static void UpdateParkingConfig()
@@ -208,7 +295,7 @@ namespace AutoService.Bootstrap.Editor
                 Vector3 towardsCamera = -(facing * Vector3.forward);
                 towardsCamera.y = 0f;
                 towardsCamera = towardsCamera.sqrMagnitude > 0.0001f ? towardsCamera.normalized : Vector3.back;
-                Vector3 hudPos = workSpot + Vector3.up * 2.4f + towardsCamera * 0.3f;
+                Vector3 hudPos = workSpot + Vector3.up * 3.0f + towardsCamera * 0.3f;
 
                 var hudGo = new GameObject("HUD", typeof(RectTransform), typeof(Canvas));
                 hudGo.transform.SetParent(wh.transform, false);
@@ -227,6 +314,9 @@ namespace AutoService.Bootstrap.Editor
                     parentScale.z != 0f ? worldScale / Mathf.Abs(parentScale.z) : worldScale);
 
                 Sprite uiSprite = AssetDatabase.GetBuiltinExtraResource<Sprite>(UiSpritePath);
+                Sprite badgeSprite = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/_Project/Art/Kenney/kenney_ui-pack/Red/Default/button_rectangle_depth_flat.png")
+                    ?? AssetDatabase.LoadAssetAtPath<Sprite>("Assets/_Project/Art/Kenney/kenney_ui-pack/Yellow/Default/button_rectangle_depth_flat.png")
+                    ?? uiSprite;
 
                 // Progress bar root
                 var progressRoot = new GameObject("ProgressRoot", typeof(RectTransform));
@@ -264,18 +354,34 @@ namespace AutoService.Bootstrap.Editor
 
                 progressRoot.SetActive(false);
 
-                // Message text
-                var msgGo = new GameObject("Message", typeof(RectTransform));
+                // Message Badge container
+                var msgGo = new GameObject("MessageBadge", typeof(RectTransform), typeof(CanvasGroup));
                 msgGo.transform.SetParent(hudRect, false);
                 var msgRect = (RectTransform)msgGo.transform;
-                msgRect.anchoredPosition = new Vector2(0f, 32f);
-                msgRect.sizeDelta = new Vector2(400f, 60f);
-                var msgTmp = msgGo.AddComponent<TextMeshProUGUI>();
+                msgRect.anchoredPosition = new Vector2(0f, 34f);
+                msgRect.sizeDelta = new Vector2(260f, 62f);
+
+                var badgeImg = msgGo.AddComponent<Image>();
+                badgeImg.sprite = badgeSprite;
+                badgeImg.type = Image.Type.Sliced;
+                badgeImg.color = Color.white;
+                badgeImg.raycastTarget = false;
+
+                // Message text inside badge
+                var textGo = new GameObject("Text", typeof(RectTransform));
+                textGo.transform.SetParent(msgGo.transform, false);
+                var textRect = (RectTransform)textGo.transform;
+                textRect.anchorMin = Vector2.zero;
+                textRect.anchorMax = Vector2.one;
+                textRect.sizeDelta = Vector2.zero;
+                textRect.anchoredPosition = new Vector2(0f, 2f);
+
+                var msgTmp = textGo.AddComponent<TextMeshProUGUI>();
                 msgTmp.text = "Need $0";
-                msgTmp.fontSize = 28f;
+                msgTmp.fontSize = 26f;
                 msgTmp.fontStyle = FontStyles.Bold;
                 msgTmp.alignment = TextAlignmentOptions.Center;
-                msgTmp.color = new Color(1f, 0.84f, 0.31f, 1f);
+                msgTmp.color = Color.white;
                 msgTmp.raycastTarget = false;
                 msgGo.SetActive(false);
 
@@ -284,13 +390,164 @@ namespace AutoService.Bootstrap.Editor
                 wSo.FindProperty("_progressRoot").objectReferenceValue = progressRoot;
                 wSo.FindProperty("_progressBarFill").objectReferenceValue = fillImg;
                 wSo.FindProperty("_messageLabel").objectReferenceValue = msgTmp;
+                var msgRootProp = wSo.FindProperty("_messageRoot");
+                if (msgRootProp != null)
+                {
+                    msgRootProp.objectReferenceValue = msgGo;
+                }
                 wSo.FindProperty("_dwellSeconds").floatValue = 1.2f;
                 wSo.ApplyModifiedProperties();
+
+                // 3. Re-link active renderers to InteractableHighlight
+                var highlight = wh.GetComponent<InteractableHighlight>();
+                if (highlight != null)
+                {
+                    var activeRenderers = System.Array.FindAll(wh.GetComponentsInChildren<MeshRenderer>(false), r => r.gameObject.name != "WorkPad");
+                    if (activeRenderers.Length == 0)
+                    {
+                        activeRenderers = wh.GetComponentsInChildren<MeshRenderer>(false);
+                    }
+
+                    if (activeRenderers.Length > 0)
+                    {
+                        var so = new SerializedObject(highlight);
+                        var rendProp = so.FindProperty("_renderers");
+                        rendProp.arraySize = activeRenderers.Length;
+                        for (int r = 0; r < activeRenderers.Length; r++)
+                        {
+                            rendProp.GetArrayElementAtIndex(r).objectReferenceValue = activeRenderers[r];
+                        }
+                        so.ApplyModifiedProperties();
+                    }
+                }
+
+                // 4. Update BoxCollider bounds of warehouse based on active renderers
+                var collider = wh.GetComponent<BoxCollider>();
+                if (collider != null)
+                {
+                    var allRenderers = System.Array.FindAll(wh.GetComponentsInChildren<MeshRenderer>(false), r => r.gameObject.name != "WorkPad");
+                    if (allRenderers.Length == 0)
+                    {
+                        allRenderers = wh.GetComponentsInChildren<MeshRenderer>(false);
+                    }
+
+                    if (allRenderers.Length > 0)
+                    {
+                        Bounds b = allRenderers[0].bounds;
+                        for (int r = 1; r < allRenderers.Length; r++)
+                        {
+                            b.Encapsulate(allRenderers[r].bounds);
+                        }
+                        collider.center = wh.transform.InverseTransformPoint(b.center);
+                        collider.size = b.size;
+                        EditorUtility.SetDirty(collider);
+                    }
+                }
 
                 Undo.RegisterCreatedObjectUndo(hudGo, "Create warehouse HUD");
             }
 
-            Debug.Log("[Location2SceneUpdater] Configured WorkPad and HUD for " + warehouses.Length + " warehouse(s).");
+            Debug.Log("[Location2SceneUpdater] Configured WorkPad, HUD, Highlight and Collider for " + warehouses.Length + " warehouse(s).");
+        }
+
+        private static void EnsureServiceBayHudNames()
+        {
+            var bays = new (string BayName, string DisplayName)[]
+            {
+                ("Wash", "Car Wash 1"),
+                ("Bay_loc1_wash_2", "Car Wash 2"),
+                ("Bay_loc1_oil_1", "Oil Service 1"),
+                ("Bay_loc1_oil_2", "Oil Service 2"),
+                ("Bay_loc2_tires_1", "Tire Service"),
+                ("Bay_loc2_tuning_1", "Tuning"),
+                ("Bay_loc2_paint_1", "Paint Shop")
+            };
+
+            Sprite bgSprite = AssetDatabase.LoadAssetAtPath<Sprite>(
+                "Assets/_Project/Art/Kenney/kenney_ui-pack/Default/button_rectangle_depth_flat.png")
+                ?? AssetDatabase.LoadAssetAtPath<Sprite>(
+                "Assets/_Project/Art/Kenney/kenney_ui-pack/Grey/Default/button_rectangle_depth_flat.png")
+                ?? AssetDatabase.LoadAssetAtPath<Sprite>(
+                "Assets/_Project/Art/Kenney/kenney_ui-pack/PNG/Default/button_rectangle_depth_flat.png");
+
+            TMP_FontAsset fontAsset = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(
+                "Assets/TextMesh Pro/Resources/Fonts & Materials/LiberationSans SDF.asset")
+                ?? AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(
+                "Assets/_Project/Art/Kenney/kenney_ui-pack/Font/LiberationSans SDF.asset");
+
+            foreach (var (bayName, displayName) in bays)
+            {
+                GameObject bayGo = GameObject.Find(bayName);
+                if (bayGo == null)
+                {
+                    var allTransforms = UnityEngine.Object.FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+                    foreach (var t in allTransforms)
+                    {
+                        if (t.name == bayName && t.gameObject.scene.isLoaded)
+                        {
+                            bayGo = t.gameObject;
+                            break;
+                        }
+                    }
+                }
+
+                if (bayGo == null) continue;
+
+                Transform existing = bayGo.transform.Find("HUDNAME");
+                if (existing != null)
+                {
+                    Undo.DestroyObjectImmediate(existing.gameObject);
+                }
+
+                var hudGo = new GameObject("HUDNAME", typeof(RectTransform), typeof(Canvas));
+                hudGo.transform.SetParent(bayGo.transform, false);
+                hudGo.transform.localPosition = new Vector3(0f, 3.5f, -1.55f);
+                hudGo.transform.localEulerAngles = new Vector3(30f, 0f, 0f);
+                hudGo.transform.localScale = new Vector3(0.006f, 0.006f, 0.006f);
+
+                var canvas = hudGo.GetComponent<Canvas>();
+                canvas.renderMode = RenderMode.WorldSpace;
+                canvas.additionalShaderChannels = AdditionalCanvasShaderChannels.TexCoord1 | 
+                                                  AdditionalCanvasShaderChannels.Normal | 
+                                                  AdditionalCanvasShaderChannels.Tangent;
+
+                var rt = hudGo.GetComponent<RectTransform>();
+                rt.sizeDelta = new Vector2(280f, 70f);
+
+                // Background
+                var bgGo = new GameObject("Background", typeof(RectTransform), typeof(Image));
+                bgGo.transform.SetParent(hudGo.transform, false);
+                var bgRt = bgGo.GetComponent<RectTransform>();
+                bgRt.anchorMin = Vector2.zero;
+                bgRt.anchorMax = Vector2.one;
+                bgRt.sizeDelta = Vector2.zero;
+                var bgImg = bgGo.GetComponent<Image>();
+                bgImg.sprite = bgSprite;
+                bgImg.type = Image.Type.Sliced;
+                bgImg.color = new Color(0.95f, 0.95f, 0.98f, 0.98f);
+                bgImg.raycastTarget = false;
+
+                // Text
+                var textGo = new GameObject("Text", typeof(RectTransform), typeof(TextMeshProUGUI));
+                textGo.transform.SetParent(bgGo.transform, false);
+                var textRt = textGo.GetComponent<RectTransform>();
+                textRt.anchorMin = Vector2.zero;
+                textRt.anchorMax = Vector2.one;
+                textRt.offsetMin = new Vector2(8f, 4f);
+                textRt.offsetMax = new Vector2(-8f, -4f);
+                var tmp = textGo.GetComponent<TextMeshProUGUI>();
+                if (fontAsset != null) tmp.font = fontAsset;
+                tmp.text = displayName;
+                tmp.fontSize = 26f;
+                tmp.fontStyle = FontStyles.Bold;
+                tmp.alignment = TextAlignmentOptions.Center;
+                tmp.color = new Color(0.15f, 0.18f, 0.25f, 1f);
+                tmp.raycastTarget = false;
+
+                EditorUtility.SetDirty(bayGo);
+            }
+
+            Debug.Log("[Location2SceneUpdater] Successfully created HUDNAME plates for all service bays!");
         }
 
         private static DwellRingView EnsureDwellRingCanvas(Transform parent, Vector3 groundPos, Quaternion facing, float height, float forwardOffset, string canvasName)
@@ -302,9 +559,16 @@ namespace AutoService.Bootstrap.Editor
                 if (existingRing != null)
                 {
                     var ringSo = new SerializedObject(existingRing);
-                    if (ringSo.FindProperty("_fill").objectReferenceValue != null &&
-                        ringSo.FindProperty("_background").objectReferenceValue != null)
+                    if (ringSo.FindProperty("_fill").objectReferenceValue != null)
                     {
+                        // Remove legacy Background and Arrow if present
+                        Transform oldBg = existing.Find("Background");
+                        if (oldBg != null) Undo.DestroyObjectImmediate(oldBg.gameObject);
+                        Transform oldArrow = existing.Find("Arrow");
+                        if (oldArrow != null) Undo.DestroyObjectImmediate(oldArrow.gameObject);
+
+                        ringSo.FindProperty("_background").objectReferenceValue = null;
+                        ringSo.ApplyModifiedPropertiesWithoutUndo();
                         return existingRing;
                     }
                 }
@@ -333,16 +597,6 @@ namespace AutoService.Bootstrap.Editor
                 parentScale.z != 0f ? worldScale / Mathf.Abs(parentScale.z) : worldScale);
 
             Sprite knobSprite = AssetDatabase.GetBuiltinExtraResource<Sprite>(KnobSpritePath);
-            Sprite arrowSprite = AssetDatabase.GetBuiltinExtraResource<Sprite>(ArrowSpritePath);
-
-            var bgGo = new GameObject("Background", typeof(RectTransform));
-            bgGo.transform.SetParent(rect, false);
-            var bgRect = (RectTransform)bgGo.transform;
-            bgRect.sizeDelta = PadCanvasSize;
-            var bgImg = bgGo.AddComponent<Image>();
-            bgImg.sprite = knobSprite;
-            bgImg.color = PadRingBackground;
-            bgImg.raycastTarget = false;
 
             var fillGo = new GameObject("Fill", typeof(RectTransform));
             fillGo.transform.SetParent(rect, false);
@@ -359,21 +613,11 @@ namespace AutoService.Bootstrap.Editor
             fillImg.raycastTarget = false;
             fillGo.SetActive(false);
 
-            var arrowGo = new GameObject("Arrow", typeof(RectTransform));
-            arrowGo.transform.SetParent(rect, false);
-            var arrowRect = (RectTransform)arrowGo.transform;
-            arrowRect.sizeDelta = new Vector2(90f, 90f);
-            arrowRect.localRotation = Quaternion.Euler(0f, 0f, 180f);
-            var arrowImg = arrowGo.AddComponent<Image>();
-            arrowImg.sprite = arrowSprite;
-            arrowImg.color = Color.white;
-            arrowImg.raycastTarget = false;
-
             var ringView = canvasGo.AddComponent<DwellRingView>();
             var serialized = new SerializedObject(ringView);
             serialized.FindProperty("_fill").objectReferenceValue = fillImg;
             serialized.FindProperty("_root").objectReferenceValue = fillGo;
-            serialized.FindProperty("_background").objectReferenceValue = bgGo;
+            serialized.FindProperty("_background").objectReferenceValue = null;
             serialized.ApplyModifiedPropertiesWithoutUndo();
 
             Undo.RegisterCreatedObjectUndo(canvasGo, "Create Dwell Ring");

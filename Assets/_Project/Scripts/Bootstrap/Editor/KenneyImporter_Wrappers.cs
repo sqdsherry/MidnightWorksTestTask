@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
@@ -28,10 +28,10 @@ namespace AutoService.Bootstrap.Editor
                 inst.transform.localPosition = Vector3.zero;
                 
                 // Fit to size
-                if (path.Contains("kenney_car-kit") && (name.Contains("sedan") || name.Contains("suv")))
+                if (path.Contains("kenney_car-kit") && (name.Contains("sedan") || name.Contains("suv") || name.Contains("hatchback") || name.Contains("race") || name.Contains("taxi") || name.Contains("police") || name.Contains("ambulance") || name.Contains("truck") || name.Contains("van")))
                 {
                     inst.transform.localRotation = Quaternion.Euler(0, 180, 0); // Kenney cars face -Z
-                    float targetZ = name.Contains("suv") ? 4.3f : (name.Contains("sports") ? 4.2f : 4.0f);
+                    float targetZ = name.Contains("suv") ? 4.3f : (name.Contains("sports") || name.Contains("race") ? 4.2f : 4.0f);
                     FitToSize(inst, new Vector3(0, 0, targetZ), 2);
                 }
                 else if (path.Contains("kenney_mini-characters"))

@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using AutoService.Presentation.Characters;
+using AutoService.Presentation.Player;
 using AutoService.Presentation.Points;
 using AutoService.Presentation.Points.Panel;
 using AutoService.Presentation.Staff;
@@ -13,6 +15,7 @@ using AutoService.Services.Points;
 using AutoService.Services.Staff;
 using AutoService.Services.Supplies;
 using AutoService.Services.Upgrades;
+using UnityEngine;
 
 namespace AutoService.Bootstrap.Installers
 {
@@ -84,6 +87,13 @@ namespace AutoService.Bootstrap.Installers
             else
             {
                 context.Logger.Warning("[Gameplay] _playerCarry is not assigned; the carried box is not shown.");
+            }
+
+            var animator = scene.Player != null ? scene.Player.GetComponentInChildren<Animator>() : null;
+            if (animator != null && scene.Player != null && scene.Player.Agent != null)
+            {
+                var charAnim = new CharacterAnimator(animator, scene.Player.Agent);
+                context.Register(new PlayerAnimatorPresenter(charAnim, carry), TickPhase.Presentation);
             }
 
             for (int i = 0; i < locations.Length; i++)

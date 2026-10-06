@@ -50,9 +50,40 @@ namespace AutoService.Presentation.Interaction
 
         private void Awake()
         {
-            _block = new MaterialPropertyBlock();
-            _baseColors = new Color[_renderers.Length];
-            for (int i = 0; i < _renderers.Length; i++)
+            EnsureRenderers();
+        }
+
+        private void EnsureRenderers()
+        {
+            if (_block == null)
+            {
+                _block = new MaterialPropertyBlock();
+            }
+
+            bool hasValid = false;
+            if (_renderers != null && _renderers.Length > 0)
+            {
+                for (int i = 0; i < _renderers.Length; i++)
+                {
+                    if (_renderers[i] != null && _renderers[i].gameObject.activeInHierarchy)
+                    {
+                        hasValid = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!hasValid)
+            {
+                var found = GetComponentsInChildren<MeshRenderer>(false);
+                if (found != null && found.Length > 0)
+                {
+                    _renderers = found;
+                }
+            }
+
+            _baseColors = new Color[_renderers != null ? _renderers.Length : 0];
+            for (int i = 0; i < _baseColors.Length; i++)
             {
                 Material material = _renderers[i] != null ? _renderers[i].sharedMaterial : null;
                 _baseColors[i] = material != null && material.HasProperty(BaseColorId) ? material.GetColor(BaseColorId) : Color.white;
@@ -65,10 +96,9 @@ namespace AutoService.Presentation.Interaction
         /// <summary>Turns the highlight on with <paramref name="color"/>, or off (the color is then ignored).</summary>
         public void SetHighlighted(bool highlighted, Color color)
         {
-            if (_block == null)
+            if (_block == null || _baseColors == null || _baseColors.Length != (_renderers != null ? _renderers.Length : 0))
             {
-                // Why: may be called before Awake if the object starts inactive; nothing is rendered yet anyway.
-                return;
+                EnsureRenderers();
             }
 
             _isHighlighted = highlighted;

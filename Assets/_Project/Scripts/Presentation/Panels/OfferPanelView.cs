@@ -168,7 +168,17 @@ namespace AutoService.Presentation.Panels
         {
             SetText(_title, title);
             SetText(_description, description);
+            if (_description != null)
+            {
+                _description.gameObject.SetActive(false);
+            }
+
             SetText(_cost, cost);
+            if (_cost != null)
+            {
+                _cost.gameObject.SetActive(false);
+            }
+
             SetText(_requirement, requirement);
             if (_requirement != null)
             {

@@ -8,6 +8,7 @@ using AutoService.Presentation.Traffic;
 using AutoService.Services.Core;
 using AutoService.Services.Staff;
 using UnityEngine;
+using UnityEngine.AI;
 
 namespace AutoService.Presentation.Staff
 {
@@ -78,6 +79,10 @@ namespace AutoService.Presentation.Staff
             {
                 Transform door = _layout.StaffRoom;
                 Vector3 position = door != null ? door.position : _layout.transform.position;
+                if (NavMesh.SamplePosition(position, out NavMeshHit hit, 5.0f, NavMesh.AllAreas))
+                {
+                    position = hit.position;
+                }
                 Quaternion rotation = door != null ? door.rotation : Quaternion.identity;
                 view = UnityEngine.Object.Instantiate(_prefab, position, rotation, _root);
                 view.name = _prefab.name + "_" + role + "_" + staffId;
