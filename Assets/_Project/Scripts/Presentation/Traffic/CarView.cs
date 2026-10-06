@@ -58,7 +58,11 @@ namespace AutoService.Presentation.Traffic
         private static readonly Dictionary<Color, Texture2D> CachedColorTextures = new Dictionary<Color, Texture2D>();
         private static byte[] _baseColormapBytes;
 
-        private MaterialPropertyBlock _propertyBlock;
+        // Why: painting swaps in a per-car copy of the body material (a property block override was not shown);
+        // the originals are kept here and restored when the car returns to the pool.
+        private readonly List<Renderer> _paintedRenderers = new List<Renderer>(4);
+        private readonly List<Material> _originalMaterials = new List<Material>(4);
+        private Texture2D _paintTexture;
         private MaterialPropertyBlock _wheelPropertyBlock;
         private bool _hasCustomColor;
         private Color _customBodyColor;
@@ -245,38 +249,21 @@ namespace AutoService.Presentation.Traffic
         public void ResetForPool()
         {
             Halt();
-            ResetVisualModel();
+
+            // Why: before ResetVisualModel, which destroys the sport visual whose renderers hold painted material copies.
             ClearCustomColor();
+            ResetVisualModel();
             ResetCustomWheels();
             _currentNode = null;
             _carId = NoCar;
         }
 
-        /// <summary>Applies a custom body color to the car's renderers via MaterialPropertyBlock using cached tinted palette texture (windows and lights remain intact).</summary>
+        /// <summary>Paints the car body with <paramref name="color"/>: the body renderers get a copy of their material with a recolored palette (glass, lights and wheels keep their colors).</summary>
         public void SetBodyColor(Color color)
         {
             _customBodyColor = color;
             _hasCustomColor = true;
-
-            if (_propertyBlock == null)
-            {
-                _propertyBlock = new MaterialPropertyBlock();
-            }
-
-            Texture2D tintedTex = GetOrCreateTintedPalette(color);
-            if (tintedTex != null)
-            {
-                _propertyBlock.SetTexture(BaseMapPropertyId, tintedTex);
-                _propertyBlock.SetTexture(MainTexPropertyId, tintedTex);
-                _propertyBlock.SetColor(BaseColorPropertyId, Color.white);
-                _propertyBlock.SetColor(ColorPropertyId, Color.white);
-            }
-            else
-            {
-                _propertyBlock.SetColor(BaseColorPropertyId, color);
-                _propertyBlock.SetColor(ColorPropertyId, color);
-            }
-
+            _paintTexture = GetOrCreateTintedPalette(color);
             ApplyPropertyBlock();
         }
 
@@ -341,17 +328,26 @@ namespace AutoService.Presentation.Traffic
         /// <summary>Removes any custom MaterialPropertyBlock override.</summary>
         public void ClearCustomColor()
         {
-            if (!_hasCustomColor)
+            for (int i = 0; i < _paintedRenderers.Count; i++)
             {
-                return;
+                Renderer renderer = _paintedRenderers[i];
+                if (renderer == null)
+                {
+                    continue;
+                }
+
+                Material copy = renderer.sharedMaterial;
+                renderer.sharedMaterial = _originalMaterials[i];
+                if (copy != null && copy != _originalMaterials[i])
+                {
+                    Destroy(copy);
+                }
             }
 
+            _paintedRenderers.Clear();
+            _originalMaterials.Clear();
             _hasCustomColor = false;
-            MeshRenderer[] renderers = GetComponentsInChildren<MeshRenderer>(true);
-            for (int i = 0; i < renderers.Length; i++)
-            {
-                renderers[i].SetPropertyBlock(null);
-            }
+            _paintTexture = null;
         }
 
         /// <summary>Replaces the car's visual mesh with the sport model visual from <paramref name="sportPrefab"/>.</summary>
@@ -548,7 +544,7 @@ namespace AutoService.Presentation.Traffic
 
         private void ApplyPropertyBlock()
         {
-            if (!_hasCustomColor || _propertyBlock == null)
+            if (!_hasCustomColor)
             {
                 return;
             }
@@ -562,12 +558,48 @@ namespace AutoService.Presentation.Traffic
             MeshRenderer[] renderers = activeVisual.GetComponentsInChildren<MeshRenderer>(true);
             for (int i = 0; i < renderers.Length; i++)
             {
-                // Do not tint custom wheels if they have their own tint
-                if (_hasCustomWheels && renderers[i].gameObject.name.ToLowerInvariant().Contains("wheel"))
+                // Why: only the body is painted — wheels keep their own (possibly upgraded) look.
+                if (renderers[i].gameObject.name.ToLowerInvariant().Contains("wheel"))
                 {
                     continue;
                 }
-                renderers[i].SetPropertyBlock(_propertyBlock);
+
+                Material copy;
+                int index = _paintedRenderers.IndexOf(renderers[i]);
+                if (index >= 0)
+                {
+                    copy = renderers[i].sharedMaterial;
+                }
+                else
+                {
+                    Material original = renderers[i].sharedMaterial;
+                    if (original == null)
+                    {
+                        continue;
+                    }
+
+                    copy = new Material(original);
+                    _paintedRenderers.Add(renderers[i]);
+                    _originalMaterials.Add(original);
+                    renderers[i].sharedMaterial = copy;
+                }
+
+                if (_paintTexture != null)
+                {
+                    if (copy.HasProperty(BaseMapPropertyId))
+                    {
+                        copy.SetTexture(BaseMapPropertyId, _paintTexture);
+                    }
+
+                    if (copy.HasProperty(MainTexPropertyId))
+                    {
+                        copy.SetTexture(MainTexPropertyId, _paintTexture);
+                    }
+                }
+                else if (copy.HasProperty(BaseColorPropertyId))
+                {
+                    copy.SetColor(BaseColorPropertyId, _customBodyColor);
+                }
             }
         }
 
