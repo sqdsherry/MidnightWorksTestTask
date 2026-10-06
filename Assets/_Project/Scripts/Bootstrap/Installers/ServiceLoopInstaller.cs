@@ -150,7 +150,7 @@ namespace AutoService.Bootstrap.Installers
 
             if (context.Scene.CarVisuals != null && _carAgents.Count > 0)
             {
-                var customizationPresenter = new CarCustomizationPresenter(eventBus, context.Scene.CarVisuals, _carAgents.Values);
+                var customizationPresenter = new CarCustomizationPresenter(eventBus, context.Scene.CarVisuals, _carAgents);
                 context.Track(customizationPresenter);
             }
         }

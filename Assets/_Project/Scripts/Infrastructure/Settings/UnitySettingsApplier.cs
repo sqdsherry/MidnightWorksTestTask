@@ -1,14 +1,25 @@
 ﻿using System;
+using AutoService.Services.Audio;
 using AutoService.Services.Settings;
 using UnityEngine;
 
 namespace AutoService.Infrastructure.Settings
 {
     /// <summary>
-    /// <see cref="ISettingsApplier"/> that pushes settings into <see cref="QualitySettings"/> and <see cref="Screen"/>.
+    /// <see cref="ISettingsApplier"/> that pushes settings into <see cref="QualitySettings"/>, <see cref="Screen"/>
+    /// and the <see cref="IAudioService"/>.
     /// </summary>
     public sealed class UnitySettingsApplier : ISettingsApplier
     {
+        private readonly IAudioService _audio;
+
+        /// <summary>Creates the applier.</summary>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="audio"/> is null.</exception>
+        public UnitySettingsApplier(IAudioService audio)
+        {
+            _audio = audio ?? throw new ArgumentNullException(nameof(audio));
+        }
+
         /// <inheritdoc />
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="settings"/> is null.</exception>
         public void Apply(GameSettings settings)
@@ -20,11 +31,7 @@ namespace AutoService.Infrastructure.Settings
 
             ApplyQuality(settings.QualityLevel);
             ApplyScreen(settings);
-
-            if (AutoService.Infrastructure.Services.Audio.AudioService.Instance != null)
-            {
-                AutoService.Infrastructure.Services.Audio.AudioService.Instance.ApplyVolumes(1f, settings.SfxVolume, settings.MusicVolume);
-            }
+            _audio.SetVolumes(settings.MusicVolume, settings.SfxVolume);
         }
 
         private static void ApplyQuality(int level)

@@ -286,7 +286,7 @@ namespace AutoService.Bootstrap.Editor
             copy.transform.localPosition = localPos;
             copy.transform.localRotation = Quaternion.identity;
 
-            // Убираем визуальные вращающиеся щетки мойки (на сервисах 2 локации они не нужны)
+            // Remove the spinning wash brushes: location 2 services do not use them.
             WashFx fx = copy.GetComponent<WashFx>();
             if (fx != null)
             {
@@ -318,14 +318,14 @@ namespace AutoService.Bootstrap.Editor
 
             bay = copy.GetComponent<ServicePointView>();
 
-            // Конфигурируем ServicePointView
+            // Configure the ServicePointView.
             var viewSo = new SerializedObject(bay);
             viewSo.FindProperty("_pointId").stringValue = pointId;
             viewSo.FindProperty("_serviceTypeId").stringValue = serviceTypeId;
             SetArrayProp(viewSo.FindProperty("_bufferSlots"), new UnityEngine.Object[] { bufferNode });
             viewSo.ApplyModifiedPropertiesWithoutUndo();
 
-            // Соединяем CarSpot в дорожный граф
+            // Connect the CarSpot to the road graph.
             RoadNode carSpotNode = bay.CarSpot.GetComponent<RoadNode>();
             if (carSpotNode == null)
             {
@@ -334,14 +334,14 @@ namespace AutoService.Bootstrap.Editor
             Link(bufferNode, carSpotNode);
             Link(carSpotNode, exitNode);
 
-            // Ставим рабочую точку и площадки (1-в-1 как на Локации 1: желтый квадрат и синий круг с иконкой апгрейда)
+            // Work spot and pads, same as on location 1: yellow square and blue circle with the upgrade icon.
             WhiteboxLocationBuilder.PlaceBayWorkSpot(bay);
             pad = WhiteboxLocationBuilder.AddBayPads(bay, workPadMat, managePadMat, washRef.Hud);
 
-            // Создаем призрак и BuildPlotView через проверенный метод Локации 1
+            // Ghost and BuildPlotView, built the same way as on location 1.
             BuildPlotView plot = WhiteboxLocationBuilder.CreateBayGhost(washRef, bay, plotId, pointId, Vector3.zero, ghostMat, washRef.Hud);
 
-            // Целевой бокс скрыт до покупки участка
+            // The bay stays hidden until its plot is bought.
             bay.gameObject.SetActive(false);
 
             return plot;

@@ -2,6 +2,8 @@
 using AutoService.Presentation.Controls;
 using AutoService.Presentation.Menu;
 using AutoService.Presentation.Settings;
+using AutoService.Presentation.Ui;
+using AutoService.Services.Audio;
 using AutoService.Services.Core;
 using AutoService.Services.Menu;
 using AutoService.Services.Save;
@@ -69,6 +71,10 @@ namespace AutoService.Bootstrap
             _container.Register(model);
             _container.Register(settings);
             _container.Register(new MainMenuPresenter(model, _menu, _confirmDialog, settings, escape));
+
+            var clicks = new ButtonClickSounds(_container.Resolve<IAudioService>());
+            clicks.Bind(gameObject.scene.GetRootGameObjects());
+            _container.Register(clicks);
         }
 
         // Why: the gameplay input wrapper is reused for its Cancel action rather than adding a second wrapper for one key;

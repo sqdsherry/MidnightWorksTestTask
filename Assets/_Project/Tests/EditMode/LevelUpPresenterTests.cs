@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using AutoService.Domain.Building;
 using AutoService.Domain.Common;
 using AutoService.Domain.Progression;
 using AutoService.Presentation.Popups;
@@ -53,7 +55,7 @@ namespace AutoService.Tests.EditMode
             _go = new GameObject("LevelUpPopupTest");
             _view = _go.AddComponent<LevelUpPopupView>();
             _progression = new FakeProgressionService();
-            _presenter = new LevelUpPresenter(_progression, _view);
+            _presenter = new LevelUpPresenter(_progression, _view, Buildables);
         }
 
         [TearDown]
@@ -66,13 +68,26 @@ namespace AutoService.Tests.EditMode
             }
         }
 
-        [Test]
-        public void Descriptions_MatchGddRequirements()
+        private static readonly BuildableSettings[] Buildables =
         {
-            Assert.IsTrue(LevelUpPresenter.GetUnlockedDescription(2).Contains("Автомойка 2 и Замена масла"));
-            Assert.IsTrue(LevelUpPresenter.GetUnlockedDescription(3).Contains("второй бокс замены масла"));
-            Assert.IsTrue(LevelUpPresenter.GetUnlockedDescription(4).Contains("Локацию 2"));
-            Assert.IsTrue(LevelUpPresenter.GetUnlockedDescription(5).Contains("Максимальный уровень"));
+            new BuildableSettings("wash_2", "Wash Bay 2", "", BuildableKind.ServicePoint, "wash_2", new Money(100), 2, 0d),
+            new BuildableSettings("parking_3", "Parking Spot 3", "", BuildableKind.ParkingSlot, "2", new Money(50), 2, 0d),
+            new BuildableSettings("oil_1", "Oil Change 1", "", BuildableKind.ServicePoint, "oil_1", new Money(200), 3, 0d),
+        };
+
+        [Test]
+        public void CollectUnlocks_ReturnsBuildablesOfExactlyThatLevel()
+        {
+            var names = new List<string>();
+
+            LevelUpPresenter.CollectUnlocks(Buildables, 2, names);
+            CollectionAssert.AreEqual(new[] { "Wash Bay 2", "Parking Spot 3" }, names);
+
+            LevelUpPresenter.CollectUnlocks(Buildables, 3, names);
+            CollectionAssert.AreEqual(new[] { "Oil Change 1" }, names);
+
+            LevelUpPresenter.CollectUnlocks(Buildables, 5, names);
+            Assert.IsEmpty(names);
         }
 
         [Test]

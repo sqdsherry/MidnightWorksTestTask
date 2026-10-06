@@ -95,16 +95,12 @@ namespace AutoService.Bootstrap.Editor
         private static void SavePrefabs(GameObject levelUpGo, GameObject welcomeGo, GameObject cheatGo)
         {
             const string prefabsFolder = "Assets/_Project/Prefabs/UI";
-            const string resourcesFolder = "Assets/_Project/Resources/UI";
 
             PrefabUtility.SaveAsPrefabAsset(levelUpGo, prefabsFolder + "/LevelUpPopup.prefab");
-            PrefabUtility.SaveAsPrefabAsset(levelUpGo, resourcesFolder + "/LevelUpPopup.prefab");
 
             PrefabUtility.SaveAsPrefabAsset(welcomeGo, prefabsFolder + "/Location2WelcomePopup.prefab");
-            PrefabUtility.SaveAsPrefabAsset(welcomeGo, resourcesFolder + "/Location2WelcomePopup.prefab");
 
             PrefabUtility.SaveAsPrefabAsset(cheatGo, prefabsFolder + "/DebugCheatPanel.prefab");
-            PrefabUtility.SaveAsPrefabAsset(cheatGo, resourcesFolder + "/DebugCheatPanel.prefab");
         }
 
         private static Transform FindScreenHud(Scene scene, BalanceView balance)
@@ -184,7 +180,7 @@ namespace AutoService.Bootstrap.Editor
             // Title
             TMP_Text title = SetupUi.EnsureChild(card, "Title", problems, p =>
             {
-                TMP_Text t = SetupUi.CreateText(p, "Title", "НОВЫЙ УРОВЕНЬ!", 32f, true, TextAlignmentOptions.Center);
+                TMP_Text t = SetupUi.CreateText(p, "Title", "LEVEL UP!", 32f, true, TextAlignmentOptions.Center);
                 SetupUi.Place(t.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -85f), new Vector2(400f, 40f), new Vector2(0.5f, 0.5f));
                 t.color = DarkTitleColor;
                 return t;
@@ -193,7 +189,7 @@ namespace AutoService.Bootstrap.Editor
             // Level Badge
             TMP_Text levelBadge = SetupUi.EnsureChild(card, "LevelBadge", problems, p =>
             {
-                TMP_Text t = SetupUi.CreateText(p, "LevelBadge", "УРОВЕНЬ 2", 24f, true, TextAlignmentOptions.Center);
+                TMP_Text t = SetupUi.CreateText(p, "LevelBadge", "LEVEL 2", 24f, true, TextAlignmentOptions.Center);
                 SetupUi.Place(t.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -125f), new Vector2(300f, 32f), new Vector2(0.5f, 0.5f));
                 t.color = LevelBadgeColor;
                 return t;
@@ -202,7 +198,7 @@ namespace AutoService.Bootstrap.Editor
             // Description
             TMP_Text description = SetupUi.EnsureChild(card, "Description", problems, p =>
             {
-                TMP_Text t = SetupUi.CreateText(p, "Description", "Разблокированы новые возможности!", 18f, false, TextAlignmentOptions.Center, wrap: true);
+                TMP_Text t = SetupUi.CreateText(p, "Description", "New buildings are available!", 18f, false, TextAlignmentOptions.Center, wrap: true);
                 SetupUi.Place(t.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -185f), new Vector2(400f, 80f), new Vector2(0.5f, 0.5f));
                 t.color = DescriptionTextColor;
                 return t;
@@ -211,7 +207,7 @@ namespace AutoService.Bootstrap.Editor
             // Continue Button
             Button continueButton = SetupUi.EnsureChild(card, "ContinueButton", problems, p =>
             {
-                Button btn = SetupUi.CreateButton(p, "ContinueButton", "ПРОДОЛЖИТЬ", Color.white, new Vector2(240f, 54f));
+                Button btn = SetupUi.CreateButton(p, "ContinueButton", "CONTINUE", Color.white, new Vector2(240f, 54f));
                 SetupUi.Place((RectTransform)btn.transform, new Vector2(0.5f, 0f), new Vector2(0f, 45f), new Vector2(240f, 54f), new Vector2(0.5f, 0.5f));
                 Image btnImg = btn.GetComponent<Image>();
                 btnImg.sprite = AssetDatabase.LoadAssetAtPath<Sprite>(GreenButtonSpritePath);
@@ -276,7 +272,7 @@ namespace AutoService.Bootstrap.Editor
             // Title
             TMP_Text title = SetupUi.EnsureChild(card, "Title", problems, p =>
             {
-                TMP_Text t = SetupUi.CreateText(p, "Title", Location2WelcomePopupView.DefaultTitle, 30f, true, TextAlignmentOptions.Center);
+                TMP_Text t = SetupUi.CreateText(p, "Title", "TUNING CENTER IS OPEN!", 30f, true, TextAlignmentOptions.Center);
                 SetupUi.Place(t.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -50f), new Vector2(480f, 44f), new Vector2(0.5f, 0.5f));
                 t.color = DarkTitleColor;
                 return t;
@@ -285,7 +281,7 @@ namespace AutoService.Bootstrap.Editor
             // Description
             TMP_Text description = SetupUi.EnsureChild(card, "Description", problems, p =>
             {
-                TMP_Text t = SetupUi.CreateText(p, "Description", Location2WelcomePopupView.DefaultDescription, 18f, false, TextAlignmentOptions.Center, wrap: true);
+                TMP_Text t = SetupUi.CreateText(p, "Description", "Welcome to the second location!\nPremium services are available here: tires, tuning and paint jobs that change the look of the car.", 18f, false, TextAlignmentOptions.Center, wrap: true);
                 SetupUi.Place(t.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -145f), new Vector2(460f, 130f), new Vector2(0.5f, 0.5f));
                 t.color = DescriptionTextColor;
                 return t;
@@ -294,7 +290,7 @@ namespace AutoService.Bootstrap.Editor
             // Start Button
             Button startButton = SetupUi.EnsureChild(card, "StartButton", problems, p =>
             {
-                Button btn = SetupUi.CreateButton(p, "StartButton", "НАЧАТЬ РАБОТУ!", Color.white, new Vector2(250f, 54f));
+                Button btn = SetupUi.CreateButton(p, "StartButton", "LET'S GO!", Color.white, new Vector2(250f, 54f));
                 SetupUi.Place((RectTransform)btn.transform, new Vector2(0.5f, 0f), new Vector2(0f, 45f), new Vector2(250f, 54f), new Vector2(0.5f, 0.5f));
                 Image btnImg = btn.GetComponent<Image>();
                 btnImg.sprite = AssetDatabase.LoadAssetAtPath<Sprite>(GreenButtonSpritePath);
@@ -369,7 +365,7 @@ namespace AutoService.Bootstrap.Editor
             // Panel Header Title
             SetupUi.EnsureChild(panelRoot, "HeaderTitle", problems, p =>
             {
-                TMP_Text t = SetupUi.CreateText(p, "HeaderTitle", "ДЕБАГ-ПАНЕЛЬ (F1)", 22f, true, TextAlignmentOptions.Left);
+                TMP_Text t = SetupUi.CreateText(p, "HeaderTitle", "DEBUG PANEL (F1)", 22f, true, TextAlignmentOptions.Left);
                 SetupUi.Place(t.rectTransform, new Vector2(0f, 1f), new Vector2(20f, -25f), new Vector2(280f, 30f), new Vector2(0f, 1f));
                 return t;
             });
@@ -392,10 +388,10 @@ namespace AutoService.Bootstrap.Editor
 
             Button add1000 = CreateCheatButton(panelRoot, "Add1000Btn", "+ $1,000", GreenButtonSpritePath, new Vector2(0f, startY), actionBtnSize, problems);
             Button add10000 = CreateCheatButton(panelRoot, "Add10000Btn", "+ $10,000", GreenButtonSpritePath, new Vector2(0f, startY + stepY), actionBtnSize, problems);
-            Button levelUp = CreateCheatButton(panelRoot, "LevelUpBtn", "+ 1 Уровень (Level Up)", BlueButtonSpritePath, new Vector2(0f, startY + stepY * 2), actionBtnSize, problems);
-            Button teleportLoc1 = CreateCheatButton(panelRoot, "TeleportLoc1Btn", "Телепорт: Локация 1", GreyButtonSpritePath, new Vector2(0f, startY + stepY * 3), actionBtnSize, problems);
-            Button teleportLoc2 = CreateCheatButton(panelRoot, "TeleportLoc2Btn", "Телепорт: Локация 2", GreyButtonSpritePath, new Vector2(0f, startY + stepY * 4), actionBtnSize, problems);
-            Button resetProgress = CreateCheatButton(panelRoot, "ResetProgressBtn", "Сброс прогресса", RedButtonSpritePath, new Vector2(0f, startY + stepY * 5), actionBtnSize, problems);
+            Button levelUp = CreateCheatButton(panelRoot, "LevelUpBtn", "+1 Level", BlueButtonSpritePath, new Vector2(0f, startY + stepY * 2), actionBtnSize, problems);
+            Button teleportLoc1 = CreateCheatButton(panelRoot, "TeleportLoc1Btn", "Teleport: Location 1", GreyButtonSpritePath, new Vector2(0f, startY + stepY * 3), actionBtnSize, problems);
+            Button teleportLoc2 = CreateCheatButton(panelRoot, "TeleportLoc2Btn", "Teleport: Location 2", GreyButtonSpritePath, new Vector2(0f, startY + stepY * 4), actionBtnSize, problems);
+            Button resetProgress = CreateCheatButton(panelRoot, "ResetProgressBtn", "Reset Progress", RedButtonSpritePath, new Vector2(0f, startY + stepY * 5), actionBtnSize, problems);
 
             DebugCheatView view = SetupUi.GetOrAdd<DebugCheatView>(root);
             var so = new SerializedObject(view);

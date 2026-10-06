@@ -713,7 +713,7 @@ namespace AutoService.Services.Traffic
             }
 
             _eventBus.Publish(new ServiceCompletedEvent(
-                pointDefinition.Id, pointDefinition.ServiceTypeId, pointDefinition.Kind, carId, car.Type.Id));
+                pointDefinition.Id, pointDefinition.ServiceTypeId, pointDefinition.Kind, carId, car.Type.Id, _definition.LocationId));
         }
 
         private void LeavePoint(Car car)

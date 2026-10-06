@@ -1,9 +1,11 @@
 ﻿using AutoService.Presentation.Controls;
 using AutoService.Presentation.Hud;
 using AutoService.Presentation.Pause;
+using AutoService.Presentation.Player;
 using AutoService.Presentation.Popups;
 using AutoService.Presentation.Settings;
 using AutoService.Presentation.Ui;
+using AutoService.Services.Config;
 using AutoService.Services.Core;
 using AutoService.Services.Economy;
 using AutoService.Services.Menu;
@@ -103,124 +105,48 @@ namespace AutoService.Bootstrap.Installers
             LevelUpPopupView levelUpView = scene.LevelUpPopup;
             if (levelUpView == null)
             {
-                levelUpView = UnityEngine.Object.FindFirstObjectByType<LevelUpPopupView>(UnityEngine.FindObjectsInactive.Include);
+                context.Logger.Warning("[Gameplay] _levelUpPopup is not assigned; no level-up popup.");
             }
-
-            if (levelUpView == null)
-            {
-                var prefab = UnityEngine.Resources.Load<LevelUpPopupView>("UI/LevelUpPopup");
-                if (prefab != null)
-                {
-                    Transform hud = GetHudCanvasTransform(scene);
-                    if (hud != null)
-                    {
-                        levelUpView = UnityEngine.Object.Instantiate(prefab, hud);
-                    }
-                }
-            }
-
-            if (levelUpView != null)
+            else if (context.TryResolve(out IProgressionService progression))
             {
                 levelUpView.SetEscapeRouter(escape);
-                if (context.TryResolve(out IProgressionService progression))
-                {
-                    context.Register(new LevelUpPresenter(progression, levelUpView));
-                }
-            }
-            else
-            {
-                context.Logger.Warning("[Gameplay] LevelUpPopupView not assigned / found; level up popup disabled.");
+                context.Register(new LevelUpPresenter(progression, levelUpView, context.Resolve<IConfigProvider>().Buildables));
             }
 
             Location2WelcomePopupView welcomeView = scene.Loc2WelcomePopup;
             if (welcomeView == null)
             {
-                welcomeView = UnityEngine.Object.FindFirstObjectByType<Location2WelcomePopupView>(UnityEngine.FindObjectsInactive.Include);
+                context.Logger.Warning("[Gameplay] _loc2WelcomePopup is not assigned; no welcome popup for location 2.");
             }
-
-            if (welcomeView == null)
-            {
-                var prefab = UnityEngine.Resources.Load<Location2WelcomePopupView>("UI/Location2WelcomePopup");
-                if (prefab != null)
-                {
-                    Transform hud = GetHudCanvasTransform(scene);
-                    if (hud != null)
-                    {
-                        welcomeView = UnityEngine.Object.Instantiate(prefab, hud);
-                    }
-                }
-            }
-
-            if (welcomeView != null)
+            else if (scene.Player != null && scene.Locations.Length >= 2)
             {
                 welcomeView.SetEscapeRouter(escape);
-                if (scene.Player != null)
-                {
-                    var presenter = new Location2WelcomePresenter(scene.Player, welcomeView);
-                    context.Register(presenter);
-                    context.Track(presenter, TickPhase.Presentation);
-                }
-            }
-            else
-            {
-                context.Logger.Warning("[Gameplay] Location2WelcomePopupView not assigned / found; welcome popup disabled.");
+                context.Track(new Location2WelcomePresenter(
+                    scene.Player, welcomeView, scene.Locations[0].transform.position, scene.Locations[1].transform.position));
             }
         }
 
         private static void InstallDebugCheats(GameplayContext context)
         {
-            GameplaySceneRefs scene = context.Scene;
-            DebugCheatView cheatView = scene.DebugCheatView;
+            DebugCheatView cheatView = context.Scene.DebugCheatView;
             if (cheatView == null)
             {
-                cheatView = UnityEngine.Object.FindFirstObjectByType<DebugCheatView>(UnityEngine.FindObjectsInactive.Include);
+                context.Logger.Warning("[Gameplay] _debugCheatView is not assigned; no debug panel.");
+                return;
             }
 
-            if (cheatView == null)
-            {
-                var prefab = UnityEngine.Resources.Load<DebugCheatView>("UI/DebugCheatPanel");
-                if (prefab != null)
-                {
-                    Transform hud = GetHudCanvasTransform(scene);
-                    if (hud != null)
-                    {
-                        cheatView = UnityEngine.Object.Instantiate(prefab, hud);
-                    }
-                }
-            }
+            // Why: TryResolve throughout — the panel is a debug tool and must not block the scene when a module is off.
+            context.TryResolve(out EscapeRouter escape);
+            context.TryResolve(out IWalletService wallet);
+            context.TryResolve(out IProgressionService progression);
+            context.TryResolve(out PlayerTeleporter teleporter);
+            context.TryResolve(out ISaveService saveService);
+            context.TryResolve(out IGameSaver gameSaver);
+            context.TryResolve(out ISceneLoader sceneLoader);
+            context.TryResolve(out IPauseService pauseService);
 
-            if (cheatView != null)
-            {
-                context.TryResolve(out EscapeRouter escape);
-                context.TryResolve(out IWalletService wallet);
-                context.TryResolve(out IProgressionService progression);
-                context.TryResolve(out ISaveService saveService);
-                context.TryResolve(out IGameSaver gameSaver);
-                context.TryResolve(out ISceneLoader sceneLoader);
-                context.TryResolve(out IPauseService pauseService);
-
-                cheatView.Initialize(wallet, progression, scene.Player, scene.CameraRig, saveService, gameSaver, sceneLoader, pauseService, escape);
-            }
-            else
-            {
-                context.Logger.Warning("[Gameplay] DebugCheatView not assigned / found; debug cheats disabled.");
-            }
-        }
-
-        private static Transform GetHudCanvasTransform(GameplaySceneRefs scene)
-        {
-            if (scene.BalanceView != null)
-            {
-                var c = scene.BalanceView.GetComponentInParent<UnityEngine.Canvas>(true);
-                if (c != null) return c.rootCanvas.transform;
-            }
-            if (scene.PauseButton != null)
-            {
-                var c = scene.PauseButton.GetComponentInParent<UnityEngine.Canvas>(true);
-                if (c != null) return c.rootCanvas.transform;
-            }
-            var anyCanvas = UnityEngine.Object.FindFirstObjectByType<UnityEngine.Canvas>(UnityEngine.FindObjectsInactive.Include);
-            return anyCanvas != null ? anyCanvas.rootCanvas.transform : null;
+            cheatView.Construct(wallet, progression, teleporter, saveService, gameSaver, sceneLoader, pauseService, escape);
+            context.Track(cheatView);
         }
     }
 }

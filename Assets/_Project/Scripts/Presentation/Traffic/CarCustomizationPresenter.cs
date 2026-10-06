@@ -21,21 +21,21 @@ namespace AutoService.Presentation.Traffic
     /// </summary>
     public sealed class CarCustomizationPresenter : IDisposable
     {
+        // Why: no red, orange or green — those are the stock body colors (sedan, sport, SUV), and a car repainted
+        // into almost the same color looked as if the paint shop had done nothing.
         private static readonly Color[] PaintPalette =
         {
-            new Color(0.95f, 0.15f, 0.15f), // Rich Red
             new Color(0.1f, 0.5f, 1f),      // Electric Neon Blue
-            new Color(0.15f, 0.9f, 0.25f),  // Vibrant Lime Green
-            new Color(1f, 0.55f, 0.05f),    // Sport Orange
             new Color(0.7f, 0.15f, 0.95f),  // Deep Neon Purple
             new Color(1f, 0.85f, 0.1f),     // Racing Yellow
             new Color(0.1f, 0.9f, 0.9f),    // Bright Cyan
-            new Color(0.95f, 0.2f, 0.6f)    // Hot Pink
+            new Color(0.95f, 0.2f, 0.6f),   // Hot Pink
+            new Color(0.95f, 0.95f, 0.95f)  // Pearl White
         };
 
         private readonly IEventBus _eventBus;
         private readonly CarVisualCatalog _catalog;
-        private readonly IEnumerable<CarAgents> _agents;
+        private readonly IReadOnlyDictionary<string, CarAgents> _agents;
         private readonly CarView _sportPrefab;
         private readonly GameObject _darkWheelPrefab;
         private bool _disposed;
@@ -43,7 +43,7 @@ namespace AutoService.Presentation.Traffic
         public CarCustomizationPresenter(
             IEventBus eventBus,
             CarVisualCatalog catalog,
-            IEnumerable<CarAgents> agents)
+            IReadOnlyDictionary<string, CarAgents> agents)
         {
             _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
             _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
@@ -54,9 +54,13 @@ namespace AutoService.Presentation.Traffic
                 _sportPrefab = sport;
             }
 
-            // Optional custom wheel prefab from Resources/Prefabs
-            _darkWheelPrefab = Resources.Load<GameObject>("wheel-dark") 
-                ?? Resources.Load<GameObject>("wheel-racing");
+            // Why: racing wheels have orange rims, clearly different from the stock ones; the dark wheels differ only
+            // by a slightly darker rim and the change was not noticeable.
+            _darkWheelPrefab = Resources.Load<GameObject>("wheel-racing");
+            if (_darkWheelPrefab == null)
+            {
+                _darkWheelPrefab = Resources.Load<GameObject>("wheel-dark");
+            }
 
             _eventBus.Subscribe<ServiceCompletedEvent>(OnServiceCompleted);
         }
@@ -80,7 +84,7 @@ namespace AutoService.Presentation.Traffic
                 return;
             }
 
-            CarView view = FindCarView(evt.CarId);
+            CarView view = FindCarView(evt.LocationId, evt.CarId);
             if (view == null)
             {
                 return;
@@ -123,14 +127,16 @@ namespace AutoService.Presentation.Traffic
             return ServiceType.None;
         }
 
-        private CarView FindCarView(int carId)
+        // Why: car ids start from 0 in every location — searching all locations by id alone found a car with the same
+        // id on location 1 and painted it instead of the one that left the location 2 paint shop.
+        private CarView FindCarView(string locationId, int carId)
         {
-            foreach (CarAgents agent in _agents)
+            if (locationId != null
+                && _agents.TryGetValue(locationId, out CarAgents agents)
+                && agents != null
+                && agents.TryGetCarView(carId, out CarView view))
             {
-                if (agent != null && agent.TryGetCarView(carId, out CarView view))
-                {
-                    return view;
-                }
+                return view;
             }
 
             return null;

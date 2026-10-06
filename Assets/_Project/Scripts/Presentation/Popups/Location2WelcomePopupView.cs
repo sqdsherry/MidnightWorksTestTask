@@ -13,10 +13,6 @@ namespace AutoService.Presentation.Popups
     /// </summary>
     public sealed class Location2WelcomePopupView : MonoBehaviour, IEscapeHandler
     {
-        public const string DefaultTitle = "ТЮНИНГ-ЦЕНТР ОТКРЫТ!";
-        public const string DefaultDescription =
-            "Добро пожаловать на вторую локацию!\nЗдесь доступны премиальные сервисы: Замена шин, Тюнинг и Покраска кузова с визуальным изменением авто!";
-
         [SerializeField]
         [Tooltip("Full-screen dimmer blocking clicks behind the modal.")]
         private GameObject _overlay;
@@ -26,7 +22,7 @@ namespace AutoService.Presentation.Popups
         private RectTransform _card;
 
         [SerializeField]
-        [Tooltip("Title label ('ТЮНИНГ-ЦЕНТР ОТКРЫТ!').")]
+        [Tooltip("Title label; its text is set in the scene.")]
         private TMP_Text _titleText;
 
         [SerializeField]
@@ -34,7 +30,7 @@ namespace AutoService.Presentation.Popups
         private TMP_Text _descriptionText;
 
         [SerializeField]
-        [Tooltip("Button to dismiss the popup ('НАЧАТЬ РАБОТУ!').")]
+        [Tooltip("Button that dismisses the popup.")]
         private Button _startButton;
 
         private Action _onClose;
@@ -72,16 +68,6 @@ namespace AutoService.Presentation.Popups
         public void Show(Action onClose = null)
         {
             _onClose = onClose;
-
-            if (_titleText != null && string.IsNullOrEmpty(_titleText.text))
-            {
-                _titleText.text = DefaultTitle;
-            }
-
-            if (_descriptionText != null && string.IsNullOrEmpty(_descriptionText.text))
-            {
-                _descriptionText.text = DefaultDescription;
-            }
 
             UiVisibility.ShowChain(gameObject);
             if (_overlay != null)

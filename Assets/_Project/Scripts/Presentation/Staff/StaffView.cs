@@ -102,7 +102,7 @@ namespace AutoService.Presentation.Staff
                 }
             }
 
-            // Фоллбэк: если используется базовый префаб с Body/Head
+            // Fallback: the base prefab with Body/Head parts.
             Transform fallbackBody = transform.Find("Body");
             if (fallbackBody != null)
             {
@@ -165,26 +165,26 @@ namespace AutoService.Presentation.Staff
                         return false;
                     }
 
-                    // Если путь еще рассчитывается в фоне — ждем завершения расчета
+                    // The path is still being computed in the background: wait for it.
                     if (_agent.pathPending)
                     {
                         return false;
                     }
 
-                    // Если путь вообще недостижим (нет проходимой сетки)
+                    // The target is unreachable (no walkable NavMesh).
                     if (_agent.pathStatus == NavMeshPathStatus.PathInvalid)
                     {
                         SnapToTarget("has invalid path");
                         return false;
                     }
 
-                    // Если у агента еще нет пути — ждем инициализации NavMesh
+                    // The agent has no path yet: wait for the NavMesh.
                     if (!_agent.hasPath)
                     {
                         return false;
                     }
 
-                    // Проверяем реальное приближение к цели
+                    // Check the real distance to the target.
                     bool closeToTarget = _target != null && Vector3.Distance(transform.position, _target.position) <= 1.8f;
                     bool reachedPathEnd = _agent.remainingDistance <= Mathf.Max(_agent.stoppingDistance + _arrivalTolerance, 0.5f);
 
@@ -196,8 +196,8 @@ namespace AutoService.Presentation.Staff
 
                     if (reachedPathEnd)
                     {
-                        // Дошел до конца доступного пути NavMesh.
-                        // Если остался небольшой разрыв до объекта из-за obstacle, дотягиваем до точки
+                        // Reached the end of the available NavMesh path.
+                        // A small gap left by an obstacle: snap to the point.
                         if (_target != null && Vector3.Distance(transform.position, _target.position) > 2.0f)
                         {
                             SnapToTarget("path ended before target; snapping to work spot");
