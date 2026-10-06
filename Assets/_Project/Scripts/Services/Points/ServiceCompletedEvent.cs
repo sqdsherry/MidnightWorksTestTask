@@ -13,8 +13,10 @@ namespace AutoService.Services.Points
     public readonly struct ServiceCompletedEvent
     {
         /// <summary>Creates the event.</summary>
-        public ServiceCompletedEvent(string pointId, string serviceTypeId, PointKind kind, int carId, string carTypeId)
+        /// <param name="locationId">Location of the point; car ids are unique only within a location.</param>
+        public ServiceCompletedEvent(string pointId, string serviceTypeId, PointKind kind, int carId, string carTypeId, string locationId = null)
         {
+            LocationId = locationId;
             PointId = pointId;
             ServiceTypeId = serviceTypeId;
             Kind = kind;
@@ -31,7 +33,10 @@ namespace AutoService.Services.Points
         /// <summary>Barrier (parking fee paid, the car drives to its slot) or real service.</summary>
         public PointKind Kind { get; }
 
-        /// <summary>Runtime id of the served car.</summary>
+        /// <summary>Location of the point. Car ids start from 0 in every location, so a car is identified by both.</summary>
+        public string LocationId { get; }
+
+        /// <summary>Runtime id of the served car (unique within <see cref="LocationId"/> only).</summary>
         public int CarId { get; }
 
         /// <summary>Type id of the served car.</summary>

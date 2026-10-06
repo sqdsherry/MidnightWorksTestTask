@@ -35,7 +35,7 @@ namespace AutoService.Presentation.Traffic
 
         private readonly IEventBus _eventBus;
         private readonly CarVisualCatalog _catalog;
-        private readonly IEnumerable<CarAgents> _agents;
+        private readonly IReadOnlyDictionary<string, CarAgents> _agents;
         private readonly CarView _sportPrefab;
         private readonly GameObject _darkWheelPrefab;
         private bool _disposed;
@@ -43,7 +43,7 @@ namespace AutoService.Presentation.Traffic
         public CarCustomizationPresenter(
             IEventBus eventBus,
             CarVisualCatalog catalog,
-            IEnumerable<CarAgents> agents)
+            IReadOnlyDictionary<string, CarAgents> agents)
         {
             _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
             _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
@@ -84,7 +84,7 @@ namespace AutoService.Presentation.Traffic
                 return;
             }
 
-            CarView view = FindCarView(evt.CarId);
+            CarView view = FindCarView(evt.LocationId, evt.CarId);
             if (view == null)
             {
                 return;
@@ -127,14 +127,16 @@ namespace AutoService.Presentation.Traffic
             return ServiceType.None;
         }
 
-        private CarView FindCarView(int carId)
+        // Why: car ids start from 0 in every location — searching all locations by id alone found a car with the same
+        // id on location 1 and painted it instead of the one that left the location 2 paint shop.
+        private CarView FindCarView(string locationId, int carId)
         {
-            foreach (CarAgents agent in _agents)
+            if (locationId != null
+                && _agents.TryGetValue(locationId, out CarAgents agents)
+                && agents != null
+                && agents.TryGetCarView(carId, out CarView view))
             {
-                if (agent != null && agent.TryGetCarView(carId, out CarView view))
-                {
-                    return view;
-                }
+                return view;
             }
 
             return null;
