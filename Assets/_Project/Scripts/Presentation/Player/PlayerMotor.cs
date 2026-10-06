@@ -123,11 +123,9 @@ namespace AutoService.Presentation.Player
                 return;
             }
 
-            if (_agent.pathStatus != NavMeshPathStatus.PathComplete)
+            if (_agent.pathStatus == NavMeshPathStatus.PathInvalid)
             {
-                // Why: a partial path would leave the character standing at the closest reachable point forever,
-                // never arriving; stopping makes the failure explicit.
-                Debug.LogWarning("[PlayerMotor] Destination is unreachable (" + _agent.pathStatus + "); stopping.", _view);
+                // Why: an invalid path means no route can be calculated at all (e.g. completely disconnected mesh).
                 StopAgent();
                 TransitionTo(PlayerMotionState.Idle, null);
                 return;

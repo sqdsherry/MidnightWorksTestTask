@@ -7,10 +7,12 @@ using AutoService.Presentation.Panels;
 using AutoService.Presentation.Pause;
 using AutoService.Presentation.Player;
 using AutoService.Presentation.Points.Panel;
+using AutoService.Presentation.Popups;
 using AutoService.Presentation.Settings;
 using AutoService.Presentation.Staff;
 using AutoService.Presentation.Supplies;
 using AutoService.Presentation.Traffic;
+using AutoService.Presentation.Ui;
 using AutoService.Services.Core;
 using AutoService.Services.Economy;
 using AutoService.Services.Formatting;
@@ -134,6 +136,19 @@ namespace AutoService.Bootstrap
         [Tooltip("Settings screen opened from the pause menu (Prefabs/UI/SettingsPanel).")]
         private SettingsView _settingsPanel;
 
+        [Header("Popups & Cheats")]
+        [SerializeField]
+        [Tooltip("Modal level up congratulatory popup.")]
+        private LevelUpPopupView _levelUpPopup;
+
+        [SerializeField]
+        [Tooltip("Modal welcome popup upon arriving at Location 2.")]
+        private Location2WelcomePopupView _loc2WelcomePopup;
+
+        [SerializeField]
+        [Tooltip("F1 / button debug cheat panel.")]
+        private DebugCheatView _debugCheatView;
+
         // Why: lifecycle lists are filled by the installers (through GameplayContext), so every service created there is
         // initialized and ticked without each module having to remember to wire itself in.
         private readonly List<IInitializable> _initializables = new List<IInitializable>();
@@ -254,7 +269,10 @@ namespace AutoService.Bootstrap
                 _playerCarry,
                 _pauseMenu,
                 _pauseButton,
-                _settingsPanel);
+                _settingsPanel,
+                _levelUpPopup != null ? _levelUpPopup : FindFirstObjectByType<LevelUpPopupView>(FindObjectsInactive.Include),
+                _loc2WelcomePopup != null ? _loc2WelcomePopup : FindFirstObjectByType<Location2WelcomePopupView>(FindObjectsInactive.Include),
+                _debugCheatView != null ? _debugCheatView : FindFirstObjectByType<DebugCheatView>(FindObjectsInactive.Include));
         }
 
         // Why: reverse order, like the container — dependents go before what they depend on.

@@ -21,7 +21,7 @@ namespace AutoService.Presentation.Player
     public sealed class PlayerView : MonoBehaviour
     {
         // Why: clicks land on the ground/object surface, which can be slightly off the baked NavMesh (edges, object footprints).
-        private const float NavMeshSampleRadius = 1f;
+        private const float NavMeshSampleRadius = 3f;
 
         [SerializeField]
         [Tooltip("Agent that moves the character.")]

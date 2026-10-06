@@ -9,5 +9,8 @@ namespace AutoService.Services.Save
     {
         /// <summary>Captures and writes the progress immediately.</summary>
         void SaveNow();
+
+        /// <summary>Deletes the save and suspends future saving until next restore.</summary>
+        void ResetProgress();
     }
 }

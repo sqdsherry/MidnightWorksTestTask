@@ -24,5 +24,10 @@ namespace AutoService.Tests.EditMode
             SaveCount++;
             _onSave?.Invoke();
         }
+
+        /// <inheritdoc />
+        public void ResetProgress()
+        {
+        }
     }
 }

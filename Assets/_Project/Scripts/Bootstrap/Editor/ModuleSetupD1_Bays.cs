@@ -111,13 +111,24 @@ namespace AutoService.Bootstrap.Editor
                     var ps = foamObj.AddComponent<ParticleSystem>();
                     var main = ps.main;
                     main.useUnscaledTime = false;
-                    main.startLifetime = 1f;
-                    main.startSpeed = 2f;
+                    main.startLifetime = 1.0f;
+                    main.startSpeed = 1.8f;
+                    main.startSize = 0.35f;
+                    main.gravityModifier = 0.8f;
+                    main.startColor = new Color(0.92f, 0.96f, 1f, 0.85f);
                     var em = ps.emission;
-                    em.rateOverTime = 30;
+                    em.rateOverTime = 40;
+                    em.enabled = false;
                     var shape = ps.shape;
                     shape.shapeType = ParticleSystemShapeType.Box;
-                    shape.scale = new Vector3(3f, 1f, 3f);
+                    shape.scale = new Vector3(3f, 0.5f, 3f);
+
+                    var foamMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/_Project/Materials/M_WashFoam.mat");
+                    var psr = ps.GetComponent<ParticleSystemRenderer>();
+                    if (psr != null && foamMat != null)
+                    {
+                        psr.sharedMaterial = foamMat;
+                    }
                     
                     var bMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/_Project/Art/Generated/M_Brush.mat");
                     var bl = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
@@ -138,6 +149,7 @@ namespace AutoService.Bootstrap.Editor
                     serialized.FindProperty("_leftBrush").objectReferenceValue = bl.transform;
                     serialized.FindProperty("_rightBrush").objectReferenceValue = br.transform;
                     serialized.FindProperty("_foam").objectReferenceValue = ps;
+                    serialized.FindProperty("_foamMaterial").objectReferenceValue = foamMat;
                     serialized.ApplyModifiedProperties();
                 }
                 else if (bay.ServiceTypeId == "oil")

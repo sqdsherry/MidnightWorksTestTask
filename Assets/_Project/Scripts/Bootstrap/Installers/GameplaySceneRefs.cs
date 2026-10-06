@@ -4,10 +4,12 @@ using AutoService.Presentation.Panels;
 using AutoService.Presentation.Pause;
 using AutoService.Presentation.Player;
 using AutoService.Presentation.Points.Panel;
+using AutoService.Presentation.Popups;
 using AutoService.Presentation.Settings;
 using AutoService.Presentation.Staff;
 using AutoService.Presentation.Supplies;
 using AutoService.Presentation.Traffic;
+using AutoService.Presentation.Ui;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -48,7 +50,10 @@ namespace AutoService.Bootstrap.Installers
             PlayerCarryView playerCarry,
             PauseMenuView pauseMenu,
             PauseButtonView pauseButton,
-            SettingsView settingsPanel)
+            SettingsView settingsPanel,
+            LevelUpPopupView levelUpPopup = null,
+            Location2WelcomePopupView loc2WelcomePopup = null,
+            DebugCheatView debugCheatView = null)
         {
             InputActions = inputActions;
             Camera = camera;
@@ -74,6 +79,9 @@ namespace AutoService.Bootstrap.Installers
             PauseMenu = pauseMenu;
             PauseButton = pauseButton;
             SettingsPanel = settingsPanel;
+            LevelUpPopup = levelUpPopup;
+            Loc2WelcomePopup = loc2WelcomePopup;
+            DebugCheatView = debugCheatView;
         }
 
         /// <summary>GameControls asset with the 'Gameplay' action map.</summary>
@@ -147,5 +155,14 @@ namespace AutoService.Bootstrap.Installers
 
         /// <summary>Settings screen opened from the pause menu.</summary>
         public SettingsView SettingsPanel { get; }
+
+        /// <summary>Modal level-up celebratory popup.</summary>
+        public LevelUpPopupView LevelUpPopup { get; }
+
+        /// <summary>Modal welcome window for Location 2.</summary>
+        public Location2WelcomePopupView Loc2WelcomePopup { get; }
+
+        /// <summary>F1 / toggle debug cheat window.</summary>
+        public DebugCheatView DebugCheatView { get; }
     }
 }

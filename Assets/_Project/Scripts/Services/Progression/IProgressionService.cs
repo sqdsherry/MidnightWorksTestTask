@@ -16,5 +16,8 @@ namespace AutoService.Services.Progression
         event Action<int> LeveledUp;
 
         void Restore(int xp);
+
+        /// <summary>Adds experience points, triggering level up if thresholds are met.</summary>
+        void AddExperience(int amount);
     }
 }

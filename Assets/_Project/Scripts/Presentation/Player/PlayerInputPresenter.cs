@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using AutoService.Presentation.Controls;
 using AutoService.Presentation.Interaction;
 using AutoService.Services.Core;
@@ -18,6 +19,7 @@ namespace AutoService.Presentation.Player
         private readonly PlayerView _player;
         private readonly IPauseService _pause;
         private readonly ClickMarkerView _clickMarker;
+        private readonly List<RaycastResult> _uiRaycastResults = new List<RaycastResult>();
 
         private IInteractable _hovered;
         private bool _clickPending;
@@ -49,7 +51,7 @@ namespace AutoService.Presentation.Player
         /// <inheritdoc />
         public void Tick(float deltaTime)
         {
-            bool blocked = _pause.IsPaused || IsPointerOverUi();
+            bool blocked = _pause.IsPaused || IsPointerOverUi(_input.PointerPosition);
 
             // Why: one raycast per tick feeds both hover and the click, so they can never disagree about the target.
             PointerHit hit = default;
@@ -130,10 +132,41 @@ namespace AutoService.Presentation.Player
             }
         }
 
-        private static bool IsPointerOverUi()
+        private bool IsPointerOverUi(Vector2 pointerPosition)
         {
             EventSystem eventSystem = EventSystem.current;
-            return eventSystem != null && eventSystem.IsPointerOverGameObject();
+            if (eventSystem == null || !eventSystem.IsPointerOverGameObject())
+            {
+                return false;
+            }
+
+            // Why: EventSystem.IsPointerOverGameObject() returns true even when the pointer is over World Space canvases
+            // (such as in-world floating bay HUDs, indicators, or name plates). Gameplay ground clicks must only be
+            // blocked when the pointer is over Screen Space UI (ScreenHud, popups, menus).
+            var pointerData = new PointerEventData(eventSystem)
+            {
+                position = pointerPosition
+            };
+
+            _uiRaycastResults.Clear();
+            eventSystem.RaycastAll(pointerData, _uiRaycastResults);
+
+            for (int i = 0; i < _uiRaycastResults.Count; i++)
+            {
+                GameObject go = _uiRaycastResults[i].gameObject;
+                if (go == null)
+                {
+                    continue;
+                }
+
+                Canvas canvas = go.GetComponentInParent<Canvas>();
+                if (canvas != null && canvas.renderMode != RenderMode.WorldSpace)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 }

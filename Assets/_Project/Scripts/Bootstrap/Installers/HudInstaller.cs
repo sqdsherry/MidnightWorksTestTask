@@ -1,17 +1,21 @@
 using AutoService.Presentation.Controls;
 using AutoService.Presentation.Hud;
 using AutoService.Presentation.Pause;
+using AutoService.Presentation.Popups;
 using AutoService.Presentation.Settings;
+using AutoService.Presentation.Ui;
 using AutoService.Services.Core;
 using AutoService.Services.Economy;
 using AutoService.Services.Menu;
+using AutoService.Services.Progression;
 using AutoService.Services.Save;
 using AutoService.Services.Scenes;
 using AutoService.Services.Settings;
+using UnityEngine;
 
 namespace AutoService.Bootstrap.Installers
 {
-    /// <summary>Screen HUD: the balance label and the pause (button, menu, settings screen).</summary>
+    /// <summary>Screen HUD: the balance label, progression, pause, popups, and debug cheats.</summary>
     internal sealed class HudInstaller : IGameplayInstaller
     {
         /// <inheritdoc />
@@ -20,6 +24,8 @@ namespace AutoService.Bootstrap.Installers
             InstallBalance(context);
             InstallProgression(context);
             InstallPause(context);
+            InstallPopups(context);
+            InstallDebugCheats(context);
         }
 
         private static void InstallBalance(GameplayContext context)
@@ -87,6 +93,134 @@ namespace AutoService.Bootstrap.Installers
             var model = new PauseMenuModel(context.Resolve<IPauseService>(), context.Resolve<ISceneLoader>(), saver);
             context.Register(model);
             context.Register(new PauseMenuPresenter(model, scene.PauseMenu, scene.PauseButton, settings, escape));
+        }
+
+        private static void InstallPopups(GameplayContext context)
+        {
+            GameplaySceneRefs scene = context.Scene;
+            context.TryResolve(out EscapeRouter escape);
+
+            LevelUpPopupView levelUpView = scene.LevelUpPopup;
+            if (levelUpView == null)
+            {
+                levelUpView = UnityEngine.Object.FindFirstObjectByType<LevelUpPopupView>(UnityEngine.FindObjectsInactive.Include);
+            }
+
+            if (levelUpView == null)
+            {
+                var prefab = UnityEngine.Resources.Load<LevelUpPopupView>("UI/LevelUpPopup");
+                if (prefab != null)
+                {
+                    Transform hud = GetHudCanvasTransform(scene);
+                    if (hud != null)
+                    {
+                        levelUpView = UnityEngine.Object.Instantiate(prefab, hud);
+                    }
+                }
+            }
+
+            if (levelUpView != null)
+            {
+                levelUpView.SetEscapeRouter(escape);
+                if (context.TryResolve(out IProgressionService progression))
+                {
+                    context.Register(new LevelUpPresenter(progression, levelUpView));
+                }
+            }
+            else
+            {
+                context.Logger.Warning("[Gameplay] LevelUpPopupView not assigned / found; level up popup disabled.");
+            }
+
+            Location2WelcomePopupView welcomeView = scene.Loc2WelcomePopup;
+            if (welcomeView == null)
+            {
+                welcomeView = UnityEngine.Object.FindFirstObjectByType<Location2WelcomePopupView>(UnityEngine.FindObjectsInactive.Include);
+            }
+
+            if (welcomeView == null)
+            {
+                var prefab = UnityEngine.Resources.Load<Location2WelcomePopupView>("UI/Location2WelcomePopup");
+                if (prefab != null)
+                {
+                    Transform hud = GetHudCanvasTransform(scene);
+                    if (hud != null)
+                    {
+                        welcomeView = UnityEngine.Object.Instantiate(prefab, hud);
+                    }
+                }
+            }
+
+            if (welcomeView != null)
+            {
+                welcomeView.SetEscapeRouter(escape);
+                if (scene.Player != null)
+                {
+                    var presenter = new Location2WelcomePresenter(scene.Player, welcomeView);
+                    context.Register(presenter);
+                    context.Track(presenter, TickPhase.Presentation);
+                }
+            }
+            else
+            {
+                context.Logger.Warning("[Gameplay] Location2WelcomePopupView not assigned / found; welcome popup disabled.");
+            }
+        }
+
+        private static void InstallDebugCheats(GameplayContext context)
+        {
+            GameplaySceneRefs scene = context.Scene;
+            DebugCheatView cheatView = scene.DebugCheatView;
+            if (cheatView == null)
+            {
+                cheatView = UnityEngine.Object.FindFirstObjectByType<DebugCheatView>(UnityEngine.FindObjectsInactive.Include);
+            }
+
+            if (cheatView == null)
+            {
+                var prefab = UnityEngine.Resources.Load<DebugCheatView>("UI/DebugCheatPanel");
+                if (prefab != null)
+                {
+                    Transform hud = GetHudCanvasTransform(scene);
+                    if (hud != null)
+                    {
+                        cheatView = UnityEngine.Object.Instantiate(prefab, hud);
+                    }
+                }
+            }
+
+            if (cheatView != null)
+            {
+                context.TryResolve(out EscapeRouter escape);
+                context.TryResolve(out IWalletService wallet);
+                context.TryResolve(out IProgressionService progression);
+                context.TryResolve(out ISaveService saveService);
+                context.TryResolve(out IGameSaver gameSaver);
+                context.TryResolve(out ISceneLoader sceneLoader);
+                context.TryResolve(out IPauseService pauseService);
+
+                cheatView.Initialize(wallet, progression, scene.Player, scene.CameraRig, saveService, gameSaver, sceneLoader, pauseService, escape);
+            }
+            else
+            {
+                context.Logger.Warning("[Gameplay] DebugCheatView not assigned / found; debug cheats disabled.");
+            }
+        }
+
+        private static Transform GetHudCanvasTransform(GameplaySceneRefs scene)
+        {
+            if (scene.BalanceView != null)
+            {
+                var c = scene.BalanceView.GetComponentInParent<UnityEngine.Canvas>(true);
+                if (c != null) return c.rootCanvas.transform;
+            }
+            if (scene.PauseButton != null)
+            {
+                var c = scene.PauseButton.GetComponentInParent<UnityEngine.Canvas>(true);
+                if (c != null) return c.rootCanvas.transform;
+            }
+            var anyCanvas = UnityEngine.Object.FindFirstObjectByType<UnityEngine.Canvas>(UnityEngine.FindObjectsInactive.Include);
+            return anyCanvas != null ? anyCanvas.rootCanvas.transform : null;
         }
     }
 }

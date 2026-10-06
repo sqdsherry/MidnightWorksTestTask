@@ -31,6 +31,17 @@ namespace AutoService.Bootstrap.Editor
         private static readonly Color32 PadRingFill = new Color32(0x4F, 0xC3, 0xF7, 0xFF);
         private static readonly Vector2 PadCanvasSize = new Vector2(200f, 200f);
 
+        [InitializeOnLoadMethod]
+        private static void AutoSyncWarehouseVisuals()
+        {
+            EditorApplication.delayCall += () =>
+            {
+                if (EditorPrefs.GetBool("AutoService_WarehouseLoc2Visuals_V3", false)) return;
+                EditorPrefs.SetBool("AutoService_WarehouseLoc2Visuals_V3", true);
+                ApplyFixes();
+            };
+        }
+
         /// <summary>
         /// Applies in-place non-destructive updates to the gameplay scene and configs.
         /// </summary>
@@ -48,18 +59,51 @@ namespace AutoService.Bootstrap.Editor
             UpdateParkingConfig();
             UpdateTravelPoints(facing);
             UpdateManagePads(facing);
+            CloneWarehouse1VisualsToLoc2();
             UpdateWarehouses(facing);
             EnsureDoorNavMesh();
             AdjustWorkSpotsAndBakeNavMesh();
             CleanTagCanvases();
             EnsureServiceBayHudNames();
             CharacterSetupHelper.ConfigureAll();
+            StripWorldSpaceGraphicRaycasters();
 
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene);
             AssetDatabase.SaveAssets();
 
             Debug.Log("[Location2SceneUpdater] Successfully applied Location 2 and Warehouse fixes to " + scene.name + "!");
+        }
+
+        [MenuItem("AutoService/Setup/Strip WorldSpace GraphicRaycasters")]
+        public static void StripWorldSpaceGraphicRaycasters()
+        {
+            var canvases = UnityEngine.Object.FindObjectsByType<Canvas>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            int stripped = 0;
+            foreach (var canvas in canvases)
+            {
+                if (canvas.renderMode == RenderMode.WorldSpace)
+                {
+                    var raycaster = canvas.GetComponent<GraphicRaycaster>();
+                    if (raycaster != null)
+                    {
+                        Undo.DestroyObjectImmediate(raycaster);
+                        stripped++;
+                    }
+
+                    var graphics = canvas.GetComponentsInChildren<Graphic>(true);
+                    foreach (var g in graphics)
+                    {
+                        if (g.raycastTarget)
+                        {
+                            g.raycastTarget = false;
+                            EditorUtility.SetDirty(g);
+                        }
+                    }
+                    EditorUtility.SetDirty(canvas.gameObject);
+                }
+            }
+            Debug.Log("[Location2SceneUpdater] Stripped GraphicRaycaster from " + stripped + " WorldSpace Canvas(es).");
         }
 
         private static void CleanTagCanvases()
@@ -248,6 +292,172 @@ namespace AutoService.Bootstrap.Editor
             Debug.Log("[Location2SceneUpdater] Verified ManagePads; attached DwellRingView to " + updated + " pad(s).");
         }
 
+        /// <summary>
+        /// Clones the modular visual models, transforms, and UI structure from Warehouse_1 to Warehouse_loc2.
+        /// </summary>
+        [MenuItem("AutoService/Setup/Clone Warehouse 1 Visuals To Location 2")]
+        public static void CloneWarehouse1VisualsToLoc2()
+        {
+            Scene scene = SceneManager.GetActiveScene();
+            if (scene.path != GameplayScenePath)
+            {
+                scene = EditorSceneManager.OpenScene(GameplayScenePath, OpenSceneMode.Single);
+            }
+
+            GameObject wh1 = GameObject.Find("Warehouse_1");
+            GameObject wh2 = GameObject.Find("Warehouse_loc2");
+
+            if (wh1 == null || wh2 == null)
+            {
+                var allTransforms = UnityEngine.Object.FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+                foreach (var t in allTransforms)
+                {
+                    if (t.name == "Warehouse_1") wh1 = t.gameObject;
+                    if (t.name == "Warehouse_loc2") wh2 = t.gameObject;
+                }
+            }
+
+            if (wh1 == null || wh2 == null)
+            {
+                Debug.LogWarning("[Location2SceneUpdater] Warehouse_1 or Warehouse_loc2 not found in scene.");
+                return;
+            }
+
+            // 1. Deactivate whitebox Body on Warehouse_loc2
+            Transform body2 = wh2.transform.Find("Body");
+            if (body2 != null)
+            {
+                body2.gameObject.SetActive(false);
+                EditorUtility.SetDirty(body2.gameObject);
+            }
+
+            // 2. Remove duplicate/nested WorkPad under ApproachPoint if present
+            Transform approach2 = wh2.transform.Find("ApproachPoint");
+            if (approach2 != null)
+            {
+                Transform nestedPad = approach2.Find("WorkPad");
+                if (nestedPad != null)
+                {
+                    Undo.DestroyObjectImmediate(nestedPad.gameObject);
+                }
+                approach2.localPosition = new Vector3(-2.16f, 0f, -0.53f);
+                approach2.localRotation = Quaternion.Euler(0f, 90f, 0f);
+                EditorUtility.SetDirty(approach2);
+            }
+
+            // 3. Align WorkPad directly under Warehouse_loc2
+            Transform workPad2 = wh2.transform.Find("WorkPad");
+            if (workPad2 == null)
+            {
+                var pad = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                pad.name = "WorkPad";
+                UnityEngine.Object.DestroyImmediate(pad.GetComponent<Collider>());
+                pad.transform.SetParent(wh2.transform, false);
+                workPad2 = pad.transform;
+                Material workPadMat = AssetDatabase.LoadAssetAtPath<Material>(WorkPadMaterialPath);
+                if (workPadMat != null)
+                {
+                    pad.GetComponent<Renderer>().sharedMaterial = workPadMat;
+                }
+                Undo.RegisterCreatedObjectUndo(pad, "Create WorkPad");
+            }
+            workPad2.localPosition = new Vector3(-2.16f, 0.01f, -0.53f);
+            workPad2.localRotation = Quaternion.identity;
+            workPad2.localScale = new Vector3(1.6f, 0.02f, 1.6f);
+            EditorUtility.SetDirty(workPad2);
+
+            // 4. Align StorekeeperSpots
+            Transform spot0 = wh2.transform.Find("StorekeeperSpot_0");
+            if (spot0 != null)
+            {
+                spot0.localPosition = new Vector3(-1.2f, 0f, -2.3f);
+                spot0.localRotation = Quaternion.Euler(0f, 180f, 0f);
+                EditorUtility.SetDirty(spot0);
+            }
+            Transform spot1 = wh2.transform.Find("StorekeeperSpot_1");
+            if (spot1 != null)
+            {
+                spot1.localPosition = new Vector3(0f, 0f, -2.3f);
+                spot1.localRotation = Quaternion.Euler(0f, 180f, 0f);
+                EditorUtility.SetDirty(spot1);
+            }
+            Transform spot2 = wh2.transform.Find("StorekeeperSpot_2");
+            if (spot2 != null)
+            {
+                spot2.localPosition = new Vector3(1.2f, 0f, -2.3f);
+                spot2.localRotation = Quaternion.Euler(0f, 180f, 0f);
+                EditorUtility.SetDirty(spot2);
+            }
+
+            // 5. Clean existing cloned models on Warehouse_loc2
+            for (int i = wh2.transform.childCount - 1; i >= 0; i--)
+            {
+                Transform child = wh2.transform.GetChild(i);
+                string cName = child.name;
+                if (cName == "floor" || cName == "conveyor-long" ||
+                    cName.StartsWith("box-wide") || cName.StartsWith("box-small") ||
+                    cName.StartsWith("detail-awning"))
+                {
+                    Undo.DestroyObjectImmediate(child.gameObject);
+                }
+            }
+
+            // 6. Clone all 19 model children from Warehouse_1
+            for (int i = 0; i < wh1.transform.childCount; i++)
+            {
+                Transform srcChild = wh1.transform.GetChild(i);
+                string srcName = srcChild.name;
+                if (srcName == "floor" || srcName == "conveyor-long" ||
+                    srcName.StartsWith("box-wide") || srcName.StartsWith("box-small") ||
+                    srcName.StartsWith("detail-awning"))
+                {
+                    GameObject srcPrefab = PrefabUtility.GetCorrespondingObjectFromSource(srcChild.gameObject);
+                    GameObject clone;
+                    if (srcPrefab != null)
+                    {
+                        clone = (GameObject)PrefabUtility.InstantiatePrefab(srcPrefab, wh2.transform);
+                        clone.name = srcName;
+                    }
+                    else
+                    {
+                        clone = UnityEngine.Object.Instantiate(srcChild.gameObject, wh2.transform);
+                        clone.name = srcName;
+                    }
+
+                    clone.transform.localPosition = srcChild.localPosition;
+                    clone.transform.localRotation = srcChild.localRotation;
+                    clone.transform.localScale = srcChild.localScale;
+
+                    clone.layer = wh2.layer;
+                    foreach (Transform t in clone.GetComponentsInChildren<Transform>(true))
+                    {
+                        t.gameObject.layer = wh2.layer;
+                    }
+                    Undo.RegisterCreatedObjectUndo(clone, "Clone warehouse visual part");
+                }
+            }
+
+            // 7. Update BoxCollider to match Warehouse_1 bounding box
+            BoxCollider col1 = wh1.GetComponent<BoxCollider>();
+            BoxCollider col2 = wh2.GetComponent<BoxCollider>();
+            if (col2 != null)
+            {
+                if (col1 != null)
+                {
+                    col2.center = col1.center;
+                    col2.size = col1.size;
+                }
+                else
+                {
+                    col2.center = new Vector3(0.9787302f, 1.0f, -0.57f);
+                    col2.size = new Vector3(5.450001f, 4.023367f, 3.6142006f);
+                }
+                EditorUtility.SetDirty(col2);
+            }
+
+            Debug.Log("[Location2SceneUpdater] Cloned visuals, transforms, spots, and collider to Warehouse_loc2!");
+        }
+
         private static void UpdateWarehouses(Quaternion facing)
         {
             var warehouses = UnityEngine.Object.FindObjectsByType<WarehouseView>(FindObjectsInactive.Include, FindObjectsSortMode.None);
@@ -278,7 +488,7 @@ namespace AutoService.Bootstrap.Editor
                     Undo.RegisterCreatedObjectUndo(pad, "Create warehouse work pad");
                 }
 
-                // 2. Ensure overhead HUD Canvas (Progress bar + Message)
+                // 2. Ensure overhead HUD Canvas (Progress bar + Message + TitleBadge)
                 Transform existingHud = wh.transform.Find("HUD");
                 if (existingHud != null)
                 {
@@ -301,6 +511,9 @@ namespace AutoService.Bootstrap.Editor
                 hudGo.transform.SetParent(wh.transform, false);
                 var canvas = hudGo.GetComponent<Canvas>();
                 canvas.renderMode = RenderMode.WorldSpace;
+                canvas.additionalShaderChannels = AdditionalCanvasShaderChannels.TexCoord1 | 
+                                                  AdditionalCanvasShaderChannels.Normal | 
+                                                  AdditionalCanvasShaderChannels.Tangent;
 
                 var hudRect = (RectTransform)hudGo.transform;
                 hudRect.sizeDelta = new Vector2(300f, 120f);
@@ -317,6 +530,15 @@ namespace AutoService.Bootstrap.Editor
                 Sprite badgeSprite = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/_Project/Art/Kenney/kenney_ui-pack/Red/Default/button_rectangle_depth_flat.png")
                     ?? AssetDatabase.LoadAssetAtPath<Sprite>("Assets/_Project/Art/Kenney/kenney_ui-pack/Yellow/Default/button_rectangle_depth_flat.png")
                     ?? uiSprite;
+
+                Sprite titleBadgeSprite = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/_Project/Art/Kenney/kenney_ui-pack/Default/button_rectangle_depth_flat.png")
+                    ?? AssetDatabase.LoadAssetAtPath<Sprite>("Assets/_Project/Art/Kenney/kenney_ui-pack/Grey/Default/button_rectangle_depth_flat.png")
+                    ?? badgeSprite;
+
+                TMP_FontAsset fontAsset = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(
+                    "Assets/TextMesh Pro/Resources/Fonts & Materials/LiberationSans SDF.asset")
+                    ?? AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(
+                    "Assets/_Project/Art/Kenney/kenney_ui-pack/Font/LiberationSans SDF.asset");
 
                 // Progress bar root
                 var progressRoot = new GameObject("ProgressRoot", typeof(RectTransform));
@@ -354,7 +576,7 @@ namespace AutoService.Bootstrap.Editor
 
                 progressRoot.SetActive(false);
 
-                // Message Badge container
+                // Message Badge container (dynamic interaction feedback)
                 var msgGo = new GameObject("MessageBadge", typeof(RectTransform), typeof(CanvasGroup));
                 msgGo.transform.SetParent(hudRect, false);
                 var msgRect = (RectTransform)msgGo.transform;
@@ -377,6 +599,7 @@ namespace AutoService.Bootstrap.Editor
                 textRect.anchoredPosition = new Vector2(0f, 2f);
 
                 var msgTmp = textGo.AddComponent<TextMeshProUGUI>();
+                if (fontAsset != null) msgTmp.font = fontAsset;
                 msgTmp.text = "Need $0";
                 msgTmp.fontSize = 26f;
                 msgTmp.fontStyle = FontStyles.Bold;
@@ -384,6 +607,41 @@ namespace AutoService.Bootstrap.Editor
                 msgTmp.color = Color.white;
                 msgTmp.raycastTarget = false;
                 msgGo.SetActive(false);
+
+                // Title Badge ("Warehouse" sign plate on building)
+                var titleGo = new GameObject("TitleBadge", typeof(RectTransform));
+                titleGo.transform.SetParent(hudRect, false);
+                var titleRect = (RectTransform)titleGo.transform;
+                titleRect.anchoredPosition = new Vector2(607f, -15f);
+                titleRect.localPosition = new Vector3(titleRect.localPosition.x, titleRect.localPosition.y, -322f);
+                titleRect.localRotation = Quaternion.Euler(30f, 0f, 0f);
+                titleRect.sizeDelta = new Vector2(600f, 150f);
+
+                var titleImg = titleGo.AddComponent<Image>();
+                titleImg.sprite = titleBadgeSprite;
+                titleImg.type = Image.Type.Sliced;
+                titleImg.color = new Color(0.95f, 0.95f, 0.98f, 0.98f);
+                titleImg.raycastTarget = false;
+
+                var titleTextGo = new GameObject("Text", typeof(RectTransform));
+                titleTextGo.transform.SetParent(titleGo.transform, false);
+                var titleTextRect = (RectTransform)titleTextGo.transform;
+                titleTextRect.anchorMin = Vector2.zero;
+                titleTextRect.anchorMax = Vector2.one;
+                titleTextRect.sizeDelta = Vector2.zero;
+                titleTextRect.anchoredPosition = new Vector2(0f, 2f);
+
+                var titleTmp = titleTextGo.AddComponent<TextMeshProUGUI>();
+                if (fontAsset != null) titleTmp.font = fontAsset;
+                titleTmp.text = "Warehouse";
+                titleTmp.fontSize = 68.2f;
+                titleTmp.fontSizeMin = 18f;
+                titleTmp.fontSizeMax = 72f;
+                titleTmp.enableAutoSizing = true;
+                titleTmp.fontStyle = FontStyles.Bold;
+                titleTmp.alignment = TextAlignmentOptions.Center;
+                titleTmp.color = new Color(0.3647f, 0.3882f, 0.4784f, 1f);
+                titleTmp.raycastTarget = false;
 
                 // Wire to WarehouseView
                 var wSo = new SerializedObject(wh);
@@ -398,11 +656,13 @@ namespace AutoService.Bootstrap.Editor
                 wSo.FindProperty("_dwellSeconds").floatValue = 1.2f;
                 wSo.ApplyModifiedProperties();
 
-                // 3. Re-link active renderers to InteractableHighlight
+                // 3. Re-link active renderers to InteractableHighlight (excluding WorkPad, Disc and ManagePad)
                 var highlight = wh.GetComponent<InteractableHighlight>();
                 if (highlight != null)
                 {
-                    var activeRenderers = System.Array.FindAll(wh.GetComponentsInChildren<MeshRenderer>(false), r => r.gameObject.name != "WorkPad");
+                    Transform managePad = wh.transform.Find("ManagePad_loc2");
+                    var activeRenderers = System.Array.FindAll(wh.GetComponentsInChildren<MeshRenderer>(false),
+                        r => r.gameObject.name != "WorkPad" && r.gameObject.name != "Disc" && (managePad == null || !r.transform.IsChildOf(managePad)));
                     if (activeRenderers.Length == 0)
                     {
                         activeRenderers = wh.GetComponentsInChildren<MeshRenderer>(false);
@@ -425,7 +685,9 @@ namespace AutoService.Bootstrap.Editor
                 var collider = wh.GetComponent<BoxCollider>();
                 if (collider != null)
                 {
-                    var allRenderers = System.Array.FindAll(wh.GetComponentsInChildren<MeshRenderer>(false), r => r.gameObject.name != "WorkPad");
+                    Transform managePad = wh.transform.Find("ManagePad_loc2");
+                    var allRenderers = System.Array.FindAll(wh.GetComponentsInChildren<MeshRenderer>(false),
+                        r => r.gameObject.name != "WorkPad" && r.gameObject.name != "Disc" && (managePad == null || !r.transform.IsChildOf(managePad)));
                     if (allRenderers.Length == 0)
                     {
                         allRenderers = wh.GetComponentsInChildren<MeshRenderer>(false);

@@ -39,6 +39,11 @@ namespace AutoService.Services.Progression
             _progress.Restore(xp);
         }
 
+        public void AddExperience(int amount)
+        {
+            _progress.AddXp(amount);
+        }
+
         private void OnProgressChanged(PlayerProgress progress)
         {
             Changed?.Invoke();
