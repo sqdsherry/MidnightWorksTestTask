@@ -3,6 +3,7 @@ using AutoService.Services.Core;
 using AutoService.Services.Economy;
 using AutoService.Services.Events;
 using AutoService.Services.Points;
+using AutoService.Services.Progression;
 using AutoService.Services.Save;
 using AutoService.Services.Staff;
 using AutoService.Services.Upgrades;
@@ -32,7 +33,12 @@ namespace AutoService.Bootstrap.Installers
             // Points before Staff: workers are restored per point, storekeepers need the location's points.
             coordinator.Add(new WalletSaveable(context.Resolve<IWalletService>(), logger));
 
-            // TODO(07-progression): coordinator.Add(new ProgressionSaveable(progression)) — after Wallet, before Build (level gates may matter on restore).
+            // Why: before Build — level gates are checked when built plots are restored.
+            if (context.TryResolve(out IProgressionService progression))
+            {
+                coordinator.Add(new ProgressionSaveable(progression, logger));
+            }
+
             if (context.TryResolve(out IBuildService build))
             {
                 coordinator.Add(new BuildSaveable(build, logger));
